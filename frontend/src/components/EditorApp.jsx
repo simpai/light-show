@@ -293,6 +293,55 @@ export default function EditorApp() {
         }
     }
 
+    const handleSaveProject = () => {
+        const projectData = {
+            version: '1.0',
+            project: project.toJSON(),
+            matrixConfig,
+            audioFileName,
+        };
+
+        const json = JSON.stringify(projectData, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `lightshow-${Date.now()}.json`;
+        a.click();
+
+        URL.revokeObjectURL(url);
+        console.log('Project saved');
+    };
+
+    const handleLoadProject = async (file) => {
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+
+            // Load project
+            const loadedProject = await ProjectState.fromJSON(data.project);
+            setProject(loadedProject);
+            rendererRef.current.setProject(loadedProject);
+
+            // Restore matrix config
+            if (data.matrixConfig) {
+                setMatrixConfig(data.matrixConfig);
+                setTempGridConfig(data.matrixConfig);
+            }
+
+            // Note: User needs to re-upload audio file
+            setAudioFileName(data.audioFileName || '');
+
+            console.log('Project loaded');
+            alert('Project loaded! Please re-upload the audio file: ' + (data.audioFileName || 'unknown'));
+
+        } catch (err) {
+            console.error('Failed to load project:', err);
+            alert('Failed to load project: ' + err.message);
+        }
+    };
+
     return (
         <div className="editor-container">
             <header className="editor-header">

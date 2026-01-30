@@ -1,21 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
-import { Upload, Zap, Download, CheckCircle, Car, Music, Eye, Play, Pause } from 'lucide-react'
+import { Upload, Zap, Download, CheckCircle, Car, Music, Eye, Play, Pause, Edit3 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FseqParser } from './utils/FseqParser'
 import JSZip from 'jszip'
 import Visualizer from './components/Visualizer'
 import MatrixVisualizer from './components/MatrixVisualizer'
+import Editor from './components/Editor'
 import './App.css'
 
 function App() {
-  const [mode, setMode] = useState('generator') // 'generator' or 'viewer'
+  const [mode, setMode] = useState('generator') // 'generator', 'viewer', 'editor'
   // Generator States
   const [file, setFile] = useState(null)
   const [fseqFile, setFseqFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const [analysisData, setAnalysisData] = useState(null)
 
   // Matrix Mode State
   const [isMatrixMode, setIsMatrixMode] = useState(false)
@@ -156,6 +158,29 @@ function App() {
     }
   }
 
+  const handleAnalyze = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('audio', file);
+
+    try {
+      const response = await axios.post('/analyze', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (response.data.success) {
+        setAnalysisData(response.data.analysis);
+        setMode('editor');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to analyze audio.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownload = () => {
     if (!result?.file_id) return
     window.location.href = `/download/${result.file_id}`
@@ -192,6 +217,10 @@ function App() {
     }
     return () => cancelAnimationFrame(requestRef.current)
   }, [isPlaying, playbackData])
+
+  if (mode === 'editor') {
+    return <Editor audioFile={file} analysis={analysisData} onExit={() => setMode('generator')} />;
+  }
 
   return (
     <div className="container">
@@ -297,13 +326,24 @@ function App() {
 
                   {error && <p className="status-text">{error}</p>}
 
-                  <button
-                    className="btn-tesla"
-                    onClick={handleUpload}
-                    disabled={!file || loading}
-                  >
-                    {loading ? "Building..." : "Generate Show"}
-                  </button>
+                  <div className="action-buttons" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem' }}>
+                    <button
+                      className="btn-tesla"
+                      onClick={handleUpload}
+                      disabled={!file || loading}
+                    >
+                      {loading ? "Processing..." : "Auto-Generate Show"}
+                    </button>
+                    <button
+                      className="btn-tesla btn-secondary"
+                      onClick={handleAnalyze}
+                      disabled={!file || loading}
+                      style={{ background: '#333', border: '1px solid #555' }}
+                    >
+                      <Edit3 size={20} style={{ marginRight: '5px' }} />
+                      Advanced Editor
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div className="success-view">

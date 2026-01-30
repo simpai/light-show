@@ -36,13 +36,13 @@ class TeslaLightShowGenerator:
         cent = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
         
         return {
-            "frame_count": frame_count,
-            "beat_times": beat_times,
-            "onset_times": onset_times,
-            "rms": rms,
-            "rms_times": rms_times,
-            "spectral_centroid": cent,
-            "duration": duration
+            "frame_count": int(frame_count),
+            "beat_times": beat_times.tolist(),
+            "onset_times": onset_times.tolist(),
+            "rms": rms.tolist(),
+            "rms_times": rms_times.tolist(),
+            "spectral_centroid": cent.tolist(),
+            "duration": float(duration)
         }
 
     def generate_fseq(self, analysis, output_path):

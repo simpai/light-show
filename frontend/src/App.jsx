@@ -3,16 +3,28 @@ import axios from 'axios'
 import { Upload, Zap, Download, CheckCircle, Car, Music, Eye, Play, Pause } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FseqParser } from './utils/FseqParser'
+import JSZip from 'jszip'
 import Visualizer from './components/Visualizer'
+import MatrixVisualizer from './components/MatrixVisualizer'
 import './App.css'
 
 function App() {
   const [mode, setMode] = useState('generator') // 'generator' or 'viewer'
+  // Generator States
   const [file, setFile] = useState(null)
   const [fseqFile, setFseqFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+
+  // Matrix Mode State
+  const [isMatrixMode, setIsMatrixMode] = useState(false)
+  const [matrixConfig, setMatrixConfig] = useState({ rows: 10, cols: 10 })
+
+  // Matrix Viewer State
+  const [isMatrixPlayback, setIsMatrixPlayback] = useState(false)
+  const [matrixData, setMatrixData] = useState({}) // { "r_c": { parser, header } }
+  const [matrixGrid, setMatrixGrid] = useState({ rows: 10, cols: 10 })
 
   // Viewer States
   const [isPlaying, setIsPlaying] = useState(false)
@@ -42,7 +54,66 @@ function App() {
   const handleFseqChange = async (e) => {
     const selectedFile = e.target.files[0]
     if (selectedFile) {
-      if (selectedFile.name.endsWith('.fseq')) {
+      setIsMatrixPlayback(false)
+      setMatrixData({})
+
+      if (selectedFile.name.endsWith('.zip')) {
+        // Handle Matrix Zip
+        try {
+          const zip = await JSZip.loadAsync(selectedFile)
+          const newMatrixData = {}
+          let maxR = 0, maxC = 0
+
+          // Parse all fseq files in zip
+          const promises = []
+
+          zip.forEach((relativePath, zipEntry) => {
+            if (zipEntry.name.endsWith('.fseq')) {
+              const nameParts = zipEntry.name.replace('.fseq', '').split('_')
+              if (nameParts.length >= 2) {
+                const r = parseInt(nameParts[0])
+                const c = parseInt(nameParts[1])
+                if (!isNaN(r) && !isNaN(c)) {
+                  maxR = Math.max(maxR, r)
+                  maxC = Math.max(maxC, c)
+
+                  promises.push(
+                    zipEntry.async('arraybuffer').then(buffer => {
+                      try {
+                        const parser = new FseqParser(buffer)
+                        const header = parser.parse()
+                        newMatrixData[`${r}_${c}`] = { parser, header }
+                      } catch (err) {
+                        console.warn("Failed to parse fseq in zip:", zipEntry.name)
+                      }
+                    })
+                  )
+                }
+              }
+            }
+          })
+
+          await Promise.all(promises)
+
+          if (Object.keys(newMatrixData).length > 0) {
+            setMatrixData(newMatrixData)
+            setMatrixGrid({ rows: maxR + 1, cols: maxC + 1 })
+            setIsMatrixPlayback(true)
+
+            // Set playback header from first found file for timing
+            const firstKey = Object.keys(newMatrixData)[0]
+            setPlaybackData({ header: newMatrixData[firstKey].header })
+            setFseqFile(selectedFile)
+            setError(null)
+          } else {
+            setError("No valid matrix .fseq files found in zip")
+          }
+
+        } catch (err) {
+          setError("Failed to parse ZIP file: " + err.message)
+        }
+      } else if (selectedFile.name.endsWith('.fseq')) {
+        // Standard Single File
         const buffer = await selectedFile.arrayBuffer()
         try {
           const parser = new FseqParser(buffer)
@@ -54,7 +125,7 @@ function App() {
           setError(err.message)
         }
       } else {
-        setError("Please upload a valid .fseq file")
+        setError("Please upload a .fseq or .zip file")
       }
     }
   }
@@ -66,6 +137,12 @@ function App() {
 
     const formData = new FormData()
     formData.append('audio', file)
+
+    if (isMatrixMode) {
+      formData.append('mode', 'matrix')
+      formData.append('rows', matrixConfig.rows)
+      formData.append('cols', matrixConfig.cols)
+    }
 
     try {
       const response = await axios.post('/generate', formData, {
@@ -86,11 +163,23 @@ function App() {
 
   // Animation loop for viewer
   const animate = () => {
-    if (audioRef.current && playbackData) {
+    if (audioRef.current && (playbackData || isMatrixPlayback)) {
       const currentTime = audioRef.current.currentTime
-      const frameIndex = Math.floor((currentTime * 1000) / playbackData.header.stepTime)
-      const frame = playbackData.parser.getFrame(frameIndex)
-      setCurrentFrameData(frame)
+
+      // Use header from playbackData (single) or first matrix file which is set in handleFseqChange
+      const header = playbackData?.header
+      if (header) {
+        const frameIndex = Math.floor((currentTime * 1000) / header.stepTime)
+
+        if (isMatrixPlayback) {
+          // Matrix Mode: Pass frame index to visualizer, it handles lookups
+          setCurrentFrameData(frameIndex)
+        } else {
+          // Single Mode: Get frame directly
+          const frame = playbackData.parser.getFrame(frameIndex)
+          setCurrentFrameData(frame)
+        }
+      }
     }
     requestRef.current = requestAnimationFrame(animate)
   }
@@ -171,6 +260,41 @@ function App() {
                     <h3>{file ? file.name : "Select Audio File"}</h3>
                   </div>
 
+                  <div className="matrix-toggle" style={{ margin: '1rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                      <input
+                        type="checkbox"
+                        id="matrixMode"
+                        checked={isMatrixMode}
+                        onChange={(e) => setIsMatrixMode(e.target.checked)}
+                      />
+                      <label htmlFor="matrixMode" style={{ fontWeight: 'bold' }}>Enable Matrix Mode (Multi-Car Grid)</label>
+                    </div>
+
+                    {isMatrixMode && (
+                      <div className="matrix-config" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '0.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <label style={{ fontSize: '0.8rem', marginBottom: '0.2rem' }}>Rows</label>
+                          <input
+                            type="number"
+                            value={matrixConfig.rows}
+                            onChange={(e) => setMatrixConfig({ ...matrixConfig, rows: parseInt(e.target.value) || 10 })}
+                            style={{ width: '60px', padding: '0.3rem', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: 'white', textAlign: 'center' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <label style={{ fontSize: '0.8rem', marginBottom: '0.2rem' }}>Cols</label>
+                          <input
+                            type="number"
+                            value={matrixConfig.cols}
+                            onChange={(e) => setMatrixConfig({ ...matrixConfig, cols: parseInt(e.target.value) || 10 })}
+                            style={{ width: '60px', padding: '0.3rem', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: 'white', textAlign: 'center' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {error && <p className="status-text">{error}</p>}
 
                   <button
@@ -184,7 +308,7 @@ function App() {
               ) : (
                 <div className="success-view">
                   <CheckCircle size={64} className="tesla-red" style={{ marginBottom: '1.5rem' }} />
-                  <h2>Sequence Ready!</h2>
+                  <h2>{result.mode === 'matrix' ? "Matrix Show Ready!" : "Sequence Ready!"}</h2>
                   <div className="stats">
                     <div className="stat-item">
                       <span className="label">Duration</span>
@@ -197,7 +321,7 @@ function App() {
                   </div>
                   <button className="btn-tesla" onClick={handleDownload} style={{ marginTop: '2rem' }}>
                     <Download size={20} />
-                    Download .fseq
+                    {result.mode === 'matrix' ? "Download Matrix .zip" : "Download .fseq"}
                   </button>
                   <button
                     className="btn-link"
@@ -220,8 +344,8 @@ function App() {
                 <div className="file-inputs">
                   <div className="mini-upload" onClick={() => fseqInputRef.current.click()}>
                     <Zap size={20} className={fseqFile ? "tesla-red" : ""} />
-                    <span>{fseqFile ? fseqFile.name : "Select .fseq"}</span>
-                    <input type="file" ref={fseqInputRef} onChange={handleFseqChange} style={{ display: 'none' }} accept=".fseq" />
+                    <span>{fseqFile ? fseqFile.name : "Select .fseq / .zip"}</span>
+                    <input type="file" ref={fseqInputRef} onChange={handleFseqChange} style={{ display: 'none' }} accept=".fseq,.zip" />
                   </div>
                   <div className="mini-upload" onClick={() => fileInputRef.current.click()}>
                     <Music size={20} className={file ? "tesla-red" : ""} />
@@ -231,7 +355,16 @@ function App() {
                 </div>
               </div>
 
-              <Visualizer frameData={currentFrameData} />
+              {isMatrixPlayback ? (
+                <MatrixVisualizer
+                  matrixData={matrixData}
+                  frameIndex={currentFrameData}
+                  rows={matrixGrid.rows}
+                  cols={matrixGrid.cols}
+                />
+              ) : (
+                <Visualizer frameData={currentFrameData} />
+              )}
 
               <div className="player-controls">
                 <audio

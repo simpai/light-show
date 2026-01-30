@@ -125,6 +125,117 @@ class TeslaLightShowGenerator:
         print(f"Successfully generated {output_path}")
         print(f"Total frames: {frame_count}, Duration: {datetime.timedelta(seconds=analysis['duration'])}")
 
+    def generate_matrix_show(self, analysis, output_dir, rows=10, cols=10):
+        frame_count = analysis["frame_count"]
+        # Grid state: [frames, rows, cols]
+        # We'll use a simplified normalized intensity 0.0-1.0
+        grid_intensity = np.zeros((frame_count, rows, cols))
+        
+        center_r, center_c = rows / 2, cols / 2
+        max_dist = np.sqrt(center_r**2 + center_c**2)
+        
+        # 1. Beat Ripple Effect
+        # For each beat, expand a ring
+        beat_frames = [int(t / self.frame_interval) for t in analysis["beat_times"]]
+        for t_frame in beat_frames:
+            # Effect lasts 20 frames (~400ms)
+            for i in range(20):
+                curr_frame = t_frame + i
+                if curr_frame >= frame_count: break
+                
+                # Radius expands
+                radius = (i / 20.0) * max_dist * 1.5
+                thickness = 1.5
+                
+                # Check all cells
+                for r in range(rows):
+                    for c in range(cols):
+                        dist = np.sqrt((r - center_r)**2 + (c - center_c)**2)
+                        if abs(dist - radius) < thickness:
+                            grid_intensity[curr_frame, r, c] += 0.8
+
+        # 2. Spectral Centroid Vertical Sweep
+        # Map centroid to horizontal position or vertical sweep
+        cent_resampled = np.interp(
+            np.linspace(0, analysis["duration"], frame_count),
+            analysis["rms_times"],
+            analysis["spectral_centroid"]
+        )
+        # Normalize centroid 0-1
+        cent_min, cent_max = np.min(cent_resampled), np.max(cent_resampled)
+        if cent_max > cent_min:
+            cent_norm = (cent_resampled - cent_min) / (cent_max - cent_min)
+        else:
+            cent_norm = np.zeros(frame_count)
+            
+        for f in range(frame_count):
+            # Bar moves from left to right based on frequency height
+            # Or simplified: Active column based on frequency
+            active_col = int(cent_norm[f] * (cols - 1))
+            grid_intensity[f, :, active_col] += 0.5
+
+        # 3. RMS Global Flash
+        rms_resampled = np.interp(
+            np.linspace(0, analysis["duration"], frame_count),
+            analysis["rms_times"],
+            analysis["rms"]
+        )
+        rms_threshold = np.mean(rms_resampled) * 2.0
+        
+        # Clamp values
+        np.clip(grid_intensity, 0, 1, out=grid_intensity)
+
+        # Generate files for each car
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        print(f"Generating matrix show {rows}x{cols}...")
+        
+        for r in range(rows):
+            for c in range(cols):
+                # Init car data
+                data = np.zeros((frame_count, self.channel_count), dtype=np.uint8)
+                
+                for f in range(frame_count):
+                    val = grid_intensity[f, r, c]
+                    
+                    # Global RMS override for high energy
+                    if rms_resampled[f] > rms_threshold:
+                        val = 1.0
+                        
+                    if val > 0.1:
+                        # Map intensity to different lights based on threshold
+                        # Low intensity: Signature lights
+                        data[f, 4] = 255 # Sig L
+                        data[f, 5] = 255 # Sig R
+                        
+                        # High intensity: Main Beams + Fog
+                        if val > 0.5:
+                            data[f, 0:4] = 255 # Beams
+                            data[f, 14] = 255 # Fog L
+                            data[f, 15] = 255 # Fog R
+                
+                # Write individual file
+                filename = f"{r}_{c}.fseq"
+                path = os.path.join(output_dir, filename)
+                self._write_fseq_file(data, path)
+                
+    def _write_fseq_file(self, data, path):
+         with open(path, "wb") as f:
+            f.write(b"PSEQ")
+            f.write(struct.pack("<H", 24))
+            f.write(struct.pack("<B", 0))
+            f.write(struct.pack("<B", 2))
+            f.write(struct.pack("<H", 0))
+            f.write(struct.pack("<I", self.channel_count))
+            f.write(struct.pack("<I", len(data)))
+            f.write(struct.pack("<B", self.step_time_ms))
+            f.write(struct.pack("<B", 0))
+            f.write(struct.pack("<H", 0))
+            f.write(struct.pack("<B", 0))
+            f.write(struct.pack("<B", 0))
+            f.write(data.tobytes())
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:

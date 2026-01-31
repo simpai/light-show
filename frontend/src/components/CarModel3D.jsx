@@ -5,8 +5,11 @@ import { useFrame } from '@react-three/fiber';
  * 3D Car Model with individual light objects
  * Each light can be toggled based on the light show sequence
  */
-export default function CarModel3D({ position = [0, 0, 0], lightStates = [] }) {
+export default function CarModel3D({ position = [0, 0, 0], rotation = 0, lightStates = [] }) {
     const carRef = useRef();
+
+    // Convert rotation from degrees to radians
+    const rotationRadians = (rotation * Math.PI) / 180;
 
     // Light channel mapping (Tesla light show channels)
     // 0: Left headlight
@@ -28,7 +31,7 @@ export default function CarModel3D({ position = [0, 0, 0], lightStates = [] }) {
     };
 
     return (
-        <group ref={carRef} position={position}>
+        <group ref={carRef} position={position} rotation={[0, rotationRadians, 0]}>
             {/* Car Body */}
             <mesh position={[0, 0.5, 0]}>
                 <boxGeometry args={[2, 0.8, 4]} />

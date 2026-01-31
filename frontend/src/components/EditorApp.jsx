@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Save, Plus, Layers, Grid3x3, Upload, Wand2 } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Wand2, Image as ImageIcon } from 'lucide-react';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
 import { Timeline } from './Timeline';
 import Scene3D from './Scene3D';
 import ClipEditor from './ClipEditor';
+import { LayoutParser } from '../utils/LayoutParser';
 import axios from 'axios';
 
 export default function EditorApp() {
@@ -14,15 +15,21 @@ export default function EditorApp() {
     const [selectedClipId, setSelectedClipId] = useState(null);
     const [selectedLayerId, setSelectedLayerId] = useState(null);
     const [matrixConfig, setMatrixConfig] = useState({ rows: 16, cols: 63 });
-    const [tempGridConfig, setTempGridConfig] = useState({ rows: 16, cols: 63 });
     const [audioFile, setAudioFile] = useState(null);
     const [audioFileName, setAudioFileName] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    // Layout system state
+    const [layoutData, setLayoutData] = useState(null);
+    const [layoutFileName, setLayoutFileName] = useState('');
+    const [colSpacing, setColSpacing] = useState(2.5);
+    const [rowSpacing, setRowSpacing] = useState(6);
 
     const audioRef = useRef(null);
     const rendererRef = useRef(new ShowRenderer());
     const requestRef = useRef();
     const fileInputRef = useRef(null);
+    const layoutInputRef = useRef(null);
     const audioUrlRef = useRef(null); // Cache audio URL
 
     // Initialize with one default track
@@ -34,7 +41,10 @@ export default function EditorApp() {
         setSelectedLayerId(newProject.layers[0].id);
         rendererRef.current.setProject(newProject);
         rendererRef.current.setMatrixMode(true, matrixConfig);
-        setTempGridConfig(matrixConfig); // Initialize temp config
+
+        // Initialize with default layout
+        const defaultLayout = LayoutParser.createDefaultLayout(matrixConfig.cols, matrixConfig.rows);
+        setLayoutData(defaultLayout);
     }, []);
 
     useEffect(() => {
@@ -179,15 +189,46 @@ export default function EditorApp() {
         }
     };
 
-    const handleApplyGridConfig = () => {
-        const newConfig = {
-            rows: parseInt(tempGridConfig.rows) || 10,
-            cols: parseInt(tempGridConfig.cols) || 10
-        };
+    const handleLayoutUpload = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            try {
+                const parsed = await LayoutParser.parseLayoutImage(file, colSpacing, rowSpacing);
+                setLayoutData(parsed);
+                setLayoutFileName(file.name);
 
-        // Update both state and renderer synchronously
-        rendererRef.current.setMatrixMode(true, newConfig);
-        setMatrixConfig(newConfig);
+                // Update matrix config based on image dimensions
+                const newConfig = {
+                    rows: parsed.height,
+                    cols: parsed.width
+                };
+                setMatrixConfig(newConfig);
+                rendererRef.current.setMatrixMode(true, newConfig);
+
+                console.log('Layout loaded:', parsed.width, 'x', parsed.height);
+            } catch (err) {
+                console.error('Failed to load layout:', err);
+                alert('Failed to load layout image: ' + err.message);
+            }
+        }
+    };
+
+    const handleSpacingChange = async () => {
+        if (layoutData && layoutFileName) {
+            // Re-parse with new spacing values
+            // We need to reload the file, but we don't have it anymore
+            // So just update the layout data offsets
+            const updatedLayout = { ...layoutData };
+            for (let r = 0; r < updatedLayout.height; r++) {
+                for (let c = 0; c < updatedLayout.width; c++) {
+                    const cell = updatedLayout.layout[r][c];
+                    const raw = cell.raw;
+                    cell.offsetX = ((raw.r - 127) / 127) * colSpacing;
+                    cell.offsetY = ((raw.g - 127) / 127) * rowSpacing;
+                }
+            }
+            setLayoutData(updatedLayout);
+        }
     };
 
     const handleSeek = (timeMs) => {
@@ -299,6 +340,10 @@ export default function EditorApp() {
             project: project.toJSON(),
             matrixConfig,
             audioFileName,
+            layoutFileName,
+            layoutData,
+            colSpacing,
+            rowSpacing
         };
 
         const json = JSON.stringify(projectData, null, 2);
@@ -327,8 +372,17 @@ export default function EditorApp() {
             // Restore matrix config
             if (data.matrixConfig) {
                 setMatrixConfig(data.matrixConfig);
-                setTempGridConfig(data.matrixConfig);
             }
+
+            // Restore layout data
+            if (data.layoutData) {
+                setLayoutData(data.layoutData);
+                setLayoutFileName(data.layoutFileName || 'layout.png');
+            }
+
+            // Restore spacing
+            if (data.colSpacing !== undefined) setColSpacing(data.colSpacing);
+            if (data.rowSpacing !== undefined) setRowSpacing(data.rowSpacing);
 
             // Note: User needs to re-upload audio file
             setAudioFileName(data.audioFileName || '');
@@ -399,31 +453,54 @@ export default function EditorApp() {
                         />
                     </label>
 
-                    <div className="matrix-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
-                        <Grid3x3 size={16} style={{ color: '#e82020' }} />
+                    {/* Layout Image Upload */}
+                    <input
+                        ref={layoutInputRef}
+                        type="file"
+                        accept="image/png"
+                        onChange={handleLayoutUpload}
+                        style={{ display: 'none' }}
+                    />
+                    <button
+                        className="btn-icon"
+                        onClick={() => layoutInputRef.current?.click()}
+                        title="Upload Layout Image (PNG)"
+                        style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
+                    >
+                        <ImageIcon size={20} />
+                    </button>
+                    {layoutFileName && (
+                        <span style={{ fontSize: '12px', color: '#888', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {layoutFileName}
+                        </span>
+                    )}
+
+                    {/* Spacing Controls */}
+                    <div className="spacing-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
+                        <span style={{ fontSize: '12px', color: '#666' }}>Spacing:</span>
                         <input
                             type="number"
-                            value={tempGridConfig.cols}
-                            onChange={e => setTempGridConfig({ ...tempGridConfig, cols: parseInt(e.target.value) || 1 })}
+                            value={colSpacing}
+                            onChange={e => setColSpacing(parseFloat(e.target.value) || 2.5)}
+                            onBlur={handleSpacingChange}
                             style={{ width: '50px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
                             min="1"
-                            max="100"
+                            max="50"
+                            step="0.5"
+                            title="Column Spacing (X)"
                         />
                         <span style={{ color: '#666' }}>×</span>
                         <input
                             type="number"
-                            value={tempGridConfig.rows}
-                            onChange={e => setTempGridConfig({ ...tempGridConfig, rows: parseInt(e.target.value) || 1 })}
+                            value={rowSpacing}
+                            onChange={e => setRowSpacing(parseFloat(e.target.value) || 6)}
+                            onBlur={handleSpacingChange}
                             style={{ width: '50px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
                             min="1"
-                            max="100"
+                            max="50"
+                            step="0.5"
+                            title="Row Spacing (Y)"
                         />
-                        <button
-                            onClick={() => setMatrixConfig(tempGridConfig)}
-                            style={{ padding: '2px 8px', background: '#e82020', border: 'none', borderRadius: '3px', color: 'white', cursor: 'pointer', fontSize: '12px' }}
-                        >
-                            Apply
-                        </button>
                     </div>
                     <button className="btn-tesla-sm" onClick={handleExport}>
                         <Save size={16} /> Export
@@ -438,6 +515,9 @@ export default function EditorApp() {
                         matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
                         rows={matrixConfig.rows}
                         cols={matrixConfig.cols}
+                        layoutData={layoutData}
+                        colSpacing={colSpacing}
+                        rowSpacing={rowSpacing}
                     />
                 </div>
 
@@ -447,6 +527,7 @@ export default function EditorApp() {
                             clip={selectedClip}
                             onChange={handleClipUpdate}
                             onDelete={handleClipDelete}
+                            assets={project.assets}
                         />
                     ) : (
                         <div className="text-muted p-4">Select a clip to edit</div>

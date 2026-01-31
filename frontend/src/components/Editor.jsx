@@ -212,6 +212,7 @@ export default function Editor({ audioFile, analysis, onExit }) {
                             clip={selectedClip}
                             onChange={handleClipUpdate}
                             onDelete={handleClipDelete}
+                            assets={project.assets}
                         />
                     ) : (
                         <div className="text-muted p-4">Select a clip to edit</div>

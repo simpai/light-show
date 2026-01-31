@@ -284,9 +284,33 @@ export class ShowRenderer {
 
         const asset = this.project.assets[clip.assetId];
 
-        // Calculate which frame to show (for GIFs)
-        const fps = clip.fps || asset.fps || 12;
-        const frameIndex = Math.floor((clipTime / 1000) * fps) % asset.frames.length;
+        // Calculate frame duration based on timing mode
+        // Default to 'frame' mode if not specified
+        const timingMode = clip.timingMode || 'frame';
+        let frameDuration;
+
+        if (timingMode === 'beat') {
+            // Beat-based: calculate from BPM and Beats per Frame
+            const bpm = clip.bpm || 120;
+            const beatsPerFrame = clip.beatsPerFrame || 1;
+            const msPerBeat = 60000 / bpm;
+            frameDuration = msPerBeat * beatsPerFrame;
+        } else {
+            // Frame-based: use frameDuration directly (ignore GIF's original fps)
+            frameDuration = clip.frameDuration || 100;
+        }
+
+
+        // Calculate frame index considering repetitions
+        const repetitions = clip.repetitions || 1;
+        const totalFrames = asset.frames.length * repetitions;
+        const rawFrameIndex = Math.floor(clipTime / frameDuration);
+
+        // Clamp to total frames (don't loop beyond repetitions)
+        const clampedFrameIndex = Math.min(rawFrameIndex, totalFrames - 1);
+
+        // Map to actual asset frame (loop within the asset frames)
+        const frameIndex = clampedFrameIndex % asset.frames.length;
         const imageData = asset.frames[frameIndex];
 
         // Check if grid position is within image bounds

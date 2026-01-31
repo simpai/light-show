@@ -6,6 +6,7 @@ import { Timeline } from './Timeline';
 import Scene3D from './Scene3D';
 import ClipEditor from './ClipEditor';
 import { LayoutParser } from '../utils/LayoutParser';
+import MatrixPreview2D from './MatrixPreview2D';
 import axios from 'axios';
 
 export default function EditorApp() {
@@ -24,6 +25,7 @@ export default function EditorApp() {
     const [layoutFileName, setLayoutFileName] = useState('');
     const [colSpacing, setColSpacing] = useState(2.5);
     const [rowSpacing, setRowSpacing] = useState(6);
+    const [viewMode, setViewMode] = useState('2d'); // '2d' or '3d'
 
     const audioRef = useRef(null);
     const rendererRef = useRef(new ShowRenderer());
@@ -311,7 +313,8 @@ export default function EditorApp() {
             const response = await axios.post('/export', {
                 project: project,
                 matrixMode: true,
-                matrixConfig: matrixConfig
+                matrixConfig: matrixConfig,
+                layoutData: layoutData
             });
             if (response.data.success) {
                 const ext = response.data.extension || '.fseq';
@@ -502,6 +505,37 @@ export default function EditorApp() {
                             title="Row Spacing (Y)"
                         />
                     </div>
+
+                    {/* View mode toggle */}
+                    <div className="view-mode-toggle" style={{ display: 'flex', background: '#333', borderRadius: '4px', padding: '2px', marginLeft: '10px' }}>
+                        <button
+                            className={`toggle-btn ${viewMode === '2d' ? 'active' : ''}`}
+                            onClick={() => setViewMode('2d')}
+                            style={{
+                                padding: '4px 8px',
+                                border: 'none',
+                                background: viewMode === '2d' ? '#e82020' : 'transparent',
+                                color: 'white',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                cursor: 'pointer'
+                            }}
+                        >2D</button>
+                        <button
+                            className={`toggle-btn ${viewMode === '3d' ? 'active' : ''}`}
+                            onClick={() => setViewMode('3d')}
+                            style={{
+                                padding: '4px 8px',
+                                border: 'none',
+                                background: viewMode === '3d' ? '#e82020' : 'transparent',
+                                color: 'white',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                cursor: 'pointer'
+                            }}
+                        >3D</button>
+                    </div>
+
                     <button className="btn-tesla-sm" onClick={handleExport}>
                         <Save size={16} /> Export
                     </button>
@@ -510,15 +544,24 @@ export default function EditorApp() {
 
             <div className="editor-main">
                 <div className="preview-panel">
-                    <Scene3D
-                        key={`${matrixConfig.rows}-${matrixConfig.cols}`}
-                        matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
-                        rows={matrixConfig.rows}
-                        cols={matrixConfig.cols}
-                        layoutData={layoutData}
-                        colSpacing={colSpacing}
-                        rowSpacing={rowSpacing}
-                    />
+                    {viewMode === '3d' ? (
+                        <Scene3D
+                            key={`${matrixConfig.rows}-${matrixConfig.cols}`}
+                            matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
+                            rows={matrixConfig.rows}
+                            cols={matrixConfig.cols}
+                            layoutData={layoutData}
+                            colSpacing={colSpacing}
+                            rowSpacing={rowSpacing}
+                        />
+                    ) : (
+                        <MatrixPreview2D
+                            matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
+                            rows={matrixConfig.rows}
+                            cols={matrixConfig.cols}
+                            layoutData={layoutData}
+                        />
+                    )}
                 </div>
 
                 <div className="properties-panel">

@@ -110,7 +110,12 @@ def analyze():
 
 @app.route('/download/<file_id>', methods=['GET'])
 def download_file(file_id):
-    # Try both extensions
+    # 1. Try direct path (in case extension is already in file_id)
+    direct_path = os.path.join(OUTPUT_FOLDER, file_id)
+    if os.path.exists(direct_path):
+        return send_file(direct_path, as_attachment=True)
+        
+    # 2. Try both extensions
     for ext in ['.fseq', '.zip']:
         file_path = os.path.join(OUTPUT_FOLDER, f"{file_id}{ext}")
         if os.path.exists(file_path):
@@ -129,6 +134,7 @@ def export_show():
     project = data['project']
     matrix_mode = data.get('matrixMode', False)
     matrix_config = data.get('matrixConfig', {'rows': 10, 'cols': 10})
+    layout_data = data.get('layoutData')
     
     # Generate ID
     file_id = str(uuid.uuid4())
@@ -139,7 +145,7 @@ def export_show():
     
     try:
         exporter = ProjectExporter(project)
-        exporter.export(output_path, matrix_mode=matrix_mode, matrix_config=matrix_config)
+        exporter.export(output_path, matrix_mode=matrix_mode, matrix_config=matrix_config, layout_data=layout_data)
         
         return jsonify({
             "success": True,

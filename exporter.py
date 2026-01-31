@@ -21,13 +21,13 @@ class ProjectExporter:
             
         self.frame_count = int(self.duration / self.frame_interval)
 
-    def export(self, output_path, matrix_mode=False, matrix_config=None):
+    def export(self, output_path, matrix_mode=False, matrix_config=None, layout_data=None):
         """
         Export project to FSEQ file(s)
         If matrix_mode is True, creates a .zip with multiple .fseq files
         """
         if matrix_mode and matrix_config:
-            return self.export_matrix(output_path, matrix_config)
+            return self.export_matrix(output_path, matrix_config, layout_data)
         else:
             return self.export_single(output_path)
 
@@ -47,7 +47,7 @@ class ProjectExporter:
         self._write_fseq(data, output_path)
         return output_path
 
-    def export_matrix(self, output_path, matrix_config):
+    def export_matrix(self, output_path, matrix_config, layout_data=None):
         """Export matrix mode as a .zip file with multiple .fseq files"""
         rows = matrix_config.get('rows', 10)
         cols = matrix_config.get('cols', 10)
@@ -69,8 +69,20 @@ class ProjectExporter:
             fseq_files = []
             for r in range(rows):
                 for c in range(cols):
-                    # Position-based filename
-                    filename = f"x{c}_y{r}.fseq"
+                    # Check if car exists in layout
+                    if layout_data and 'layout' in layout_data:
+                        try:
+                            if not layout_data['layout'][r][c].get('exists', True):
+                                continue
+                        except (IndexError, KeyError):
+                            pass
+
+                    # Letter for row (y), Numbered ID for column (x)
+                    # y0->A, y1->B, ... | x0->01, x1->02, ...
+                    row_letter = chr(ord('A') + r)
+                    col_id = f"{c + 1:02d}"  # Padded to 2 digits (e.g., 01, 02...)
+                    
+                    filename = f"{row_letter}{col_id}.fseq"
                     filepath = os.path.join(temp_dir, filename)
                     
                     # For now, all cars get the same data
@@ -115,9 +127,9 @@ class ProjectExporter:
             
             # Intensity
             intensity = 1.0
-            if rel_time_ms < fade_in_ms:
+            if fade_in_ms > 0 and rel_time_ms < fade_in_ms:
                 intensity = rel_time_ms / fade_in_ms
-            elif rel_time_ms > (dur_ms - fade_out_ms):
+            elif fade_out_ms > 0 and rel_time_ms > (dur_ms - fade_out_ms):
                 intensity = (dur_ms - rel_time_ms) / fade_out_ms
                 
             val = int(255 * intensity)

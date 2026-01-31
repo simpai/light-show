@@ -6,10 +6,12 @@ import { Timeline } from './Timeline';
 import Scene3D from './Scene3D';
 import ClipEditor from './ClipEditor';
 import { LayoutParser } from '../utils/LayoutParser';
+import { FseqWriter } from '../utils/FseqWriter';
+import JSZip from 'jszip';
 import MatrixPreview2D from './MatrixPreview2D';
 import axios from 'axios';
 
-export default function EditorApp() {
+export default function EditorApp({ audioFile: initialAudioFile, analysis: initialAnalysis, bundledData, onExit }) {
     const [project, setProject] = useState(new ProjectState());
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -34,20 +36,68 @@ export default function EditorApp() {
     const layoutInputRef = useRef(null);
     const audioUrlRef = useRef(null); // Cache audio URL
 
-    // Initialize with one default track
+    // Initialize with props or default
     useEffect(() => {
-        const newProject = new ProjectState();
-        newProject.addLayer('Track 1');
-        newProject.duration = 60000; // Default 60s
-        setProject(newProject);
-        setSelectedLayerId(newProject.layers[0].id);
-        rendererRef.current.setProject(newProject);
-        rendererRef.current.setMatrixMode(true, matrixConfig);
+        const init = async () => {
+            if (bundledData) {
+                // 1. Restore State from bundle
+                const loadedProject = await ProjectState.fromJSON(bundledData.project);
+                setProject(loadedProject);
+                rendererRef.current.setProject(loadedProject);
 
-        // Initialize with default layout
-        const defaultLayout = LayoutParser.createDefaultLayout(matrixConfig.cols, matrixConfig.rows);
-        setLayoutData(defaultLayout);
-    }, []);
+                if (bundledData.matrixConfig) setMatrixConfig(bundledData.matrixConfig);
+                if (bundledData.layoutData) setLayoutData(bundledData.layoutData);
+                setLayoutFileName(bundledData.layoutFileName || '');
+                if (bundledData.colSpacing !== undefined) setColSpacing(bundledData.colSpacing);
+                if (bundledData.rowSpacing !== undefined) setRowSpacing(bundledData.rowSpacing);
+
+                // 2. Load Audio if provided via bundle (already set in setAudioFile in App.jsx but we need local state)
+                if (audioFile) {
+                    setAudioFile(audioFile);
+                    setAudioFileName(audioFile.name);
+                    const url = URL.createObjectURL(audioFile);
+                    audioUrlRef.current = url;
+                }
+            } else if (initialAnalysis) {
+                // Handle standard auto-gen analysis
+                const newProject = new ProjectState();
+                newProject.loadAnalysis(initialAnalysis);
+                setProject(newProject);
+                rendererRef.current.setProject(newProject);
+
+                // Set audio
+                if (initialAudioFile) {
+                    setAudioFile(initialAudioFile);
+                    setAudioFileName(initialAudioFile.name);
+                    const url = URL.createObjectURL(initialAudioFile);
+                    audioUrlRef.current = url;
+                }
+            } else {
+                // Default new project
+                const newProject = new ProjectState();
+                newProject.addLayer('Track 1');
+                newProject.duration = 60000;
+                setProject(newProject);
+                rendererRef.current.setProject(newProject);
+
+                // Set audio if provided
+                if (initialAudioFile) {
+                    setAudioFile(initialAudioFile);
+                    setAudioFileName(initialAudioFile.name);
+                    const url = URL.createObjectURL(initialAudioFile);
+                    audioUrlRef.current = url;
+                }
+            }
+
+            // Initialize with default layout if none
+            if (!layoutData && !bundledData?.layoutData) {
+                const defaultLayout = LayoutParser.createDefaultLayout(matrixConfig.cols, matrixConfig.rows);
+                setLayoutData(defaultLayout);
+            }
+        };
+
+        init();
+    }, [bundledData, initialAnalysis, initialAudioFile]);
 
     useEffect(() => {
         rendererRef.current.setMatrixMode(true, matrixConfig);
@@ -310,19 +360,54 @@ export default function EditorApp() {
 
     const handleExport = async () => {
         try {
-            const response = await axios.post('/export', {
-                project: project,
-                matrixMode: true,
-                matrixConfig: matrixConfig,
-                layoutData: layoutData
-            });
-            if (response.data.success) {
-                const ext = response.data.extension || '.fseq';
-                window.location.href = `/download/${response.data.file_id}${ext}`;
+            const writer = new FseqWriter(48, 20); // 48 channels, 20ms step
+            const durationMs = project.duration || 10000;
+            const frameCount = Math.ceil(durationMs / 20);
+            const gridSize = matrixConfig;
+
+            const zip = new JSZip();
+            let hasFiles = false;
+
+            // Process each car in the grid
+            for (let r = 0; r < gridSize.rows; r++) {
+                for (let c = 0; c < gridSize.cols; c++) {
+                    // Check if car exists in layout
+                    const cell = layoutData?.layout?.[r]?.[c];
+                    if (layoutData && cell && !cell.exists) continue;
+
+                    const frames = [];
+                    for (let f = 0; f < frameCount; f++) {
+                        const timeMs = f * 20;
+                        const frame = rendererRef.current.getFrameForPosition(timeMs, r, c, gridSize);
+                        frames.push(frame);
+                    }
+
+                    // Use requested naming convention
+                    const rowLetter = String.fromCharCode(65 + r); // A, B, C...
+                    const colId = (c + 1).toString().padStart(2, '0'); // 01, 02...
+                    const blob = writer.createFseq(frames);
+                    zip.file(`${rowLetter}${colId}.fseq`, blob);
+                    hasFiles = true;
+                }
             }
-        } catch (err) {
-            console.error("Export failed", err);
-            alert("Export failed: " + (err.response?.data?.error || err.message));
+
+            if (!hasFiles) {
+                alert("No cars found in layout to export.");
+                return;
+            }
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `lightshow_matrix_${new Date().getTime()}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('Failed to export light show.');
         }
     };
 
@@ -337,65 +422,96 @@ export default function EditorApp() {
         }
     }
 
-    const handleSaveProject = () => {
-        const projectData = {
-            version: '1.0',
-            project: project.toJSON(),
-            matrixConfig,
-            audioFileName,
-            layoutFileName,
-            layoutData,
-            colSpacing,
-            rowSpacing
-        };
+    const handleSaveProject = async () => {
+        try {
+            const zip = new JSZip();
 
-        const json = JSON.stringify(projectData, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
+            const projectData = {
+                version: '1.1',
+                project: project.toJSON(),
+                matrixConfig,
+                audioFileName,
+                layoutFileName,
+                layoutData,
+                colSpacing,
+                rowSpacing
+            };
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `lightshow-${Date.now()}.json`;
-        a.click();
+            // 1. Add project metadata
+            zip.file("project.json", JSON.stringify(projectData, null, 2));
 
-        URL.revokeObjectURL(url);
-        console.log('Project saved');
+            // 2. Add audio file if exists
+            if (audioFile) {
+                zip.file(audioFileName || "audio.mp3", audioFile);
+            }
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(content);
+
+            const a = document.createElement('a');
+            a.href = url;
+            const safeName = (audioFileName || 'lightshow').split('.')[0];
+            a.download = `${safeName}_project.ls`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            URL.revokeObjectURL(url);
+            console.log('Project bundle saved');
+        } catch (err) {
+            console.error('Failed to save project:', err);
+            alert('Failed to save project bundle: ' + err.message);
+        }
     };
 
     const handleLoadProject = async (file) => {
         try {
-            const text = await file.text();
-            const data = JSON.parse(text);
+            const zip = await JSZip.loadAsync(file);
 
-            // Load project
+            // 1. Load project.json
+            const jsonFile = zip.file("project.json");
+            if (!jsonFile) throw new Error("Not a valid lightshow bundle (missing project.json)");
+
+            const jsonText = await jsonFile.async("string");
+            const data = JSON.parse(jsonText);
+
+            // 2. Restore State
             const loadedProject = await ProjectState.fromJSON(data.project);
             setProject(loadedProject);
             rendererRef.current.setProject(loadedProject);
 
-            // Restore matrix config
-            if (data.matrixConfig) {
-                setMatrixConfig(data.matrixConfig);
-            }
-
-            // Restore layout data
-            if (data.layoutData) {
-                setLayoutData(data.layoutData);
-                setLayoutFileName(data.layoutFileName || 'layout.png');
-            }
-
-            // Restore spacing
+            if (data.matrixConfig) setMatrixConfig(data.matrixConfig);
+            if (data.layoutData) setLayoutData(data.layoutData);
+            setLayoutFileName(data.layoutFileName || '');
             if (data.colSpacing !== undefined) setColSpacing(data.colSpacing);
             if (data.rowSpacing !== undefined) setRowSpacing(data.rowSpacing);
 
-            // Note: User needs to re-upload audio file
-            setAudioFileName(data.audioFileName || '');
+            // 3. Load Audio from bundle
+            const audioName = data.audioFileName;
+            if (audioName) {
+                const audioInZip = zip.file(audioName);
+                if (audioInZip) {
+                    const audioBlob = await audioInZip.async("blob");
+                    const audioFileObj = new File([audioBlob], audioName, { type: audioBlob.type });
 
-            console.log('Project loaded');
-            alert('Project loaded! Please re-upload the audio file: ' + (data.audioFileName || 'unknown'));
+                    setAudioFile(audioFileObj);
+                    setAudioFileName(audioName);
+
+                    const url = URL.createObjectURL(audioFileObj);
+                    audioUrlRef.current = url;
+                    if (audioRef.current) {
+                        audioRef.current.src = url;
+                        audioRef.current.load();
+                    }
+                }
+            }
+
+            console.log('Project bundle loaded');
+            alert('Project bundle loaded successfully!');
 
         } catch (err) {
-            console.error('Failed to load project:', err);
-            alert('Failed to load project: ' + err.message);
+            console.error('Failed to load project bundle:', err);
+            alert('Failed to load project bundle: ' + err.message);
         }
     };
 
@@ -450,7 +566,7 @@ export default function EditorApp() {
                         <Upload size={20} />
                         <input
                             type="file"
-                            accept=".json"
+                            accept=".ls,.json,.zip"
                             onChange={(e) => e.target.files[0] && handleLoadProject(e.target.files[0])}
                             style={{ display: 'none' }}
                         />
@@ -535,6 +651,8 @@ export default function EditorApp() {
                             }}
                         >3D</button>
                     </div>
+
+
 
                     <button className="btn-tesla-sm" onClick={handleExport}>
                         <Save size={16} /> Export

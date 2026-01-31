@@ -6,7 +6,7 @@ import { FseqParser } from './utils/FseqParser'
 import JSZip from 'jszip'
 import Visualizer from './components/Visualizer'
 import MatrixVisualizer from './components/MatrixVisualizer'
-import Editor from './components/Editor'
+import EditorApp from './components/EditorApp'
 import './App.css'
 
 function App() {
@@ -47,6 +47,12 @@ function App() {
         setAudioUrl(URL.createObjectURL(selectedFile))
         setError(null)
         setResult(null)
+
+        // Detect if it's actually a bundle renamed to audio or something?
+        // Unlikely, but safety check for .ls files chosen here
+        if (selectedFile.name.endsWith('.ls')) {
+          handleBundleChange({ target: { files: [selectedFile] } });
+        }
       } else {
         setError("Please upload a valid audio file (WAV or MP3)")
       }
@@ -71,26 +77,41 @@ function App() {
 
           zip.forEach((relativePath, zipEntry) => {
             if (zipEntry.name.endsWith('.fseq')) {
-              const nameParts = zipEntry.name.replace('.fseq', '').split('_')
-              if (nameParts.length >= 2) {
-                const r = parseInt(nameParts[0])
-                const c = parseInt(nameParts[1])
-                if (!isNaN(r) && !isNaN(c)) {
-                  maxR = Math.max(maxR, r)
-                  maxC = Math.max(maxC, c)
+              const baseName = zipEntry.name.replace('.fseq', '');
+              let r = -1, c = -1;
 
-                  promises.push(
-                    zipEntry.async('arraybuffer').then(buffer => {
-                      try {
-                        const parser = new FseqParser(buffer)
-                        const header = parser.parse()
-                        newMatrixData[`${r}_${c}`] = { parser, header }
-                      } catch (err) {
-                        console.warn("Failed to parse fseq in zip:", zipEntry.name)
-                      }
-                    })
-                  )
+              // 1. Try New Convention: A01, B02...
+              const newMatch = baseName.match(/^([A-Za-z])(\d+)$/);
+              if (newMatch) {
+                r = newMatch[1].toUpperCase().charCodeAt(0) - 65; // A=0, B=1...
+                c = parseInt(newMatch[2]) - 1; // 01=0, 02=1...
+              } else {
+                // 2. Try Old Convention: x0_y1, 0_1...
+                const oldMatch = baseName.match(/^(?:x)?(\d+)[_](?:y)?(\d+)$/i);
+                if (oldMatch) {
+                  // In old format, it was usually index-based
+                  // Often it was x_y, but sometimes y_x. 
+                  // Let's assume the previous logic was r=parts[0], c=parts[1]
+                  r = parseInt(oldMatch[1]);
+                  c = parseInt(oldMatch[2]);
                 }
+              }
+
+              if (r !== -1 && c !== -1 && !isNaN(r) && !isNaN(c)) {
+                maxR = Math.max(maxR, r);
+                maxC = Math.max(maxC, c);
+
+                promises.push(
+                  zipEntry.async('arraybuffer').then(buffer => {
+                    try {
+                      const parser = new FseqParser(buffer);
+                      const header = parser.parse();
+                      newMatrixData[`${r}_${c}`] = { parser, header };
+                    } catch (err) {
+                      console.warn("Failed to parse fseq in zip:", zipEntry.name);
+                    }
+                  })
+                );
               }
             }
           })
@@ -114,20 +135,53 @@ function App() {
         } catch (err) {
           setError("Failed to parse ZIP file: " + err.message)
         }
-      } else if (selectedFile.name.endsWith('.fseq')) {
-        // Standard Single File
-        const buffer = await selectedFile.arrayBuffer()
-        try {
-          const parser = new FseqParser(buffer)
-          const header = parser.parse()
-          setFseqFile(selectedFile)
-          setPlaybackData({ parser, header })
-          setError(null)
-        } catch (err) {
-          setError(err.message)
-        }
+      } else if (selectedFile.name.endsWith('.ls')) {
+        // Project Bundle
+        handleBundleChange(e);
       } else {
-        setError("Please upload a .fseq or .zip file")
+        setError("Please upload a .fseq, .zip, or .ls file")
+      }
+    }
+  }
+
+  const handleBundleChange = async (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile && selectedFile.name.endsWith('.ls')) {
+      setLoading(true);
+      setError(null);
+      try {
+        const zip = await JSZip.loadAsync(selectedFile);
+
+        // 1. Load project.json
+        const jsonFile = zip.file("project.json");
+        if (!jsonFile) throw new Error("Not a valid lightshow bundle (missing project.json)");
+
+        const jsonText = await jsonFile.async("string");
+        const data = JSON.parse(jsonText);
+
+        // 2. Load Audio from bundle
+        const audioName = data.audioFileName;
+        if (audioName) {
+          const audioInZip = zip.file(audioName);
+          if (audioInZip) {
+            const audioBlob = await audioInZip.async("blob");
+            const audioFileObj = new File([audioBlob], audioName, { type: audioBlob.type });
+            setFile(audioFileObj);
+            setAudioUrl(URL.createObjectURL(audioFileObj));
+          }
+        }
+
+        // 3. Set analysis data and enter editor mode
+        // Note: ProjectState mapping happens automatically in the Editor/EditorApp component
+        // We just need to pass the analysis data if it exists or trigger an initial state
+        setAnalysisData(data); // Editor component will handle .project and .layoutData from this
+        setMode('editor');
+        console.log('Project bundle recognized in main screen');
+
+      } catch (err) {
+        setError("Failed to load project bundle: " + err.message);
+      } finally {
+        setLoading(false);
       }
     }
   }
@@ -219,7 +273,14 @@ function App() {
   }, [isPlaying, playbackData])
 
   if (mode === 'editor') {
-    return <Editor audioFile={file} analysis={analysisData} onExit={() => setMode('generator')} />;
+    return (
+      <EditorApp
+        audioFile={file}
+        analysis={analysisData}
+        bundledData={analysisData} // Pass the whole bundle if it was loaded from .ls
+        onExit={() => setMode('generator')}
+      />
+    );
   }
 
   return (
@@ -342,6 +403,23 @@ function App() {
                     >
                       <Edit3 size={20} style={{ marginRight: '5px' }} />
                       Advanced Editor
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+                    <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>Already have a project?</p>
+                    <button
+                      className="btn-link"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.ls';
+                        input.onchange = (e) => handleBundleChange(e);
+                        input.click();
+                      }}
+                      style={{ fontSize: '14px' }}
+                    >
+                      📁 Load Project Bundle (.ls)
                     </button>
                   </div>
                 </>

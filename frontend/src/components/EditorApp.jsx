@@ -3,7 +3,7 @@ import { Play, Pause, Save, Plus, Layers, Grid3x3, Upload, Wand2 } from 'lucide-
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
 import { Timeline } from './Timeline';
-import MatrixPreview from './MatrixPreview';
+import Scene3D from './Scene3D';
 import ClipEditor from './ClipEditor';
 import axios from 'axios';
 
@@ -402,24 +402,25 @@ export default function EditorApp() {
                     <div className="matrix-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
                         <Grid3x3 size={16} style={{ color: '#e82020' }} />
                         <input
-                            type="text"
-                            value={tempGridConfig.rows}
-                            onChange={(e) => setTempGridConfig({ ...tempGridConfig, rows: parseInt(e.target.value) || 10 })}
-                            style={{ width: '50px', padding: '4px', background: '#333', border: '1px solid #555', color: 'white', borderRadius: '3px', textAlign: 'center' }}
-                            placeholder="Rows"
-                        />
-                        <span>×</span>
-                        <input
-                            type="text"
+                            type="number"
                             value={tempGridConfig.cols}
-                            onChange={(e) => setTempGridConfig({ ...tempGridConfig, cols: parseInt(e.target.value) || 10 })}
-                            style={{ width: '50px', padding: '4px', background: '#333', border: '1px solid #555', color: 'white', borderRadius: '3px', textAlign: 'center' }}
-                            placeholder="Cols"
+                            onChange={e => setTempGridConfig({ ...tempGridConfig, cols: parseInt(e.target.value) || 1 })}
+                            style={{ width: '50px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
+                            min="1"
+                            max="100"
+                        />
+                        <span style={{ color: '#666' }}>×</span>
+                        <input
+                            type="number"
+                            value={tempGridConfig.rows}
+                            onChange={e => setTempGridConfig({ ...tempGridConfig, rows: parseInt(e.target.value) || 1 })}
+                            style={{ width: '50px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
+                            min="1"
+                            max="100"
                         />
                         <button
-                            className="btn-tesla-sm"
-                            onClick={handleApplyGridConfig}
-                            style={{ padding: '4px 8px', fontSize: '11px' }}
+                            onClick={() => setMatrixConfig(tempGridConfig)}
+                            style={{ padding: '2px 8px', background: '#e82020', border: 'none', borderRadius: '3px', color: 'white', cursor: 'pointer', fontSize: '12px' }}
                         >
                             Apply
                         </button>
@@ -432,7 +433,7 @@ export default function EditorApp() {
 
             <div className="editor-main">
                 <div className="preview-panel">
-                    <MatrixPreview
+                    <Scene3D
                         key={`${matrixConfig.rows}-${matrixConfig.cols}`}
                         matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
                         rows={matrixConfig.rows}

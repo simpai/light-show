@@ -193,12 +193,7 @@ export default function ClipEditor({ clip, onChange, onDelete }) {
                 </>
             )}
 
-            {clip.type === 'pattern' && (
-                <div className="p-2 bg-[#222] rounded border border-[#333]">
-                    <p className="text-yellow-500 text-xs mb-2">GIF Support Coming Soon</p>
-                    <input type="file" disabled className="w-full text-xs" />
-                </div>
-            )}
+
             {clip.type === 'pattern' && (
                 <div className="p-2 bg-[#222] rounded border border-[#333]">
                     <div className="form-group mb-3">

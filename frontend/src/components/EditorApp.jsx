@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Wand2, Image as ImageIcon } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Wand2, Zap, Image as ImageIcon } from 'lucide-react';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
 import { Timeline } from './Timeline';
@@ -7,6 +7,7 @@ import Scene3D from './Scene3D';
 import ClipEditor from './ClipEditor';
 import { LayoutParser } from '../utils/LayoutParser';
 import { FseqWriter } from '../utils/FseqWriter';
+import { XsqWriter } from '../utils/XsqWriter';
 import JSZip from 'jszip';
 import MatrixPreview2D from './MatrixPreview2D';
 import axios from 'axios';
@@ -358,7 +359,77 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
     };
 
-    const handleExport = async () => {
+    const handleExportXsq = async () => {
+        try {
+            const writer = new XsqWriter();
+            const durationMs = project.duration || 10000;
+            const frameCount = Math.ceil(durationMs / 20);
+            const gridSize = matrixConfig;
+            const isMatrix = gridSize.rows > 1 || gridSize.cols > 1;
+
+            if (isMatrix) {
+                const zip = new JSZip();
+                let hasFiles = false;
+
+                for (let r = 0; r < gridSize.rows; r++) {
+                    for (let c = 0; c < gridSize.cols; c++) {
+                        const cell = layoutData?.layout?.[r]?.[c];
+                        if (layoutData && cell && !cell.exists) continue;
+
+                        const frames = [];
+                        for (let f = 0; f < frameCount; f++) {
+                            const timeMs = f * 20;
+                            const frame = rendererRef.current.getFrameForPosition(timeMs, r, c, gridSize);
+                            frames.push(frame);
+                        }
+
+                        const rowLetter = String.fromCharCode(65 + r);
+                        const colId = (c + 1).toString().padStart(2, '0');
+                        const xml = writer.createXsq(frames, {
+                            song: `${audioFileName} - ${rowLetter}${colId}`,
+                            author: 'Lightshow Generator'
+                        });
+                        zip.file(`${rowLetter}${colId}.xsq`, xml);
+                        hasFiles = true;
+                    }
+                }
+
+                if (!hasFiles) {
+                    alert("No cars found in layout to export.");
+                    return;
+                }
+
+                const content = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `lightshow_matrix_xsq_${new Date().getTime()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                console.log('Matrix XSQ Exported');
+            } else {
+                // Single car export
+                const frames = [];
+                for (let i = 0; i < frameCount; i++) {
+                    frames.push(rendererRef.current.getFrame(i * 20));
+                }
+
+                const safeName = (audioFileName || 'lightshow').split('.')[0];
+                writer.download(frames, `${safeName}.xsq`, {
+                    song: audioFileName,
+                    author: 'Lightshow Generator'
+                });
+                console.log('Single XSQ Exported');
+            }
+        } catch (err) {
+            console.error('Failed to export XSQ:', err);
+            alert('Failed to export XLights sequence: ' + err.message);
+        }
+    };
+
+    const handleExportMatrix = async () => {
         try {
             const writer = new FseqWriter(48, 20); // 48 channels, 20ms step
             const durationMs = project.duration || 10000;
@@ -594,6 +665,30 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </span>
                     )}
 
+                    {/* Matrix Size Controls */}
+                    <div className="matrix-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
+                        <span style={{ fontSize: '12px', color: '#666' }}>Grid:</span>
+                        <input
+                            type="number"
+                            value={matrixConfig.rows}
+                            onChange={e => setMatrixConfig(prev => ({ ...prev, rows: parseInt(e.target.value) || 1 }))}
+                            style={{ width: '45px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
+                            min="1"
+                            max="50"
+                            title="Rows"
+                        />
+                        <span style={{ color: '#666' }}>×</span>
+                        <input
+                            type="number"
+                            value={matrixConfig.cols}
+                            onChange={e => setMatrixConfig(prev => ({ ...prev, cols: parseInt(e.target.value) || 1 }))}
+                            style={{ width: '45px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
+                            min="1"
+                            max="100"
+                            title="Columns"
+                        />
+                    </div>
+
                     {/* Spacing Controls */}
                     <div className="spacing-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
                         <span style={{ fontSize: '12px', color: '#666' }}>Spacing:</span>
@@ -651,12 +746,15 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             }}
                         >3D</button>
                     </div>
-
-
-
-                    <button className="btn-tesla-sm" onClick={handleExport}>
-                        <Save size={16} /> Export
-                    </button>
+                    <div className="toolbar-group">
+                        <button className="btn-secondary" onClick={handleExportXsq}>
+                            <Zap size={16} style={{ marginRight: '6px' }} />
+                            xLights (.xsq)
+                        </button>
+                        <button className="btn-primary" onClick={handleExportMatrix}>
+                            <Save size={16} /> Export
+                        </button>
+                    </div>
                 </div>
             </header>
 

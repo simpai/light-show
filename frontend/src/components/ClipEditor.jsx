@@ -12,30 +12,68 @@ const CHANNELS = {
     "Reverse": [22, 23]
 };
 
-const GifPreview = ({ asset }) => {
+const GifPreview = ({ asset, fps = 15 }) => {
     const canvasRef = React.useRef(null);
+    const requestRef = React.useRef();
+    const frameIndexRef = React.useRef(0);
+    const lastTimeRef = React.useRef(0);
 
+    // Reset on asset change
     React.useEffect(() => {
-        if (asset && canvasRef.current) {
+        frameIndexRef.current = 0;
+        if (asset && canvasRef.current && asset.frames && asset.frames.length > 0) {
             const ctx = canvasRef.current.getContext('2d');
-            // Keep canvas size reasonable for preview
             canvasRef.current.width = asset.width;
             canvasRef.current.height = asset.height;
-
-            // Draw first frame
-            if (asset.frames && asset.frames.length > 0) {
-                ctx.putImageData(asset.frames[0], 0, 0);
-            }
+            ctx.putImageData(asset.frames[0], 0, 0);
         }
+    }, [asset]);
+
+    // Animation loop
+    React.useEffect(() => {
+        if (!asset || !asset.frames || asset.frames.length <= 1) return;
+
+        const animate = (time) => {
+            if (time - lastTimeRef.current > (1000 / (fps || 15))) { // Default fallback
+                if (canvasRef.current) {
+                    const ctx = canvasRef.current.getContext('2d');
+                    frameIndexRef.current = (frameIndexRef.current + 1) % asset.frames.length;
+                    ctx.putImageData(asset.frames[frameIndexRef.current], 0, 0);
+                    lastTimeRef.current = time;
+                }
+            }
+            requestRef.current = requestAnimationFrame(animate);
+        };
+
+        requestRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        };
+    }, [asset, fps]);
+
+    // Calculate integer scale based on max height of 200px, capped at 4x
+    const scale = React.useMemo(() => {
+        if (!asset || !asset.height) return 1;
+        const MAX_HEIGHT = 200;
+        const s = Math.floor(MAX_HEIGHT / asset.height);
+        return Math.min(Math.max(1, s), 4); // Min 1x, Max 4x
     }, [asset]);
 
     if (!asset) return null;
 
     return (
         <div className="gif-preview">
-            <canvas ref={canvasRef} />
+            <canvas
+                ref={canvasRef}
+                style={{
+                    width: asset.width * scale,
+                    height: asset.height * scale,
+                    imageRendering: 'pixelated'
+                }}
+            />
             <div className="gif-info">
-                {asset.width}x{asset.height} • {asset.frames.length} frames
+                {asset.width}x{asset.height} • {asset.frames.length} frames • {fps || '?'} FPS • {scale}x Zoom
             </div>
             <style jsx>{`
                 .gif-preview {
@@ -46,12 +84,11 @@ const GifPreview = ({ asset }) => {
                     overflow: hidden;
                     display: inline-flex;
                     flex-direction: column;
+                    align-items: center; /* Center the canvas if it's smaller than info */
                 }
-                canvas {
+                .gif-preview canvas {
                     max-width: 100%;
                     max-height: 200px;
-                    width: auto;
-                    height: auto;
                     display: block;
                     background-image: linear-gradient(45deg, #222 25%, transparent 25%), 
                                       linear-gradient(-45deg, #222 25%, transparent 25%), 
@@ -61,12 +98,14 @@ const GifPreview = ({ asset }) => {
                     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
                 }
                 .gif-info {
+                    width: 100%;
                     padding: 4px 8px;
                     background: #222;
                     font-size: 11px;
                     color: #999;
                     border-top: 1px solid #333;
                     text-align: center;
+                    box-sizing: border-box;
                 }
             `}</style>
         </div>
@@ -123,17 +162,6 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
             </div>
 
             <div className="form-group">
-                <label>Clip Type</label>
-                <select
-                    value={clip.type || 'effect'}
-                    onChange={e => handleChange('type', e.target.value)}
-                >
-                    <option value="effect">Effect (Lights)</option>
-                    <option value="gif">GIF (Image/GIF)</option>
-                </select>
-            </div>
-
-            <div className="form-group">
                 <label>Start Time (ms)</label>
                 <input
                     type="number"
@@ -141,6 +169,35 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                     onChange={e => handleChange('startTime', parseInt(e.target.value))}
                 />
             </div>
+
+            {clip.type === 'gif' && (
+                <>
+                    <div className="form-group">
+                        <label>Brightness Mode</label>
+                        <select
+                            value={clip.brightnessMode || 'gradient'}
+                            onChange={e => handleChange('brightnessMode', e.target.value)}
+                        >
+                            <option value="gradient">Gradient (0-255)</option>
+                            <option value="binary">Binary (ON/OFF)</option>
+                        </select>
+                    </div>
+
+                    {clip.brightnessMode === 'binary' && (
+                        <div className="form-group">
+                            <label>Threshold - {clip.brightnessThreshold || 128}</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="255"
+                                step="1"
+                                value={clip.brightnessThreshold || 128}
+                                onChange={e => handleChange('brightnessThreshold', parseInt(e.target.value))}
+                            />
+                        </div>
+                    )}
+                </>
+            )}
 
             {clip.type === 'gif' ? (
                 <div className="timing-section">
@@ -323,49 +380,15 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
             {clip.type === 'gif' && (
                 <div className="pattern-section">
                     <div className="form-group vertical-group">
-                        <label>Upload Image/GIF</label>
-                        <input
-                            type="file"
-                            accept="image/gif,image/png,image/jpeg,image/jpg"
-                            onChange={(e) => {
-                                if (e.target.files[0] && onChange) {
-                                    const event = new CustomEvent('imageUpload', {
-                                        detail: { clipId: clip.id, file: e.target.files[0] }
-                                    });
-                                    window.dispatchEvent(event);
-                                }
-                            }}
-                            className="file-input"
-                        />
-                        {clip.assetId && assets[clip.assetId] && (
-                            <GifPreview asset={assets[clip.assetId]} />
+                        <label>Preview</label>
+                        {clip.assetId && assets[clip.assetId] ? (
+                            <GifPreview asset={assets[clip.assetId]} fps={clip.fps || 15} />
+                        ) : (
+                            <div className="text-gray-500 text-sm p-2">No asset loaded</div>
                         )}
                     </div>
 
-                    <div className="form-group">
-                        <label>Brightness Mode</label>
-                        <select
-                            value={clip.brightnessMode || 'gradient'}
-                            onChange={e => handleChange('brightnessMode', e.target.value)}
-                        >
-                            <option value="gradient">Gradient (0-255)</option>
-                            <option value="binary">Binary (ON/OFF)</option>
-                        </select>
-                    </div>
 
-                    {clip.brightnessMode === 'binary' && (
-                        <div className="form-group">
-                            <label>Threshold - {clip.brightnessThreshold || 128}</label>
-                            <input
-                                type="range"
-                                min="0"
-                                max="255"
-                                step="1"
-                                value={clip.brightnessThreshold || 128}
-                                onChange={e => handleChange('brightnessThreshold', parseInt(e.target.value))}
-                            />
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -412,6 +435,8 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                     display: flex;
                     align-items: center;
                     gap: 12px;
+                    width: 100%; /* Ensure it takes full width */
+                    box-sizing: border-box;
                 }
 
                 .form-group label {
@@ -428,6 +453,8 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                 .form-group input[type="text"],
                 .form-group select {
                     flex: 1;
+                    min-width: 0; /* Important: allows flex item to shrink below content size */
+                    width: 100%; /* Ensure it doesn't exceed parent */
                     background: #2a2a2a;
                     border: 1px solid #444;
                     border-radius: 6px;
@@ -436,6 +463,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                     font-size: 13px;
                     outline: none;
                     transition: border-color 0.2s;
+                    box-sizing: border-box;
                 }
 
                 .form-group input:focus,

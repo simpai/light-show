@@ -215,6 +215,24 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     if (clip) {
                         clip.assetId = assetId;
                         clip.fps = asset.fps;
+
+                        // Recalculate duration for GIF
+                        if (clip.type === 'gif') {
+                            const bpm = clip.bpm || 120;
+                            const beatsPerFrame = clip.beatsPerFrame || 1;
+                            const repetitions = clip.repetitions || 1;
+                            const frameCount = asset.frames.length;
+
+                            const msPerBeat = 60000 / bpm;
+                            const frameDuration = msPerBeat * beatsPerFrame;
+                            clip.duration = Math.round(frameDuration * frameCount * repetitions);
+
+                            // Force timing mode to beat
+                            if (!clip.timingMode) clip.timingMode = 'beat';
+
+                            // Log duration update
+                            console.log('GIF Duration updated:', clip.duration, 'ms', frameCount, 'frames');
+                        }
                         break;
                     }
                 }

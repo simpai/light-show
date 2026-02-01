@@ -78,11 +78,11 @@ export class ShowRenderer {
             return grid;
         }
 
-        // Check if any clip uses position-based patterns or is a pattern type
+        // Check if any clip uses position-based patterns or is a gif type
         let hasPositionPattern = false;
         for (const layer of this.project.layers) {
             for (const clip of layer.clips) {
-                if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'pattern') {
+                if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif') {
                     hasPositionPattern = true;
                     break;
                 }
@@ -247,7 +247,7 @@ export class ShowRenderer {
 
         if (clip.type === 'effect') {
             this.renderEffect(clip, clipTime, intensity, frame);
-        } else if (clip.type === 'pattern') {
+        } else if (clip.type === 'gif') {
             if (row !== null && col !== null && gridSize !== null) {
                 this.renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize);
             }

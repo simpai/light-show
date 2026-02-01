@@ -61,10 +61,20 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, lightSt
                 <cylinderGeometry args={[0.3, 0.3, 0.2, 16]} />
                 <meshStandardMaterial color="#222" />
             </mesh>
- */}
+            */}
+
             {/* LEFT HEADLIGHT - Channel 0 */}
-            <mesh position={[-0.7, 0.6, 2.1]} visible={isLightOn(0)}>
-                <sphereGeometry args={[0.8, 16, 16]} />
+            {/* <mesh position={[-0.7, 0.6, 2.1]} visible={isLightOn(0)}>
+                    <sphereGeometry args={[0.4, 16, 16]} />
+                    <meshStandardMaterial
+                        color="#ffffff"
+                        emissive="#ffffff"
+                        emissiveIntensity={getBrightness(0) * 9}
+                        toneMapped={false}
+                    />
+            </mesh> */}
+            <mesh position={[-0.8, 0.1, 5]} visible={isLightOn(0)}>
+                <boxGeometry args={[1.6, 0.1, 5]} />
                 <meshStandardMaterial
                     color="#ffffff"
                     emissive="#ffffff"
@@ -74,19 +84,28 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, lightSt
             </mesh>
 
             {/* RIGHT HEADLIGHT - Channel 1 */}
-            <mesh position={[0.7, 0.6, 2.1]} visible={isLightOn(1)}>
-                <sphereGeometry args={[0.8, 16, 16]} />
+            {/* <mesh position={[0.7, 0.6, 2.1]} visible={isLightOn(1)}>
+                <sphereGeometry args={[0.4, 16, 16]} />
                 <meshStandardMaterial
                     color="#ffffff"
                     emissive="#ffffff"
                     emissiveIntensity={getBrightness(1) * 9}
                     toneMapped={false}
                 />
+            </mesh> */}
+            <mesh position={[0.8, 0.1, 5]} visible={isLightOn(1)}>
+                <boxGeometry args={[1.6, 0.1, 5]} />
+                <meshStandardMaterial
+                    color="#ffffff"
+                    emissive="#ffffff"
+                    emissiveIntensity={getBrightness(0) * 9}
+                    toneMapped={false}
+                />
             </mesh>
 
             {/* LEFT TAILLIGHT - Channel 2 */}
             <mesh position={[-0.7, 0.6, -2.1]} visible={isLightOn(2)}>
-                <sphereGeometry args={[0.4, 16, 16]} />
+                <sphereGeometry args={[1, 16, 16]} />
                 <meshStandardMaterial
                     color="#ff0000"
                     emissive="#ff0000"
@@ -97,7 +116,7 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, lightSt
 
             {/* RIGHT TAILLIGHT - Channel 3 */}
             <mesh position={[0.7, 0.6, -2.1]} visible={isLightOn(3)}>
-                <sphereGeometry args={[0.4, 16, 16]} />
+                <sphereGeometry args={[1, 16, 16]} />
                 <meshStandardMaterial
                     color="#ff0000"
                     emissive="#ff0000"

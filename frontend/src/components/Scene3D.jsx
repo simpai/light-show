@@ -74,8 +74,9 @@ export default function Scene3D({ matrixData, rows = 16, cols = 63, layoutData =
     }
 
     return (
-        <div style={{ width: '100%', height: '100%', background: '#0a0a0a' }}>
+        <div style={{ width: '100%', height: '100%', background: '#0a0a0a', margin: 0, padding: 0, display: 'block' }}>
             <Canvas
+                style={{ display: 'block', margin: 0, padding: 0 }}
                 camera={{
                     position: [gridWidth * 0.4, gridDepth * 0.5, gridDepth * 0.6],
                     fov: 50

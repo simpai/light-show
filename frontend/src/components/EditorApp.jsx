@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Wand2, Zap, Image as ImageIcon } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Wand2, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack } from 'lucide-react';
+import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
 import { Timeline } from './Timeline';
@@ -28,6 +29,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [clipboard, setClipboard] = useState(null);
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
+    const [bookmarks, setBookmarks] = useState([]);
 
     // Layout system state
     const [layoutData, setLayoutData] = useState(null);
@@ -42,6 +44,58 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const fileInputRef = useRef(null);
     const layoutInputRef = useRef(null);
     const audioUrlRef = useRef(null); // Cache audio URL
+
+    const handleToggleBookmark = (timeMs) => {
+        setBookmarks(prev => {
+            const exists = prev.some(b => Math.abs(b - timeMs) < 10);
+            if (exists) {
+                return prev.filter(b => Math.abs(b - timeMs) >= 10);
+            } else {
+                return [...prev, timeMs].sort((a, b) => a - b);
+            }
+        });
+    };
+
+    const handleBookmarkMove = (oldTime, newTime) => {
+        setBookmarks(prev => {
+            const index = prev.findIndex(b => Math.abs(b - oldTime) < 10);
+            if (index === -1) return prev;
+            const updated = [...prev];
+            updated[index] = newTime;
+            return updated.sort((a, b) => a - b);
+        });
+    };
+
+    const handlePlayFromBookmark = () => {
+        if (bookmarks.length === 0) return;
+
+        // Find the latest bookmark before or at current time, or just the first one
+        let targetTime = bookmarks[0];
+        const pastBookmarks = bookmarks.filter(b => b <= currentTime + 50); // small buffer
+        if (pastBookmarks.length > 0) {
+            targetTime = pastBookmarks[pastBookmarks.length - 1];
+        }
+
+        handleSeek(targetTime);
+        if (!isPlaying) togglePlay();
+    };
+
+    const handleDelete = (clipId) => {
+        const json = project.toJSON();
+        const newProject = ProjectState.fromJSONSync(json);
+        let found = false;
+        newProject.layers.forEach(layer => {
+            const idx = layer.clips.findIndex(c => c.id === clipId);
+            if (idx !== -1) {
+                layer.clips.splice(idx, 1);
+                found = true;
+            }
+        });
+        if (found) {
+            saveToHistory(newProject);
+            setSelectedClipId(null);
+        }
+    };
 
     // Sync BPM when project analysis is available
     useEffect(() => {
@@ -202,6 +256,16 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         e.preventDefault();
                         handleDuplicateClip();
                         break;
+                    case 'x':
+                        // Cut logic
+                        if (selectedClipId) {
+                            const foundClip = project.layers.flatMap(l => l.clips).find(c => c.id === selectedClipId);
+                            if (foundClip) {
+                                setClipboard({ ...foundClip });
+                                handleDelete(selectedClipId);
+                            }
+                        }
+                        break;
                     case 'c':
                         // Copy logic
                         if (selectedClipId) {
@@ -212,7 +276,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     case 'v':
                         // Paste logic
                         if (clipboard) {
-                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                            const json = project.toJSON();
+                            const newProject = ProjectState.fromJSONSync(json);
                             const targetLayerId = selectedLayerId || newProject.layers[0].id;
                             const layer = newProject.layers.find(l => l.id === targetLayerId);
                             if (layer) {
@@ -240,6 +305,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     case ' ':
                         e.preventDefault();
                         togglePlay();
+                        break;
+                    case 'delete':
+                    case 'backspace':
+                        if (selectedClipId) {
+                            handleDelete(selectedClipId);
+                        }
                         break;
                 }
             }
@@ -790,8 +861,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     return (
         <div className="editor-container">
             <header className="editor-header">
-                <h2>🎵 Light Show Editor</h2>
-                <div className="actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <h2 style={{ margin: 0, fontSize: '18px' }}>🎵 Light Show Editor</h2>
+                <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -804,7 +875,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         onClick={() => fileInputRef.current?.click()}
                         title="Upload Audio"
                     >
-                        <Upload size={20} />
+                        <Music size={20} />
                     </button>
                     {audioFileName && (
                         <span style={{ fontSize: '12px', color: '#888', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -821,21 +892,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <Wand2 size={20} />
                     </button>
 
-                    <button
-                        className="btn-icon"
-                        onClick={handleSaveProject}
-                        title="Save Project"
-                        style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
-                    >
-                        <Save size={20} />
-                    </button>
-
                     <label
                         className="btn-icon"
                         title="Load Project"
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', borderLeft: '1px solid #444', paddingLeft: '10px' }}
                     >
-                        <Upload size={20} />
+                        <FolderOpen size={20} />
                         <input
                             type="file"
                             accept=".ls,.json,.zip"
@@ -843,6 +905,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             style={{ display: 'none' }}
                         />
                     </label>
+
+                    <button
+                        className="btn-icon"
+                        onClick={handleSaveProject}
+                        title="Save Project"
+                    >
+                        <Save size={20} />
+                    </button>
 
                     {/* Layout Image Upload */}
                     <input
@@ -947,13 +1017,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             }}
                         >3D</button>
                     </div>
-                    <div className="toolbar-group">
-                        <button className="btn-secondary" onClick={handleExportXsq}>
-                            <Zap size={16} style={{ marginRight: '6px' }} />
-                            xLights (.xsq)
+                    <div className="toolbar-group" style={{ display: 'flex', gap: '10px', borderLeft: '1px solid #444', paddingLeft: '12px', marginLeft: '12px' }}>
+                        <button className="btn-secondary" onClick={handleExportXsq} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
+                            <Save size={18} />
+                            .xsq
                         </button>
-                        <button className="btn-primary" onClick={handleExportMatrix}>
-                            <Save size={16} /> Export
+                        <button className="btn-secondary" onClick={handleExportMatrix} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
+                            <Save size={18} />
+                            .fseq
                         </button>
                     </div>
                 </div>
@@ -998,17 +1069,20 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             <div className="timeline-panel">
                 <div className="timeline-controls">
                     <button onClick={togglePlay} className="btn-icon">
-                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                        {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+                    </button>
+                    <button onClick={handlePlayFromBookmark} className="btn-icon" title="Play from Bookmark" disabled={bookmarks.length === 0}>
+                        <PlayFromBookmarkIcon size={22} />
                     </button>
                     <button onClick={handleReset} className="btn-icon" title="Reset to Start">
-                        ⏮
+                        <SkipBack size={24} />
                     </button>
                     <div className="history-controls" style={{ display: 'flex', gap: '5px', marginLeft: '10px' }}>
                         <button onClick={handleUndo} disabled={history.length === 0} className="btn-icon" title="Undo (Ctrl+Z)">
-                            <Zap size={18} style={{ transform: 'rotate(180deg)' }} />
+                            <Undo size={18} />
                         </button>
                         <button onClick={handleRedo} disabled={redoStack.length === 0} className="btn-icon" title="Redo (Ctrl+Y)">
-                            <Zap size={18} />
+                            <Redo size={18} />
                         </button>
                     </div>
                     <span className="time-display" style={{ marginLeft: '10px' }}>{(currentTime / 1000).toFixed(2)}s</span>
@@ -1089,11 +1163,15 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         snapMode={snapMode}
                         bpm={bpm}
                         onZoomChange={setZoom}
+                        selectedClipId={selectedClipId}
                         onClipSelect={setSelectedClipId}
                         selectedLayerId={selectedLayerId}
                         onLayerSelect={setSelectedLayerId}
                         onSeek={handleSeek}
                         onProjectChange={saveToHistory}
+                        bookmarks={bookmarks}
+                        onToggleBookmark={handleToggleBookmark}
+                        onBookmarkMove={handleBookmarkMove}
                     />
                 </div>
             </div>
@@ -1107,12 +1185,13 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             />
 
             <style jsx>{`
-        .editor-container { display: flex; flex-direction: column; height: 100vh; background: #111; color: white; }
-        .editor-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #222; border-bottom: 1px solid #333; }
-        .editor-main { flex: 1; display: flex; overflow: hidden; }
-        .preview-panel { flex: 2; background: #000; display: flex; align-items: center; justify-content: center; position: relative; }
-        .properties-panel { flex: 1; min-width: 300px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; }
-        .timeline-panel { height: 300px; background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; }
+        .editor-container { display: flex; flex-direction: column; height: 100%; background: #111; color: white; margin: 0; padding: 0; }
+        .editor-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #222; border-bottom: 1px solid #333; min-height: 42px; line-height: 1; margin: 0; }
+        .editor-header h2 { line-height: 1; margin: 0; }
+        .editor-main { flex: 1; display: flex; overflow: hidden; margin: 0; padding: 0; }
+        .preview-panel { flex: 1 1 auto; min-width: 400px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; padding: 0; margin: 0; }
+        .properties-panel { flex: 0 0 350px; min-width: 280px; max-width: 400px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
+        .timeline-panel { height: 350px; background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; margin: 0; padding: 0; }
         .timeline-controls { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }
         .timeline-tracks-container { flex: 1; overflow-y: auto; position: relative; }
         .btn-tesla-sm { background: #e82020; color: white; border: none; padding: 5px 15px; border-radius: 4px; display: flex; align-items: center; gap: 5px; cursor: pointer; }

@@ -111,7 +111,8 @@ export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layo
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    padding: 20px;
+                    margin: 0;
+                    padding: 0;
                     box-sizing: border-box;
                 }
             `}</style>

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
 
-export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedLayerId, onLayerSelect, onSeek, onProjectChange, onZoomChange }) {
+export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipId, selectedLayerId, onLayerSelect, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
     const pixelsPerSecond = zoom || 50;
     const totalWidth = (duration / 1000) * pixelsPerSecond;
     const trackHeaderWidth = 150;
@@ -101,6 +101,47 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
     const handleRulerMouseDown = (e) => {
         const rect = rulerScrollRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left + rulerScrollRef.current.scrollLeft;
+        const clickedTime = (x / pixelsPerSecond) * 1000;
+        const snappedTimeMs = getSnappedTime(clickedTime);
+
+        // Find bookmark near clicked position
+        const thresholdPx = 10;
+        const thresholdMs = (thresholdPx / pixelsPerSecond) * 1000;
+        const nearbyBookmark = bookmarks.find(b => Math.abs(b - clickedTime) <= thresholdMs);
+
+        if (nearbyBookmark !== undefined) {
+            if (e.ctrlKey) {
+                onToggleBookmark(nearbyBookmark);
+                return;
+            } else {
+                onBookmarkSelect(nearbyBookmark);
+
+                // Dragging logic for bookmark
+                let lastTime = nearbyBookmark;
+                const handleMouseMove = (moveEvent) => {
+                    const moveX = moveEvent.clientX - rect.left + rulerScrollRef.current.scrollLeft;
+                    const newTime = Math.max(0, (moveX / pixelsPerSecond) * 1000);
+                    const snapped = getSnappedTime(newTime);
+                    if (snapped !== lastTime && onBookmarkMove) {
+                        onBookmarkMove(lastTime, snapped);
+                        lastTime = snapped;
+                    }
+                };
+                const handleMouseUp = () => {
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                };
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+                return;
+            }
+        }
+
+        if (e.ctrlKey && onToggleBookmark) {
+            onToggleBookmark(snappedTimeMs);
+            return;
+        }
 
         const seek = (moveEvent) => {
             const x = moveEvent.clientX - rect.left + rulerScrollRef.current.scrollLeft;
@@ -222,6 +263,15 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             />
                         ))}
 
+                        {/* Bookmarks in Ruler */}
+                        {bookmarks.map((time, i) => (
+                            <div
+                                key={`b-ruler-${time}-${i}`}
+                                className="bookmark-marker-ruler"
+                                style={{ left: (time / 1000) * pixelsPerSecond }}
+                            />
+                        ))}
+
                         {/* Playhead in Ruler */}
                         <div className="playhead ruler-playhead" style={{ left: (currentTime / 1000) * pixelsPerSecond }} />
                     </div>
@@ -263,6 +313,15 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             );
                         })}
 
+                        {/* Bookmarks in Tracks */}
+                        {bookmarks.map((time, i) => (
+                            <div
+                                key={`b-track-${time}-${i}`}
+                                className="bookmark-marker-track"
+                                style={{ left: (time / 1000) * pixelsPerSecond }}
+                            />
+                        ))}
+
                         {project.layers.map(layer => (
                             <div
                                 key={layer.id}
@@ -278,7 +337,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                     return (
                                         <div
                                             key={clip.id}
-                                            className={`clip ${isDragging ? 'dragging' : ''}`}
+                                            className={`clip ${isDragging ? 'dragging' : ''} ${selectedClipId === clip.id ? 'selected' : ''}`}
                                             onMouseDown={(e) => handleDragStart(e, clip, layer.id)}
                                             style={{
                                                 left: clipLeft,
@@ -330,10 +389,24 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     z-index: 0;
                 }
                 .clip { position: absolute; top: 5px; bottom: 5px; border-radius: 4px; cursor: move; opacity: 0.8; display: flex; align-items: center; font-size: 11px; overflow: hidden; white-space: nowrap; transition: opacity 0.1s; border: 1px solid rgba(255,255,255,0.1); }
-                .clip:hover { opacity: 1; outline: 2px solid white; outline-offset: -2px; }
+                .clip:hover { opacity: 1; outline: 1px solid white; outline-offset: -1px; }
+                .clip.selected { opacity: 1; outline: 3px solid white; outline-offset: -2px; z-index: 5; box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
                 .clip.dragging { opacity: 0.6; pointer-events: none; outline: 2px solid #e82020; box-shadow: 0 0 15px rgba(232, 32, 32, 0.5); }
                 .clip-label { padding: 0 5px; pointer-events: none; }
                 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e82020; z-index: 10; pointer-events: none; }
+                .bookmark-marker-ruler { 
+                    position: absolute; 
+                    top: 0; 
+                    width: 14px; 
+                    height: 18px; 
+                    background: #22c55e; 
+                    clip-path: polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%);
+                    transform: translateX(-50%); 
+                    z-index: 20; 
+                    cursor: grab;
+                }
+                .bookmark-marker-ruler:hover { background: #4ade80; }
+                .bookmark-marker-track { position: absolute; top: 0; bottom: 0; width: 1px; background: #22c55e; opacity: 0.3; z-index: 5; pointer-events: none; }
             `}</style>
         </div>
     );

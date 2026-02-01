@@ -1,3 +1,18 @@
+/* Global Reset */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
 :root {
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -15,20 +30,18 @@
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  padding: 0;
+  height: 100%;
   min-width: 320px;
-  min-height: 100vh;
   background: radial-gradient(circle at top right, #1a1a1a, #0d0d0d);
   overflow-x: hidden;
 }
 
 #root {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 .tesla-red {

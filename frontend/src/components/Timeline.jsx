@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
 
-export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedLayerId, onLayerSelect, onSeek, onProjectChange }) {
+export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedLayerId, onLayerSelect, onSeek, onProjectChange, onZoomChange }) {
     const pixelsPerSecond = zoom || 50;
     const totalWidth = (duration / 1000) * pixelsPerSecond;
     const trackHeaderWidth = 150;
@@ -35,6 +35,35 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
     const analysis = project.analysis;
     const beatMarkers = analysis?.beat_times || [];
     const onsetMarkers = analysis?.onset_times || [];
+
+    useEffect(() => {
+        const handleWheelManual = (e) => {
+            e.preventDefault();
+            if (e.ctrlKey) {
+                // Zoom logic
+                const zoomAmount = e.deltaY > 0 ? 0.9 : 1.1;
+                const newZoom = Math.max(10, Math.min(200, zoom * zoomAmount));
+                if (onZoomChange) onZoomChange(newZoom);
+            } else {
+                // Horizontal scroll logic
+                if (lanesScrollRef.current) {
+                    lanesScrollRef.current.scrollLeft += e.deltaY;
+                }
+            }
+        };
+
+        const ruler = rulerScrollRef.current;
+        const lanes = lanesScrollRef.current;
+
+        if (ruler) ruler.addEventListener('wheel', handleWheelManual, { passive: false });
+        if (lanes) lanes.addEventListener('wheel', handleWheelManual, { passive: false });
+
+        return () => {
+            if (ruler) ruler.removeEventListener('wheel', handleWheelManual);
+            if (lanes) lanes.removeEventListener('wheel', handleWheelManual);
+        };
+    }, [zoom, onZoomChange]);
+
     // Dynamic snap interval
     let snapIntervalMs = null;
     if (snapMode !== 'off') {
@@ -216,9 +245,10 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
                 {/* Scrollable track lanes */}
                 <div
-                    className="track-lanes-container"
+                    className="timeline-tracks"
                     ref={lanesScrollRef}
                     onScroll={handleLanesScroll}
+                    style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', position: 'relative' }}
                 >
                     <div className="track-lanes" style={{ width: totalWidth }}>
                         {/* Grid lines */}

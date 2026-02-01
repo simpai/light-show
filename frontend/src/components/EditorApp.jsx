@@ -1088,6 +1088,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         zoom={zoom}
                         snapMode={snapMode}
                         bpm={bpm}
+                        onZoomChange={setZoom}
                         onClipSelect={setSelectedClipId}
                         selectedLayerId={selectedLayerId}
                         onLayerSelect={setSelectedLayerId}

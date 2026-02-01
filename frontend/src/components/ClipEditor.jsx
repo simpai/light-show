@@ -12,6 +12,67 @@ const CHANNELS = {
     "Reverse": [22, 23]
 };
 
+const GifPreview = ({ asset }) => {
+    const canvasRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (asset && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            // Keep canvas size reasonable for preview
+            canvasRef.current.width = asset.width;
+            canvasRef.current.height = asset.height;
+
+            // Draw first frame
+            if (asset.frames && asset.frames.length > 0) {
+                ctx.putImageData(asset.frames[0], 0, 0);
+            }
+        }
+    }, [asset]);
+
+    if (!asset) return null;
+
+    return (
+        <div className="gif-preview">
+            <canvas ref={canvasRef} />
+            <div className="gif-info">
+                {asset.width}x{asset.height} • {asset.frames.length} frames
+            </div>
+            <style jsx>{`
+                .gif-preview {
+                    margin-top: 10px;
+                    border: 1px solid #333;
+                    background: #111;
+                    border-radius: 4px;
+                    overflow: hidden;
+                    display: inline-flex;
+                    flex-direction: column;
+                }
+                canvas {
+                    max-width: 100%;
+                    max-height: 200px;
+                    width: auto;
+                    height: auto;
+                    display: block;
+                    background-image: linear-gradient(45deg, #222 25%, transparent 25%), 
+                                      linear-gradient(-45deg, #222 25%, transparent 25%), 
+                                      linear-gradient(45deg, transparent 75%, #222 75%), 
+                                      linear-gradient(-45deg, transparent 75%, #222 75%);
+                    background-size: 20px 20px;
+                    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+                }
+                .gif-info {
+                    padding: 4px 8px;
+                    background: #222;
+                    font-size: 11px;
+                    color: #999;
+                    border-top: 1px solid #333;
+                    text-align: center;
+                }
+            `}</style>
+        </div>
+    );
+};
+
 export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
     if (!clip) return <div className="p-4 text-gray-500">No clip selected</div>;
 
@@ -68,7 +129,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                     onChange={e => handleChange('type', e.target.value)}
                 >
                     <option value="effect">Effect (Lights)</option>
-                    <option value="pattern">Pattern (Image/GIF)</option>
+                    <option value="gif">GIF (Image/GIF)</option>
                 </select>
             </div>
 
@@ -81,139 +142,65 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                 />
             </div>
 
-            {clip.type === 'pattern' ? (
+            {clip.type === 'gif' ? (
                 <div className="timing-section">
+                    {/* Beat-based timing only for GIF clips */}
                     <div className="form-group">
-                        <label>Timing Mode</label>
-                        <select
-                            value={clip.timingMode || 'frame'}
+                        <label>BPM</label>
+                        <input
+                            type="number"
+                            value={clip.bpm || 120}
                             onChange={e => {
-                                const mode = e.target.value;
-                                const updates = { timingMode: mode };
-
-                                // Initialize default values for the selected mode
-                                if (mode === 'beat') {
-                                    updates.bpm = clip.bpm || 120;
-                                    updates.beatsPerFrame = clip.beatsPerFrame || 1;
-                                    updates.repetitions = clip.repetitions || 1;
-                                } else if (mode === 'frame') {
-                                    updates.frameDuration = clip.frameDuration || 100;
-                                    updates.repetitions = clip.repetitions || 1;
-                                }
-
-                                // Calculate initial duration
-                                const updatedClip = { ...clip, ...updates };
-                                const duration = calculateDuration(mode, updatedClip);
+                                const bpm = parseFloat(e.target.value);
+                                const updatedClip = { ...clip, bpm, timingMode: 'beat' };
+                                const duration = calculateDuration('beat', updatedClip);
                                 onChange({ ...updatedClip, duration });
                             }}
-                            className="timing-select"
-                        >
-                            <option value="frame">Frame-based</option>
-                            <option value="beat">Beat-based (BPM)</option>
-                        </select>
+                            min="1"
+                            step="0.1"
+                        />
                     </div>
-
-                    {clip.timingMode === 'frame' && (
-                        <>
-                            <div className="grid-2">
-                                <div className="form-group">
-                                    <label>Frame Duration (ms)</label>
-                                    <input
-                                        type="number"
-                                        value={clip.frameDuration || 100}
-                                        onChange={e => {
-                                            const frameDuration = parseInt(e.target.value);
-                                            const updatedClip = { ...clip, frameDuration };
-                                            const duration = calculateDuration('frame', updatedClip);
-                                            onChange({ ...updatedClip, duration });
-                                        }}
-                                        min="1"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Repetitions</label>
-                                    <input
-                                        type="number"
-                                        value={clip.repetitions || 1}
-                                        onChange={e => {
-                                            const repetitions = parseInt(e.target.value);
-                                            const updatedClip = { ...clip, repetitions };
-                                            const duration = calculateDuration('frame', updatedClip);
-                                            onChange({ ...updatedClip, duration });
-                                        }}
-                                        min="1"
-                                    />
-                                </div>
-                            </div>
-                            <div className="info-box">
-                                <span className="info-icon">ℹ️</span>
-                                <span className="info-text">
-                                    Duration: <span className="highlight">{clip.duration}ms</span> ({(clip.duration / 1000).toFixed(2)}s)
-                                </span>
-                            </div>
-                        </>
-                    )}
-
-                    {clip.timingMode === 'beat' && (
-                        <>
-                            <div className="form-group">
-                                <label>BPM</label>
-                                <input
-                                    type="number"
-                                    value={clip.bpm || 120}
-                                    onChange={e => {
-                                        const bpm = parseFloat(e.target.value);
-                                        const updatedClip = { ...clip, bpm };
-                                        const duration = calculateDuration('beat', updatedClip);
-                                        onChange({ ...updatedClip, duration });
-                                    }}
-                                    min="1"
-                                    step="0.1"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Beats per Frame</label>
-                                <input
-                                    type="number"
-                                    value={clip.beatsPerFrame || 1}
-                                    onChange={e => {
-                                        const beatsPerFrame = parseFloat(e.target.value);
-                                        const updatedClip = { ...clip, beatsPerFrame };
-                                        const duration = calculateDuration('beat', updatedClip);
-                                        onChange({ ...updatedClip, duration });
-                                    }}
-                                    min="0.125"
-                                    step="0.125"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Repetitions</label>
-                                <input
-                                    type="number"
-                                    value={clip.repetitions || 1}
-                                    onChange={e => {
-                                        const repetitions = parseInt(e.target.value);
-                                        const updatedClip = { ...clip, repetitions };
-                                        const duration = calculateDuration('beat', updatedClip);
-                                        onChange({ ...updatedClip, duration });
-                                    }}
-                                    min="1"
-                                />
-                            </div>
-                            <div className="info-box">
-                                <span className="info-icon">ℹ️</span>
-                                <span className="info-text">
-                                    Frame duration: <span className="highlight">{clip.bpm ? ((60000 / clip.bpm) * (clip.beatsPerFrame || 1)).toFixed(1) : 0}ms</span>
-                                </span>
-                            </div>
-                            <div className="info-box">
-                                <span className="info-icon">ℹ️</span>
-                                <span className="info-text">
-                                    Total duration: <span className="highlight">{clip.duration}ms</span> ({(clip.duration / 1000).toFixed(2)}s)
-                                </span>
-                            </div>
-                        </>
-                    )}
+                    <div className="form-group">
+                        <label>Beats per Frame</label>
+                        <input
+                            type="number"
+                            value={clip.beatsPerFrame || 1}
+                            onChange={e => {
+                                const beatsPerFrame = parseFloat(e.target.value);
+                                const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
+                                const duration = calculateDuration('beat', updatedClip);
+                                onChange({ ...updatedClip, duration });
+                            }}
+                            min="0.125"
+                            step="0.125"
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Repetitions</label>
+                        <input
+                            type="number"
+                            value={clip.repetitions || 1}
+                            onChange={e => {
+                                const repetitions = parseInt(e.target.value);
+                                const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
+                                const duration = calculateDuration('beat', updatedClip);
+                                onChange({ ...updatedClip, duration });
+                            }}
+                            min="1"
+                        />
+                    </div>
+                    <div className="info-box">
+                        <span className="info-icon">ℹ️</span>
+                        <span className="info-text">
+                            Frame duration: <span className="highlight">{clip.bpm ? ((60000 / clip.bpm) * (clip.beatsPerFrame || 1)).toFixed(1) : 0}ms</span>
+                        </span>
+                    </div>
+                    <div className="info-box">
+                        <span className="info-icon">ℹ️</span>
+                        <span className="info-text">
+                            Total duration: <span className="highlight">{clip.duration}ms</span> ({(clip.duration / 1000).toFixed(2)}s)
+                        </span>
+                    </div>
                 </div>
             ) : (
                 <div className="form-group">
@@ -333,7 +320,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                 </>
             )}
 
-            {clip.type === 'pattern' && (
+            {clip.type === 'gif' && (
                 <div className="pattern-section">
                     <div className="form-group vertical-group">
                         <label>Upload Image/GIF</label>
@@ -350,15 +337,9 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                             }}
                             className="file-input"
                         />
-                        {clip.assetId && (() => {
-                            const asset = assets[clip.assetId];
-                            const frameCount = asset?.frames?.length || 0;
-                            return (
-                                <p className="success-text">
-                                    ✓ Image loaded ({frameCount} frame{frameCount !== 1 ? 's' : ''})
-                                </p>
-                            );
-                        })()}
+                        {clip.assetId && assets[clip.assetId] && (
+                            <GifPreview asset={assets[clip.assetId]} />
+                        )}
                     </div>
 
                     <div className="form-group">

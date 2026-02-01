@@ -31,7 +31,7 @@ export class ProjectState {
                 id: uuidv4(),
                 startTime: clipConf.startTime || 0,
                 duration: clipConf.duration || 1000,
-                type: clipConf.type || 'effect', // 'effect' | 'pattern'
+                type: clipConf.type || 'effect', // 'effect' | 'gif'
                 effectType: clipConf.effectType || 'flash',
                 channels: clipConf.channels || [],
                 fadeIn: 0,

@@ -83,6 +83,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const handleDelete = (clipId) => {
         const json = project.toJSON();
         const newProject = ProjectState.fromJSONSync(json);
+        // Preserve assets (fromJSONSync skips them for performance)
+        newProject.assets = project.assets;
         let found = false;
         newProject.layers.forEach(layer => {
             const idx = layer.clips.findIndex(c => c.id === clipId);
@@ -111,6 +113,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setBpm(val);
         const json = project.toJSON();
         const newProject = ProjectState.fromJSONSync(json);
+        // Preserve assets (fromJSONSync skips them for performance)
+        newProject.assets = project.assets;
         if (!newProject.analysis) newProject.analysis = {};
         newProject.analysis.bpm = val;
         saveToHistory(newProject);
@@ -505,6 +509,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const handleClipUpdate = (updatedClip) => {
         const json = project.toJSON();
         const newProject = ProjectState.fromJSONSync(json);
+        // Preserve assets (fromJSONSync skips them for performance)
+        newProject.assets = project.assets;
         newProject.layers.forEach(layer => {
             const idx = layer.clips.findIndex(c => c.id === updatedClip.id);
             if (idx !== -1) {
@@ -529,6 +535,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         if (project.layers.length > 0) {
             const json = project.toJSON();
             const newProject = ProjectState.fromJSONSync(json);
+            // Preserve assets (fromJSONSync skips them for performance)
+            newProject.assets = project.assets;
             const targetLayerId = selectedLayerId || newProject.layers[0].id;
             const layer = newProject.layers.find(l => l.id === targetLayerId);
 
@@ -565,18 +573,25 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     id: crypto.randomUUID(),
                     startTime: startTime,
                     duration: 1000,
-                    type: type,
+                    type: type, // 'effect' or 'gif'
                     effectType: type === 'effect' ? 'flash' : 'image',
                     channels: [0, 1, 2, 3],
                     fadeIn: 0,
                     fadeOut: 0,
                     pattern: 'uniform',
                     patternDirection: 'horizontal',
-                    patternSpeed: 1.0
+                    patternSpeed: 1.0,
+                    // GIF clips use beat-based timing by default
+                    ...(type === 'gif' && {
+                        timingMode: 'beat',
+                        bpm: 120,
+                        beatsPerFrame: 1,
+                        repetitions: 1
+                    })
                 };
 
-                if (type === 'image') {
-                    // Trigger image upload
+                if (type === 'gif') {
+                    // Trigger image upload for GIF type
                     const input = document.createElement('input');
                     input.type = 'file';
                     input.accept = 'image/*';
@@ -603,6 +618,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
         const json = project.toJSON();
         const newProject = ProjectState.fromJSONSync(json);
+        // Preserve assets (fromJSONSync skips them for performance)
+        newProject.assets = project.assets;
         let sourceClip = null;
         let targetLayer = null;
 
@@ -1148,7 +1165,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <button onClick={() => handleAddClip('effect')} className="btn-icon" title="Add Effect at Cursor (E)" style={{ color: '#e82020' }}>
                             <Zap size={20} /> Effect
                         </button>
-                        <button onClick={() => handleAddClip('image')} className="btn-icon" title="Add GIF at Cursor (G)" style={{ color: '#4a90e2' }}>
+                        <button onClick={() => handleAddClip('gif')} className="btn-icon" title="Add GIF at Cursor (G)" style={{ color: '#4a90e2' }}>
                             <ImageIcon size={20} /> GIF
                         </button>
                     </div>

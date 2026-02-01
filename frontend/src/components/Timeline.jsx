@@ -201,6 +201,8 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     // Save change using deep clone to ensure history snapshot works
                     const json = project.toJSON();
                     const newProject = ProjectState.fromJSONSync(json);
+                    // Preserve assets (fromJSONSync skips them for performance)
+                    newProject.assets = project.assets;
                     const layer = newProject.layers.find(l => l.id === prev.layerId);
                     if (layer) {
                         const clipIdx = layer.clips.findIndex(c => c.id === prev.id);

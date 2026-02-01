@@ -22,6 +22,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [audioFile, setAudioFile] = useState(null);
     const [audioFileName, setAudioFileName] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [zoom, setZoom] = useState(50); // pixels per second
+    const [snapMode, setSnapMode] = useState('1/4'); // '1', '1/2', '1/4', '1/8', 'off'
+    const [bpm, setBpm] = useState(120);
+    const [clipboard, setClipboard] = useState(null);
+    const [history, setHistory] = useState([]);
+    const [redoStack, setRedoStack] = useState([]);
 
     // Layout system state
     const [layoutData, setLayoutData] = useState(null);
@@ -36,6 +42,25 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const fileInputRef = useRef(null);
     const layoutInputRef = useRef(null);
     const audioUrlRef = useRef(null); // Cache audio URL
+
+    // Sync BPM when project analysis is available
+    useEffect(() => {
+        if (project.analysis?.bpm) {
+            setBpm(project.analysis.bpm);
+        }
+    }, [project.analysis?.bpm]);
+
+    const handleBpmChange = (newBpm) => {
+        const val = parseFloat(newBpm);
+        if (isNaN(val) || val <= 0) return;
+
+        setBpm(val);
+        const json = project.toJSON();
+        const newProject = ProjectState.fromJSONSync(json);
+        if (!newProject.analysis) newProject.analysis = {};
+        newProject.analysis.bpm = val;
+        saveToHistory(newProject);
+    };
 
     // Initialize with props or default
     useEffect(() => {
@@ -156,6 +181,73 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
         requestRef.current = requestAnimationFrame(animate);
     };
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Check if user is typing in an input
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key.toLowerCase()) {
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) handleRedo();
+                        else handleUndo();
+                        break;
+                    case 'y':
+                        e.preventDefault();
+                        handleRedo();
+                        break;
+                    case 'd':
+                        e.preventDefault();
+                        handleDuplicateClip();
+                        break;
+                    case 'c':
+                        // Copy logic
+                        if (selectedClipId) {
+                            const foundClip = project.layers.flatMap(l => l.clips).find(c => c.id === selectedClipId);
+                            if (foundClip) setClipboard({ ...foundClip });
+                        }
+                        break;
+                    case 'v':
+                        // Paste logic
+                        if (clipboard) {
+                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                            const targetLayerId = selectedLayerId || newProject.layers[0].id;
+                            const layer = newProject.layers.find(l => l.id === targetLayerId);
+                            if (layer) {
+                                const newClip = {
+                                    ...clipboard,
+                                    id: crypto.randomUUID(),
+                                    startTime: currentTime
+                                };
+                                layer.clips.push(newClip);
+                                saveToHistory(newProject);
+                                setSelectedClipId(newClip.id);
+                            }
+                        }
+                        break;
+                }
+            } else {
+                // Non-ctrl shortcuts
+                switch (e.key.toLowerCase()) {
+                    case 'e':
+                        handleAddClip('effect');
+                        break;
+                    case 'g':
+                        handleAddClip('image');
+                        break;
+                    case ' ':
+                        e.preventDefault();
+                        togglePlay();
+                        break;
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [project, history, redoStack, selectedClipId, selectedLayerId, clipboard, currentTime]);
 
     useEffect(() => {
         requestRef.current = requestAnimationFrame(animate);
@@ -291,6 +383,38 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
     };
 
+    const saveToHistory = (newState) => {
+        const snapshot = project.toJSON();
+        setHistory(prev => [...prev.slice(-19), snapshot]);
+        setRedoStack([]);
+        setProject(newState);
+        rendererRef.current.setProject(newState);
+    };
+
+    const handleUndo = () => {
+        if (history.length === 0) return;
+        const previous = history[history.length - 1];
+        setRedoStack(prev => [...prev, project.toJSON()]);
+        setHistory(prev => prev.slice(0, -1));
+
+        ProjectState.fromJSON(previous).then(loaded => {
+            setProject(loaded);
+            rendererRef.current.setProject(loaded);
+        });
+    };
+
+    const handleRedo = () => {
+        if (redoStack.length === 0) return;
+        const next = redoStack[redoStack.length - 1];
+        setHistory(prev => [...prev, project.toJSON()]);
+        setRedoStack(prev => prev.slice(0, -1));
+
+        ProjectState.fromJSON(next).then(loaded => {
+            setProject(loaded);
+            rendererRef.current.setProject(loaded);
+        });
+    };
+
     const handleReset = () => {
         if (audioRef.current) {
             audioRef.current.pause();
@@ -308,42 +432,70 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     };
 
     const handleClipUpdate = (updatedClip) => {
-        const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+        const json = project.toJSON();
+        const newProject = ProjectState.fromJSONSync(json);
         newProject.layers.forEach(layer => {
             const idx = layer.clips.findIndex(c => c.id === updatedClip.id);
             if (idx !== -1) {
                 layer.clips[idx] = updatedClip;
             }
         });
-        setProject(newProject);
-        rendererRef.current.setProject(newProject);
+        saveToHistory(newProject);
         setSelectedClipId(updatedClip.id);
     };
 
     const handleClipDelete = (clipId) => {
-        const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+        const json = project.toJSON();
+        const newProject = ProjectState.fromJSONSync(json);
         newProject.layers.forEach(layer => {
             layer.clips = layer.clips.filter(c => c.id !== clipId);
         });
-        setProject(newProject);
-        rendererRef.current.setProject(newProject);
+        saveToHistory(newProject);
         setSelectedClipId(null);
     };
 
-    const handleAddClip = () => {
+    const handleAddClip = (type = 'effect') => {
         if (project.layers.length > 0) {
-            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+            const json = project.toJSON();
+            const newProject = ProjectState.fromJSONSync(json);
             const targetLayerId = selectedLayerId || newProject.layers[0].id;
             const layer = newProject.layers.find(l => l.id === targetLayerId);
 
             if (layer) {
+                // Smart placement logic: check for overlaps at currentTime
+                let startTime = currentTime;
+
+                // Sort clips by startTime to find the right gap
+                const sortedClips = [...layer.clips].sort((a, b) => a.startTime - b.startTime);
+
+                // Find if currentTime is inside any clip
+                const overlappingClip = sortedClips.find(c =>
+                    currentTime >= c.startTime && currentTime < (c.startTime + c.duration)
+                );
+
+                if (overlappingClip) {
+                    // Position it immediately after the overlapping clip (or the last one in a chain of overlaps)
+                    let currentEnd = overlappingClip.startTime + overlappingClip.duration;
+                    let foundOverlap = true;
+                    while (foundOverlap) {
+                        const nextOverlap = sortedClips.find(c =>
+                            c.startTime < currentEnd + 10 && (c.startTime + c.duration) > currentEnd
+                        );
+                        if (nextOverlap) {
+                            currentEnd = nextOverlap.startTime + nextOverlap.duration;
+                        } else {
+                            foundOverlap = false;
+                        }
+                    }
+                    startTime = currentEnd;
+                }
+
                 const newClip = {
                     id: crypto.randomUUID(),
-                    startTime: currentTime,
+                    startTime: startTime,
                     duration: 1000,
-                    type: 'effect',
-                    effectType: 'flash',
-                    speed: 1,
+                    type: type,
+                    effectType: type === 'effect' ? 'flash' : 'image',
                     channels: [0, 1, 2, 3],
                     fadeIn: 0,
                     fadeOut: 0,
@@ -351,11 +503,60 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     patternDirection: 'horizontal',
                     patternSpeed: 1.0
                 };
+
+                if (type === 'image') {
+                    // Trigger image upload
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            window.dispatchEvent(new CustomEvent('imageUpload', {
+                                detail: { clipId: newClip.id, file }
+                            }));
+                        }
+                    };
+                    input.click();
+                }
+
                 layer.clips.push(newClip);
-                setProject(newProject);
-                rendererRef.current.setProject(newProject);
+                saveToHistory(newProject);
                 setSelectedClipId(newClip.id);
             }
+        }
+    };
+
+    const handleDuplicateClip = () => {
+        if (!selectedClipId) return;
+
+        const json = project.toJSON();
+        const newProject = ProjectState.fromJSONSync(json);
+        let sourceClip = null;
+        let targetLayer = null;
+
+        for (const layer of newProject.layers) {
+            const found = layer.clips.find(c => c.id === selectedClipId);
+            if (found) {
+                sourceClip = found;
+                targetLayer = layer;
+                break;
+            }
+        }
+
+        if (sourceClip && targetLayer) {
+            const newClip = {
+                ...sourceClip,
+                id: crypto.randomUUID(),
+                startTime: sourceClip.startTime + sourceClip.duration
+            };
+
+            // Check for overlap at the new position and shift if necessary (simple version)
+            // In a real editor, we might want to shift everything or just find the next gap
+
+            targetLayer.clips.push(newClip);
+            saveToHistory(newProject);
+            setSelectedClipId(newClip.id);
         }
     };
 
@@ -802,13 +1003,79 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     <button onClick={handleReset} className="btn-icon" title="Reset to Start">
                         ⏮
                     </button>
-                    <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>
+                    <div className="history-controls" style={{ display: 'flex', gap: '5px', marginLeft: '10px' }}>
+                        <button onClick={handleUndo} disabled={history.length === 0} className="btn-icon" title="Undo (Ctrl+Z)">
+                            <Zap size={18} style={{ transform: 'rotate(180deg)' }} />
+                        </button>
+                        <button onClick={handleRedo} disabled={redoStack.length === 0} className="btn-icon" title="Redo (Ctrl+Y)">
+                            <Zap size={18} />
+                        </button>
+                    </div>
+                    <span className="time-display" style={{ marginLeft: '10px' }}>{(currentTime / 1000).toFixed(2)}s</span>
+
+                    <div className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: '20px' }}>
+                        <span style={{ fontSize: '12px', color: '#666' }}>Zoom:</span>
+                        <input
+                            type="range"
+                            min="10"
+                            max="200"
+                            value={zoom}
+                            onChange={(e) => setZoom(parseInt(e.target.value))}
+                            style={{ width: '100px' }}
+                        />
+                    </div>
+
+                    <div className="snap-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '20px' }}>
+                        <span style={{ fontSize: '12px', color: '#666' }}>Snap:</span>
+                        <select
+                            value={snapMode}
+                            onChange={(e) => setSnapMode(e.target.value)}
+                            style={{
+                                background: '#333',
+                                border: '1px solid #444',
+                                color: 'white',
+                                padding: '2px 5px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <option value="1">1 Beat</option>
+                            <option value="1/2">1/2 Beat</option>
+                            <option value="1/4">1/4 Beat</option>
+                            <option value="1/8">1/8 Beat</option>
+                            <option value="off">Off</option>
+                        </select>
+                    </div>
+
+                    <div className="bpm-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '20px' }}>
+                        <span style={{ fontSize: '12px', color: '#666' }}>BPM:</span>
+                        <input
+                            type="number"
+                            value={bpm}
+                            onChange={(e) => setBpm(e.target.value)}
+                            onBlur={(e) => handleBpmChange(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleBpmChange(e.target.value)}
+                            style={{
+                                width: '50px',
+                                background: '#333',
+                                border: '1px solid #444',
+                                color: 'white',
+                                padding: '2px 5px',
+                                borderRadius: '4px',
+                                fontSize: '12px'
+                            }}
+                        />
+                    </div>
                     <div className="control-group" style={{ marginLeft: '20px', display: 'flex', gap: '5px' }}>
                         <button onClick={handleAddTrack} className="btn-icon" title="Add Track">
                             <Layers size={20} /> <Plus size={10} style={{ marginLeft: -8, marginBottom: 8 }} />
                         </button>
-                        <button onClick={handleAddClip} className="btn-icon" title="Add Clip at Cursor">
-                            <Plus size={20} /> Clip
+                        <button onClick={() => handleAddClip('effect')} className="btn-icon" title="Add Effect at Cursor (E)" style={{ color: '#e82020' }}>
+                            <Zap size={20} /> Effect
+                        </button>
+                        <button onClick={() => handleAddClip('image')} className="btn-icon" title="Add GIF at Cursor (G)" style={{ color: '#4a90e2' }}>
+                            <ImageIcon size={20} /> GIF
                         </button>
                     </div>
                 </div>
@@ -818,10 +1085,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         project={project}
                         currentTime={currentTime}
                         duration={project.duration || 60000}
+                        zoom={zoom}
+                        snapMode={snapMode}
+                        bpm={bpm}
                         onClipSelect={setSelectedClipId}
                         selectedLayerId={selectedLayerId}
                         onLayerSelect={setSelectedLayerId}
                         onSeek={handleSeek}
+                        onProjectChange={saveToHistory}
                     />
                 </div>
             </div>

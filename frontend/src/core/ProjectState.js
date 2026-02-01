@@ -94,13 +94,22 @@ export class ProjectState {
     }
 
     /**
+     * Load from JSON object (Synchronous version, skipping asset deserialization)
+     */
+    static fromJSONSync(data) {
+        const project = new ProjectState();
+        project.layers = JSON.parse(JSON.stringify(data.layers)); // Deep copy layers/clips
+        project.duration = data.duration;
+        project.analysis = data.analysis;
+        // Skip assets for sync clone as they're not needed for basic timeline state
+        return project;
+    }
+
+    /**
      * Load from JSON object
      */
     static async fromJSON(data) {
-        const project = new ProjectState();
-        project.layers = data.layers;
-        project.duration = data.duration;
-        project.analysis = data.analysis;
+        const project = ProjectState.fromJSONSync(data);
         project.assets = await ProjectState.deserializeAssets(data.assets);
         return project;
     }

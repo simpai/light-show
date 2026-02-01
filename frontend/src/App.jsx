@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import axios from 'axios'
-import { Upload, Zap, Download, CheckCircle, Car, Music, Eye, Play, Pause, Edit3 } from 'lucide-react'
+import { Upload, Zap, Download, CheckCircle, Car, Music, Eye, Play, Pause, Edit3, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FseqParser } from './utils/FseqParser'
 import JSZip from 'jszip'
@@ -186,53 +185,16 @@ function App() {
     }
   }
 
-  const handleUpload = async () => {
-    if (!file) return
-    setLoading(true)
-    setError(null)
-
-    const formData = new FormData()
-    formData.append('audio', file)
-
-    if (isMatrixMode) {
-      formData.append('mode', 'matrix')
-      formData.append('rows', matrixConfig.rows)
-      formData.append('cols', matrixConfig.cols)
-    }
-
-    try {
-      const response = await axios.post('/generate', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
-      setResult(response.data)
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to generate light show. Is the server running?")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleAnalyze = async () => {
+  const handleStartEditor = () => {
     if (!file) return;
     setLoading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append('audio', file);
-
-    try {
-      const response = await axios.post('/analyze', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      if (response.data.success) {
-        setAnalysisData(response.data.analysis);
-        setMode('editor');
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || "Failed to analyze audio.");
-    } finally {
-      setLoading(false);
-    }
+    // Skip backend analysis and go directly to editor
+    // EditorApp will handle default BPM/Analysis
+    setAnalysisData({ bpm: 120, markers: [] });
+    setMode('editor');
+    setLoading(false);
   };
 
   const handleDownload = () => {
@@ -390,19 +352,11 @@ function App() {
                   <div className="action-buttons" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem' }}>
                     <button
                       className="btn-tesla"
-                      onClick={handleUpload}
+                      onClick={handleStartEditor}
                       disabled={!file || loading}
-                    >
-                      {loading ? "Processing..." : "Auto-Generate Show"}
-                    </button>
-                    <button
-                      className="btn-tesla btn-secondary"
-                      onClick={handleAnalyze}
-                      disabled={!file || loading}
-                      style={{ background: '#333', border: '1px solid #555' }}
                     >
                       <Edit3 size={20} style={{ marginRight: '5px' }} />
-                      Advanced Editor
+                      Create Project
                     </button>
                   </div>
 

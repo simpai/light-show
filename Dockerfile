@@ -10,29 +10,21 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install system dependencies for librosa/soundfile
-RUN apt-get update && apt-get install -y \
-    libsndfile1 \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# Minimal system requirements (if any needed, none for basic flask)
+# Removed ffmpeg/libsndfile as backend logic is gone
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend files
-COPY generator.py server.py exporter.py ./
-# Copy validator if user wants to play with it
-COPY validator.py ./
+# Copy only server script
+COPY server.py ./
 
-# Copy built frontend from build-stage (vite builds to /app/dist via outDir: '../dist')
+# Copy built frontend from build-stage
 COPY --from=build-stage /app/dist ./dist
 
 # Environments
 ENV PORT=8080
 ENV FLASK_APP=server.py
-
-# Create upload/output dirs
-RUN mkdir uploads outputs
 
 EXPOSE 8080
 

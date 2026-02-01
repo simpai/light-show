@@ -11,7 +11,7 @@ import { FseqWriter } from '../utils/FseqWriter';
 import { XsqWriter } from '../utils/XsqWriter';
 import JSZip from 'jszip';
 import MatrixPreview2D from './MatrixPreview2D';
-import axios from 'axios';
+
 
 export default function EditorApp({ audioFile: initialAudioFile, analysis: initialAnalysis, bundledData, onExit }) {
     const [project, setProject] = useState(new ProjectState());
@@ -410,21 +410,22 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
 
         setIsAnalyzing(true);
-        const formData = new FormData();
-        formData.append('audio', audioFile);
 
-        try {
-            const response = await axios.post('/analyze', formData);
-            if (response.data.success) {
-                project.loadAnalysis(response.data.analysis);
-                setProject(Object.assign(Object.create(Object.getPrototypeOf(project)), project));
-                alert('Audio analysis complete! Beat markers added to timeline.');
-            }
-        } catch (err) {
-            alert('Analysis failed: ' + (err.response?.data?.error || err.message));
-        } finally {
+        // Client-side simulation of analysis
+        // Since we removed the python backend, we just set defaults
+        setTimeout(() => {
+            // Default to 120 BPM if not manually set
+            const defaultAnalysis = {
+                bpm: 120,
+                markers: [], // No automatic markers without backend
+                onset_env: [] // No waveform data without backend
+            };
+
+            project.loadAnalysis(defaultAnalysis);
+            setProject(Object.assign(Object.create(Object.getPrototypeOf(project)), project));
+            // alert('Audio analysis initialized (Client Mode). Default BPM set to 120.');
             setIsAnalyzing(false);
-        }
+        }, 500); // Fake delay for UX
     };
 
     const handleLayoutUpload = async (e) => {

@@ -61,30 +61,62 @@ export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layo
                     const leftTail = Math.max(lights[25] || 0, lights[24] || 0);
                     const rightTail = Math.max(lights[26] || 0, lights[24] || 0);
 
-                    // Draw Headlights (White)
-                    if (leftBeam > 0 || rightBeam > 0) {
-                        ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(leftBeam, rightBeam) / 255})`;
-                        const headY = isFlipped ? carY : carY + carH - 1;
-                        if (leftBeam > 0) {
-                            ctx.fillStyle = `rgba(255, 255, 255, ${leftBeam / 255})`;
-                            ctx.fillRect(carX, headY, 1, 1);
+                    const groundLight = true;
+                    if (groundLight) {
+                        // Draw Headlights (White)
+                        if (leftBeam > 0 || rightBeam > 0) {
+                            ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(leftBeam, rightBeam) / 255})`;
+                            const headY = isFlipped ? carY - carH - 2 : carY + carH;
+                            if (leftBeam > 0) {
+                                ctx.fillStyle = `rgba(255, 255, 255, ${leftBeam / 355})`;
+                                ctx.fillRect(carX - 1, headY, 3, carH + 2);
+                            } 11
+                            if (rightBeam > 0) {
+                                ctx.fillStyle = `rgba(255, 255, 255, ${rightBeam / 355})`;
+                                ctx.fillRect(carX + carW - 2, headY, 3, carH + 2);
+                            }
                         }
-                        if (rightBeam > 0) {
-                            ctx.fillStyle = `rgba(255, 255, 255, ${rightBeam / 255})`;
-                            ctx.fillRect(carX + carW - 1, headY, 1, 1);
-                        }
-                    }
 
-                    // Draw Tail Lights (Red)
-                    if (leftTail > 0 || rightTail > 0) {
-                        const tailY = isFlipped ? carY + carH - 1 : carY;
-                        if (leftTail > 0) {
-                            ctx.fillStyle = `rgba(255, 0, 0, ${leftTail / 255})`;
-                            ctx.fillRect(carX, tailY, 1, 1);
+                        // Draw Tail Lights (Red)
+                        if (leftTail > 0 || rightTail > 0) {
+                            const tailY = isFlipped ? carY + carH - 1 : carY - 2;
+                            if (leftTail > 0) {
+                                ctx.fillStyle = `rgba(255, 0, 0, ${leftTail / 355})`;
+                                ctx.fillRect(carX - 1, tailY, 3, 3);
+                            }
+                            if (rightTail > 0) {
+                                ctx.fillStyle = `rgba(255, 0, 0, ${rightTail / 355})`;
+                                ctx.fillRect(carX + carW - 2, tailY, 3, 3);
+                            }
                         }
-                        if (rightTail > 0) {
-                            ctx.fillStyle = `rgba(255, 0, 0, ${rightTail / 255})`;
-                            ctx.fillRect(carX + carW - 1, tailY, 1, 1);
+
+                    }
+                    else {
+                        // Draw Headlights (White)
+                        if (leftBeam > 0 || rightBeam > 0) {
+                            ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(leftBeam, rightBeam) / 255})`;
+                            const headY = isFlipped ? carY - carH - 2 : carY + carH;
+                            if (leftBeam > 0) {
+                                ctx.fillStyle = `rgba(255, 255, 255, ${leftBeam / 355})`;
+                                ctx.fillRect(carX - 1, headY, 3, carH + 2);
+                            } 11
+                            if (rightBeam > 0) {
+                                ctx.fillStyle = `rgba(255, 255, 255, ${rightBeam / 355})`;
+                                ctx.fillRect(carX + carW - 2, headY, 3, carH + 2);
+                            }
+                        }
+
+                        // Draw Tail Lights (Red)
+                        if (leftTail > 0 || rightTail > 0) {
+                            const tailY = isFlipped ? carY + carH - 1 : carY - 2;
+                            if (leftTail > 0) {
+                                ctx.fillStyle = `rgba(255, 0, 0, ${leftTail / 355})`;
+                                ctx.fillRect(carX - 1, tailY, 3, 3);
+                            }
+                            if (rightTail > 0) {
+                                ctx.fillStyle = `rgba(255, 0, 0, ${rightTail / 355})`;
+                                ctx.fillRect(carX + carW - 2, tailY, 3, 3);
+                            }
                         }
                     }
                 }

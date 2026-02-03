@@ -175,204 +175,172 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 </button>
             </div>
 
-
-            <div className="form-group">
-                <label>Start Time (ms)</label>
-                <input
-                    type="number"
-                    value={clip.startTime}
-                    onChange={e => handleChange('startTime', parseInt(e.target.value))}
-                />
-            </div>
-
-            {clip.type === 'gif' && (
-                <>
-                    <div className="form-group">
-                        <label>Brightness Mode</label>
-                        <select
-                            value={clip.brightnessMode || 'gradient'}
-                            onChange={e => handleChange('brightnessMode', e.target.value)}
-                        >
-                            <option value="gradient">Gradient (0-255)</option>
-                            <option value="binary">Binary (ON/OFF)</option>
-                        </select>
+            <div className="section-container">
+                <label className="section-title">Timing</label>
+                <div className="form-group grid-2">
+                    <div className="input-group-compact">
+                        <label className="compact-label">Start Time</label>
+                        <div className="input-with-hint">
+                            <input
+                                type="number"
+                                value={Number((clip.startTime || 0).toFixed(2))}
+                                step="0.01"
+                                onChange={e => handleChange('startTime', parseFloat(parseFloat(e.target.value).toFixed(2)) || 0)}
+                            />
+                            <span className="unit-hint">{(clip.startTime / 1000).toFixed(2)}s</span>
+                        </div>
                     </div>
 
-                    {clip.brightnessMode === 'binary' && (
-                        <div className="form-group">
-                            <label>Threshold - {clip.brightnessThreshold || 128}</label>
+                    <div className="input-group-compact">
+                        <label className="compact-label">Duration</label>
+                        <div className="input-with-hint">
                             <input
-                                type="range"
-                                min="0"
-                                max="255"
-                                step="1"
-                                value={clip.brightnessThreshold || 128}
-                                onChange={e => handleChange('brightnessThreshold', parseInt(e.target.value))}
+                                type="number"
+                                value={Number((clip.duration || 0).toFixed(2))}
+                                step="0.01"
+                                onChange={e => handleChange('duration', parseFloat(parseFloat(e.target.value).toFixed(2)) || 0)}
+                            />
+                            <span className="unit-hint">{(clip.duration / 1000).toFixed(2)}s</span>
+                        </div>
+                    </div>
+                </div>
+
+                {clip.type === 'gif' && (
+                    <div className="form-group grid-2" style={{ marginTop: '8px' }}>
+                        <div className="input-group-compact">
+                            <label className="compact-label">BPM</label>
+                            <input
+                                type="number"
+                                value={clip.bpm || 120}
+                                onChange={e => {
+                                    const bpm = parseFloat(e.target.value);
+                                    const updatedClip = { ...clip, bpm, timingMode: 'beat' };
+                                    const duration = calculateDuration('beat', updatedClip);
+                                    onChange({ ...updatedClip, duration });
+                                }}
+                                min="1"
+                                step="0.1"
                             />
                         </div>
-                    )}
-                </>
-            )}
-
-            {clip.type === 'gif' ? (
-                <div className="timing-section">
-                    {/* Beat-based timing only for GIF clips */}
-                    <div className="form-group">
-                        <label>BPM</label>
-                        <input
-                            type="number"
-                            value={clip.bpm || 120}
-                            onChange={e => {
-                                const bpm = parseFloat(e.target.value);
-                                const updatedClip = { ...clip, bpm, timingMode: 'beat' };
-                                const duration = calculateDuration('beat', updatedClip);
-                                onChange({ ...updatedClip, duration });
-                            }}
-                            min="1"
-                            step="0.1"
-                        />
+                        <div className="input-group-compact">
+                            <label className="compact-label">Beats/Frame</label>
+                            <input
+                                type="number"
+                                value={clip.beatsPerFrame || 1}
+                                onChange={e => {
+                                    const beatsPerFrame = parseFloat(e.target.value);
+                                    const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
+                                    const duration = calculateDuration('beat', updatedClip);
+                                    onChange({ ...updatedClip, duration });
+                                }}
+                                min="0.125"
+                                step="0.125"
+                            />
+                        </div>
                     </div>
-                    <div className="form-group">
-                        <label>Beats per Frame</label>
-                        <input
-                            type="number"
-                            value={clip.beatsPerFrame || 1}
-                            onChange={e => {
-                                const beatsPerFrame = parseFloat(e.target.value);
-                                const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
-                                const duration = calculateDuration('beat', updatedClip);
-                                onChange({ ...updatedClip, duration });
-                            }}
-                            min="0.125"
-                            step="0.125"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>Repetitions</label>
-                        <input
-                            type="number"
-                            value={clip.repetitions || 1}
-                            onChange={e => {
-                                const repetitions = parseInt(e.target.value);
-                                const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
-                                const duration = calculateDuration('beat', updatedClip);
-                                onChange({ ...updatedClip, duration });
-                            }}
-                            min="1"
-                        />
-                    </div>
-                    <div className="info-box">
-                        <span className="info-icon">ℹ️</span>
-                        <span className="info-text">
-                            Frame duration: <span className="highlight">{clip.bpm ? ((60000 / clip.bpm) * (clip.beatsPerFrame || 1)).toFixed(1) : 0}ms</span>
-                        </span>
-                    </div>
-                    <div className="info-box">
-                        <span className="info-icon">ℹ️</span>
-                        <span className="info-text">
-                            Total duration: <span className="highlight">{clip.duration}ms</span> ({(clip.duration / 1000).toFixed(2)}s)
-                        </span>
-                    </div>
-                </div>
-            ) : (
-                <div className="form-group">
-                    <label>Duration (ms)</label>
-                    <input
-                        type="number"
-                        value={clip.duration}
-                        onChange={e => handleChange('duration', parseInt(e.target.value))}
-                    />
-                </div>
-            )}
+                )}
+            </div>
 
             {clip.type === 'effect' && (
                 <>
-                    <div className="form-group">
-                        <label>Effect Style</label>
-                        <select
-                            value={clip.effectType || 'flash'}
-                            onChange={e => handleChange('effectType', e.target.value)}
-                        >
-                            <option value="flash">Flash (Hold)</option>
-                            <option value="pulse">Pulse (Sine)</option>
-                            <option value="strobe">Strobe</option>
-                        </select>
-                    </div>
-
-                    {(clip.effectType === 'pulse' || clip.effectType === 'strobe') && (
+                    <div className="section-container">
+                        <label className="section-title">Effect Style</label>
                         <div className="form-group">
-                            <label>Speed (Hz) - {clip.speed || 1} cycles/sec</label>
-                            <input
-                                type="range"
-                                min="0.5"
-                                max="10"
-                                step="0.5"
-                                value={clip.speed || 1}
-                                onChange={e => handleChange('speed', parseFloat(e.target.value))}
-                            />
+                            <label className="compact-label" style={{ minWidth: '80px' }}>Style</label>
+                            <select
+                                value={clip.effectType || 'flash'}
+                                onChange={e => handleChange('effectType', e.target.value)}
+                            >
+                                <option value="flash">Flash (Hold)</option>
+                                <option value="pulse">Pulse (Sine)</option>
+                                <option value="strobe">Strobe</option>
+                            </select>
                         </div>
-                    )}
 
-                    <div className="form-group">
-                        <label>Pattern Type</label>
-                        <select
-                            value={clip.pattern || 'uniform'}
-                            onChange={e => handleChange('pattern', e.target.value)}
-                        >
-                            <option value="uniform">Uniform (All at once)</option>
-                            <option value="wave">Wave</option>
-                            <option value="sequential">Sequential</option>
-                            <option value="radial">Radial</option>
-                        </select>
+                        {(clip.effectType === 'pulse' || clip.effectType === 'strobe') && (
+                            <div className="form-group">
+                                <label className="compact-label" style={{ minWidth: '80px' }}>Speed</label>
+                                <div className="slider-with-val" style={{ flex: 1 }}>
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="10"
+                                        step="0.5"
+                                        value={clip.speed || 1}
+                                        onChange={e => handleChange('speed', parseFloat(e.target.value))}
+                                    />
+                                    <span className="val-hint">{(clip.speed || 1).toFixed(1)}Hz</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {clip.pattern && clip.pattern !== 'uniform' && (
-                        <>
-                            <div className="form-group">
-                                <label>Direction</label>
-                                <select
-                                    value={clip.patternDirection || 'horizontal'}
-                                    onChange={e => handleChange('patternDirection', e.target.value)}
-                                >
-                                    {clip.pattern === 'wave' && (
-                                        <>
-                                            <option value="horizontal">Horizontal (Left to Right)</option>
-                                            <option value="vertical">Vertical (Top to Bottom)</option>
-                                            <option value="diagonal-right">Diagonal ↘</option>
-                                            <option value="diagonal-left">Diagonal ↙</option>
-                                        </>
-                                    )}
-                                    {clip.pattern === 'sequential' && (
-                                        <>
-                                            <option value="row-by-row">Row by Row</option>
-                                            <option value="col-by-col">Column by Column</option>
-                                        </>
-                                    )}
-                                    {clip.pattern === 'radial' && (
-                                        <>
-                                            <option value="outward">Outward (Center to Edge)</option>
-                                            <option value="inward">Inward (Edge to Center)</option>
-                                        </>
-                                    )}
-                                </select>
-                            </div>
+                    <div className="section-container">
+                        <label className="section-title">Pattern</label>
+                        <div className="form-group">
+                            <label className="compact-label" style={{ minWidth: '80px' }}>Type</label>
+                            <select
+                                value={clip.pattern || 'uniform'}
+                                onChange={e => handleChange('pattern', e.target.value)}
+                            >
+                                <option value="uniform">Uniform</option>
+                                <option value="wave">Wave</option>
+                                <option value="sequential">Sequential</option>
+                                <option value="radial">Radial</option>
+                            </select>
+                        </div>
 
-                            <div className="form-group">
-                                <label>Pattern Speed - {(clip.patternSpeed || 1).toFixed(1)}x</label>
-                                <input
-                                    type="range"
-                                    min="0.1"
-                                    max="5"
-                                    step="0.1"
-                                    value={clip.patternSpeed || 1}
-                                    onChange={e => handleChange('patternSpeed', parseFloat(e.target.value))}
-                                />
-                            </div>
-                        </>
-                    )}
+                        {clip.pattern && clip.pattern !== 'uniform' && (
+                            <>
+                                <div className="form-group">
+                                    <label className="compact-label" style={{ minWidth: '80px' }}>Dir</label>
+                                    <select
+                                        value={clip.patternDirection || 'horizontal'}
+                                        onChange={e => handleChange('patternDirection', e.target.value)}
+                                    >
+                                        {clip.pattern === 'wave' && (
+                                            <>
+                                                <option value="horizontal">Horizontal</option>
+                                                <option value="vertical">Vertical</option>
+                                                <option value="diagonal-right">↘</option>
+                                                <option value="diagonal-left">↙</option>
+                                            </>
+                                        )}
+                                        {clip.pattern === 'sequential' && (
+                                            <>
+                                                <option value="row-by-row">Row</option>
+                                                <option value="col-by-col">Col</option>
+                                            </>
+                                        )}
+                                        {clip.pattern === 'radial' && (
+                                            <>
+                                                <option value="outward">Outward</option>
+                                                <option value="inward">Inward</option>
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
 
-                    <div className="form-group vertical-group">
-                        <label>Target Lights</label>
+                                <div className="form-group">
+                                    <label className="compact-label" style={{ minWidth: '80px' }}>Speed</label>
+                                    <div className="slider-with-val" style={{ flex: 1 }}>
+                                        <input
+                                            type="range"
+                                            min="0.1"
+                                            max="5"
+                                            step="0.1"
+                                            value={clip.patternSpeed || 1}
+                                            onChange={e => handleChange('patternSpeed', parseFloat(e.target.value))}
+                                        />
+                                        <span className="val-hint">{(clip.patternSpeed || 1).toFixed(1)}x</span>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="section-container content-box">
+                        <label className="section-title">Target Light Groups</label>
                         <div className="channels-list">
                             {Object.entries(displayGroups).map(([label, groupData]) => {
                                 const groupChs = Array.isArray(groupData) ? groupData : (groupData.channels || []);
@@ -390,33 +358,122 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                             })}
                         </div>
                     </div>
+
+                    <div className="section-container content-box">
+                        <div className="ramping-header-row">
+                            <div className="toggle-group-inline">
+                                <input
+                                    id="ramping-toggle"
+                                    type="checkbox"
+                                    className="toggle-checkbox"
+                                    checked={clip.rampingEnabled || false}
+                                    onChange={e => {
+                                        const enabled = e.target.checked;
+                                        if (enabled) {
+                                            onChange({
+                                                ...clip,
+                                                rampingEnabled: true,
+                                                rampOnDuration: clip.rampOnDuration || 500,
+                                                rampOffDuration: clip.rampOffDuration || 500
+                                            });
+                                        } else {
+                                            handleChange('rampingEnabled', false);
+                                        }
+                                    }}
+                                />
+                                <label htmlFor="ramping-toggle" className="section-title-inline">Ramping</label>
+                            </div>
+                            {clip.rampingEnabled && (
+                                <div className="ramping-info-inline">
+                                    {(() => {
+                                        const rampOnDur = (clip.rampOnEnabled !== false) ? (clip.rampOnDuration || 0) : 0;
+                                        const rampOffDur = (clip.rampOffEnabled !== false) ? (clip.rampOffDuration || 0) : 0;
+                                        const maxDur = clip.duration - rampOnDur - rampOffDur;
+
+                                        if (maxDur < 0) {
+                                            return <span className="error-text">⚠️ Overlap: {Math.abs(maxDur).toFixed(0)}ms</span>;
+                                        }
+                                        return (
+                                            <span className="info-text">
+                                                FULL: <span className="highlight">{(maxDur / 1000).toFixed(2)}s</span>
+                                            </span>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+
+                        {clip.rampingEnabled && (
+                            <div className="ramping-controls-horizontal">
+                                <div className="ramping-row">
+                                    <label className="ramp-label-inline">
+                                        <input
+                                            type="checkbox"
+                                            checked={clip.rampOnEnabled !== false}
+                                            onChange={e => handleChange('rampOnEnabled', e.target.checked)}
+                                        />
+                                        ON
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="3000"
+                                        step="100"
+                                        value={clip.rampOnDuration || 500}
+                                        onChange={e => handleChange('rampOnDuration', parseInt(e.target.value))}
+                                        disabled={clip.rampOnEnabled === false}
+                                        className="ramp-slider"
+                                    />
+                                    <span className="ramp-val-hint">{(clip.rampOnDuration || 500).toFixed(0)}ms</span>
+                                </div>
+
+                                <div className="ramping-row">
+                                    <label className="ramp-label-inline">
+                                        <input
+                                            type="checkbox"
+                                            checked={clip.rampOffEnabled !== false}
+                                            onChange={e => handleChange('rampOffEnabled', e.target.checked)}
+                                        />
+                                        OFF
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="3000"
+                                        step="100"
+                                        value={clip.rampOffDuration || 500}
+                                        onChange={e => handleChange('rampOffDuration', parseInt(e.target.value))}
+                                        disabled={clip.rampOffEnabled === false}
+                                        className="ramp-slider"
+                                    />
+                                    <span className="ramp-val-hint">{(clip.rampOffDuration || 500).toFixed(0)}ms</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </>
             )}
 
             {clip.type === 'gif' && (
-                <div className="pattern-section">
-                    <div className="form-group vertical-group">
-                        <label>Preview</label>
-                        {clip.assetId && assets[clip.assetId] ? (
-                            <GifPreview asset={assets[clip.assetId]} fps={clip.fps || 15} />
-                        ) : (
-                            <div className="text-gray-500 text-sm p-2">No asset loaded</div>
-                        )}
-                    </div>
-
-
+                <div className="section-container content-box">
+                    <label className="section-title">Preview</label>
+                    {clip.assetId && assets[clip.assetId] ? (
+                        <GifPreview asset={assets[clip.assetId]} fps={clip.fps || 15} />
+                    ) : (
+                        <div className="text-gray-500 text-sm p-2">No asset loaded</div>
+                    )}
                 </div>
             )}
 
-            <div className="group-selection-section">
+            <div className="section-container content-box car-selection-box">
                 <label className="section-title">Target Car Group</label>
                 <div className="group-grid">
                     <button
                         className={`group-grid-item ${!clip.carGroupId ? 'active' : ''}`}
                         onClick={() => handleChange('carGroupId', '')}
                     >
-                        <img src={allCarsThumbnail} alt="All Cars" className="all-cars-icon" />
-                        <span>All Cars</span>
+                        <img src={allCarsThumbnail} alt="ALL" className="all-cars-icon" />
+                        <span>ALL</span>
                     </button>
                     {carGroups.map(group => (
                         <button
@@ -433,7 +490,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
 
             <style>{`
                 .clip-editor {
-                    padding: 16px;
+                    padding: 12px 6px;
                     font-size: 14px;
                     color: white;
                 }
@@ -442,8 +499,8 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    margin-bottom: 20px;
-                    padding-bottom: 12px;
+                    margin-bottom: 12px;
+                    padding-bottom: 8px;
                     border-bottom: 1px solid #333;
                 }
 
@@ -470,11 +527,11 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 }
 
                 .form-group {
-                    margin-bottom: 12px;
+                    margin-bottom: 8px;
                     display: flex;
                     align-items: center;
-                    gap: 12px;
-                    width: 100%; /* Ensure it takes full width */
+                    gap: 8px;
+                    width: 100%;
                     box-sizing: border-box;
                 }
 
@@ -485,15 +542,14 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     font-size: 13px;
                     font-weight: 500;
                     color: #d1d5db;
-                    text-align: right;
                 }
 
                 .form-group input[type="number"],
                 .form-group input[type="text"],
                 .form-group select {
                     flex: 1;
-                    min-width: 0; /* Important: allows flex item to shrink below content size */
-                    width: 100%; /* Ensure it doesn't exceed parent */
+                    min-width: 0;
+                    width: 100%;
                     background: #2a2a2a;
                     border: 1px solid #444;
                     border-radius: 6px;
@@ -510,54 +566,74 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     border-color: #e82020;
                 }
 
-                .vertical-group {
-                    flex-direction: column;
-                    align-items: stretch;
+                .section-container {
+                    margin-bottom: 12px;
                 }
 
-                .vertical-group label {
-                    text-align: left;
+                .content-box {
+                    background: #111;
+                    border: 1px solid #333;
+                    border-radius: 8px;
+                    padding: 10px;
+                }
+
+                .section-title {
+                    display: block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #888;
                     margin-bottom: 8px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.1em;
+                }
+
+                .section-title-inline {
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #888;
+                    text-transform: uppercase;
+                    letter-spacing: 0.1em;
                 }
 
                 .timing-section {
                     background: #1a1a1a;
                     border: 1px solid rgba(232, 32, 32, 0.3);
                     border-radius: 8px;
-                    padding: 16px;
-                    margin-bottom: 16px;
+                    padding: 10px 12px;
+                    margin-bottom: 12px;
                 }
 
-                .timing-select {
-                    border-color: rgba(232, 32, 32, 0.5) !important;
+                .compact-label {
+                    font-size: 11px;
+                    color: #888;
+                    margin-bottom: 4px;
+                    display: block;
+                    text-transform: uppercase;
+                }
+
+                .input-group-compact {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
                 }
 
                 .grid-2 {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
                     gap: 12px;
-                    margin-bottom: 12px;
                 }
 
-                .info-box {
+                .slider-with-val {
                     display: flex;
                     align-items: center;
-                    gap: 8px;
-                    background: #252525;
-                    border: 1px solid #333;
-                    border-radius: 6px;
-                    padding: 10px 12px;
-                    margin-bottom: 8px;
+                    gap: 10px;
                 }
 
-                .info-icon {
-                    font-size: 14px;
-                    color: #9ca3af;
-                }
-
-                .info-text {
-                    font-size: 13px;
-                    color: #d1d5db;
+                .val-hint {
+                    font-size: 12px;
+                    color: #e82020;
+                    min-width: 40px;
+                    text-align: right;
                 }
 
                 .highlight {
@@ -565,71 +641,26 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     font-weight: 500;
                 }
 
-                .pattern-section {
-                    background: #1a1a1a;
-                    border: 1px solid #333;
-                    border-radius: 8px;
-                    padding: 16px;
-                    margin-bottom: 16px;
-                }
-
-                .file-input {
-                    width: 100%;
-                    font-size: 12px;
-                    color: white;
-                    padding: 8px;
-                    background: #2a2a2a;
-                    border: 1px solid #444;
-                    border-radius: 6px;
-                    cursor: pointer;
-                }
-
-                .file-input::-webkit-file-upload-button {
-                    background: #e82020;
-                    color: white;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    margin-right: 12px;
-                }
-
-                .file-input::-webkit-file-upload-button:hover {
-                    background: #c01818;
-                }
-
-                .success-text {
-                    font-size: 12px;
-                    color: #10b981;
-                    margin-top: 8px;
-                }
-
                 .channels-list {
                     max-height: 160px;
                     overflow-y: auto;
-                    border: 1px solid #333;
-                    border-radius: 6px;
-                    padding: 8px;
-                    background: #1a1a1a;
+                    padding: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0;
                 }
 
                 .channel-item {
                     display: flex;
                     align-items: center;
                     gap: 8px;
-                    padding: 6px 8px;
+                    padding: 0;
                     cursor: pointer;
-                    border-radius: 4px;
-                    transition: background 0.2s;
+                    transition: opacity 0.2s;
                 }
 
                 .channel-item:hover {
-                    background: #222;
-                }
-
-                .channel-item input[type="checkbox"] {
-                    width: auto;
-                    cursor: pointer;
+                    opacity: 0.8;
                 }
 
                 .channel-item span {
@@ -637,89 +668,145 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     color: #d1d5db;
                 }
 
-                input[type="range"] {
-                    width: 100%;
-                    cursor: pointer;
+                .ramping-header-row {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                }
+
+                .toggle-group-inline {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .ramping-controls-horizontal {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    padding-top: 4px;
+                }
+
+                .ramping-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .ramp-label-inline {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #d1d5db;
+                    min-width: 50px;
+                }
+
+                .ramp-slider {
+                    flex: 1;
+                }
+
+                .ramp-val-hint {
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #e82020;
+                    min-width: 45px;
+                    text-align: right;
+                }
+
+                .toggle-checkbox {
+                    width: auto !important;
+                    margin: 0;
+                }
+
+                .ramping-info-inline {
+                    background: rgba(255, 255, 255, 0.08);
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                }
+
+                .input-with-hint {
+                    flex: 1;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .unit-hint {
+                    font-size: 11px;
+                    color: #888;
+                    min-width: 40px;
+                }
+
+                .error-text {
+                    color: #ef4444;
+                    font-weight: 600;
                 }
 
                 .group-selection-section {
-                    margin-top: 24px;
-                    padding-top: 16px;
+                    margin-top: 16px;
+                    padding-top: 12px;
                     border-top: 1px solid #333;
-                }
-
-                .section-title {
-                    display: block;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #888;
-                    margin-bottom: 12px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
                 }
 
                 .group-grid {
                     display: grid;
                     grid-template-columns: repeat(4, 1fr);
-                    gap: 8px;
+                    gap: 6px;
                 }
 
                 .group-grid-item {
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    gap: 6px;
-                    background: #1a1a1a;
+                    background: #111;
                     border: 1px solid #333;
-                    border-radius: 8px;
-                    padding: 8px;
+                    border-radius: 6px;
+                    padding: 4px; /* Reduced from 8px */
                     cursor: pointer;
                     transition: all 0.2s;
+                    min-width: 0;
                 }
 
                 .group-grid-item:hover {
                     border-color: #555;
-                    background: #252525;
+                    background: #222;
                 }
 
                 .group-grid-item.active {
                     border-color: #e82020;
                     background: rgba(232, 32, 32, 0.1);
-                    box-shadow: 0 0 10px rgba(232, 32, 32, 0.2);
                 }
 
                 .group-grid-item img {
                     width: 100%;
                     aspect-ratio: 63 / 32;
-                    object-fit: contain;
-                    image-rendering: pixelated;
-                    border-radius: 4px;
+                    object-fit: cover; /* Changed from contain to maximize size */
+                    border-radius: 3px;
                     background: #000;
                 }
 
                 .all-cars-icon {
                     width: 100%;
                     aspect-ratio: 63 / 32;
-                    object-fit: contain;
-                    image-rendering: pixelated;
-                    border-radius: 4px;
+                    object-fit: cover;
+                    border-radius: 3px;
                     background: #000;
                     border: 1px solid #333;
                 }
 
-                .active .all-cars-icon {
-                    border-color: #4ade80;
-                    box-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
-                }
-
                 .group-grid-item span {
-                    font-size: 11px;
-                    color: #999;
+                    font-size: 9px; /* Reduced for more space */
+                    font-weight: 600;
+                    color: #777;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     width: 100%;
-                    text-align: center;
+                    margin-top: 2px;
                 }
 
                 .group-grid-item.active span {

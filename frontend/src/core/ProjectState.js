@@ -21,7 +21,7 @@ export class ProjectState {
         this.lightGroups = {
             'Red': { channels: [14, 25, 26, 24], color: '#ff0000' }, // Fog (Rear), Tail, Tail, Brake
             'MainWhite': { channels: [0, 1, 2, 3], color: '#ffffff' }, // Front High/Low
-            'Yellow': { channels: [8, 9, 10, 11, 12, 13], color: '#ffff00' } // Front/Rear/Side Signals
+            'Yellow': { channels: [8, 9, 10, 11, 12, 13], color: '#ffbb00' } // Front/Rear/Side Signals
         };
         this.carGroups = []; // Array of { id, name, selection: string[], thumbnail: string }
     }
@@ -61,6 +61,11 @@ export class ProjectState {
                 fps: clipConf.fps || 12,
                 brightnessMode: clipConf.brightnessMode || 'gradient',
                 brightnessThreshold: clipConf.brightnessThreshold || 128,
+                rampingEnabled: clipConf.rampingEnabled || false,
+                rampOnEnabled: clipConf.rampOnEnabled !== undefined ? clipConf.rampOnEnabled : true,
+                rampOffEnabled: clipConf.rampOffEnabled !== undefined ? clipConf.rampOffEnabled : true,
+                rampOnDuration: clipConf.rampOnDuration || 500,
+                rampOffDuration: clipConf.rampOffDuration || 500,
                 ...clipConf
             };
             layer.clips.push(newClip);

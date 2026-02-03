@@ -186,7 +186,6 @@ function App() {
   }
 
   const handleStartEditor = () => {
-    if (!file) return;
     setLoading(true);
     setError(null);
 
@@ -353,7 +352,7 @@ function App() {
                     <button
                       className="btn-tesla"
                       onClick={handleStartEditor}
-                      disabled={!file || loading}
+                      disabled={loading}
                     >
                       <Edit3 size={20} style={{ marginRight: '5px' }} />
                       Create Project

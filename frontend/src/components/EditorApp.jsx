@@ -113,6 +113,18 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const fileInputRef = useRef(null);
     const layoutInputRef = useRef(null);
     const audioUrlRef = useRef(null); // Cache audio URL
+    const lastTickRef = useRef(0); // For manual playback timing
+    const isPlayingRef = useRef(false);
+    const audioFileRef = useRef(audioFile);
+    const projectRef = useRef(project);
+    const currentTimeRef = useRef(currentTime);
+    const animateRef = useRef();
+
+    // Keep refs in sync with state for the animation loop
+    useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+    useEffect(() => { audioFileRef.current = audioFile; }, [audioFile]);
+    useEffect(() => { projectRef.current = project; }, [project]);
+    useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
 
     const handleToggleBookmark = (timeMs) => {
         setBookmarks(prev => {
@@ -352,12 +364,36 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     }, [project]);
 
     const animate = () => {
-        if (audioRef.current && !audioRef.current.paused) {
-            const time = audioRef.current.currentTime * 1000;
-            setCurrentTime(time);
+        if (isPlayingRef.current) {
+            const currentAudioFile = audioFileRef.current;
+            const currentAudio = audioRef.current;
+
+            if (currentAudioFile && currentAudio && !currentAudio.paused && !currentAudio.seeking) {
+                const time = currentAudio.currentTime * 1000;
+                if (Math.abs(time - currentTimeRef.current) > 1) {
+                    setCurrentTime(time);
+                }
+            } else if (!currentAudioFile) {
+                const now = performance.now();
+                const delta = now - lastTickRef.current;
+                lastTickRef.current = now;
+
+                setCurrentTime(prev => {
+                    const next = prev + delta;
+                    if (next >= projectRef.current.duration) {
+                        setIsPlaying(false);
+                        return projectRef.current.duration;
+                    }
+                    return next;
+                });
+            }
         }
-        requestRef.current = requestAnimationFrame(animate);
     };
+
+    // Keep the animate function fresh for the loop
+    useEffect(() => {
+        animateRef.current = animate;
+    });
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -462,7 +498,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     }, [project, history, redoStack, selectedClipIds, selectedLayerId, clipboard, currentTime, isPlaying, audioFile]);
 
     useEffect(() => {
-        requestRef.current = requestAnimationFrame(animate);
+        const loop = () => {
+            animateRef.current?.();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+        requestRef.current = requestAnimationFrame(loop);
         return () => {
             if (requestRef.current) {
                 cancelAnimationFrame(requestRef.current);
@@ -471,27 +511,40 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     }, []);
 
     const togglePlay = () => {
-        if (!audioFile) {
-            alert('Please upload an audio file first');
-            return;
-        }
-
         console.log('Toggle play:', { isPlaying, hasAudioRef: !!audioRef.current, audioFile: audioFile?.name });
 
         if (isPlaying) {
-            audioRef.current?.pause();
+            if (audioFile) {
+                audioRef.current?.pause();
+            }
             setIsPlaying(false);
         } else {
-            if (audioRef.current) {
-                audioRef.current.play()
-                    .then(() => {
-                        console.log('Audio playing successfully');
-                        setIsPlaying(true);
-                    })
-                    .catch(err => {
-                        console.error('Play failed:', err);
-                        alert('Failed to play audio: ' + err.message);
-                    });
+            // Ensure lastTick is initialized regardless of audio mode
+            // to prevent huge deltas if the logic switches branches.
+            lastTickRef.current = performance.now();
+
+            if (currentTime >= project.duration) {
+                handleSeek(0);
+            }
+
+            if (audioFile) {
+                if (audioRef.current) {
+                    // Force audio to match UI time precisely before playing
+                    audioRef.current.currentTime = currentTime / 1000;
+                    audioRef.current.play()
+                        .then(() => {
+                            console.log('Audio playing successfully');
+                            setIsPlaying(true);
+                        })
+                        .catch(err => {
+                            console.error('Play failed:', err);
+                            alert('Failed to play audio: ' + err.message);
+                        });
+                }
+            } else {
+                // Manual playback start
+                lastTickRef.current = performance.now();
+                setIsPlaying(true);
             }
         }
     };
@@ -590,10 +643,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     };
 
     const handleSeek = (timeMs) => {
-        if (audioRef.current) {
+        if (audioFile && audioRef.current) {
             audioRef.current.currentTime = timeMs / 1000;
-            setCurrentTime(timeMs);
         }
+        setCurrentTime(timeMs);
     };
 
     const saveToHistory = (newState) => {
@@ -629,12 +682,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     };
 
     const handleReset = () => {
-        if (audioRef.current) {
+        if (audioFile && audioRef.current) {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            setCurrentTime(0);
-            setIsPlaying(false);
         }
+        setCurrentTime(0);
+        setIsPlaying(false);
     };
 
     const handleAddTrack = () => {

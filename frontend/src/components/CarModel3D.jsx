@@ -13,7 +13,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
 
     // Helper function to get light brightness (0-1) for a group
     const getGroupBrightness = (groupName) => {
-        const channels = lightGroups[groupName] || [];
+        const group = lightGroups[groupName];
+        const channels = group?.channels || [];
         if (channels.length === 0) return 0;
 
         let maxVal = 0;
@@ -26,6 +27,10 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
     const whiteBrightness = getGroupBrightness('MainWhite');
     const redBrightness = getGroupBrightness('Red');
     const yellowBrightness = getGroupBrightness('Yellow');
+
+    const whiteColor = lightGroups['MainWhite']?.color || '#ffffff';
+    const redColor = lightGroups['Red']?.color || '#ff0000';
+    const yellowColor = lightGroups['Yellow']?.color || '#ffaa00';
 
     return (
         <group ref={carRef} position={position} rotation={[0, rotationRadians, 0]}>
@@ -45,8 +50,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[-0.8, 0.1, 5]} visible={whiteBrightness > 0.01}>
                 <boxGeometry args={[1.6, 0.1, 5]} />
                 <meshStandardMaterial
-                    color="#ffffff"
-                    emissive="#ffffff"
+                    color={whiteColor}
+                    emissive={whiteColor}
                     emissiveIntensity={whiteBrightness * 9}
                     toneMapped={false}
                 />
@@ -54,8 +59,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[0.8, 0.1, 5]} visible={whiteBrightness > 0.01}>
                 <boxGeometry args={[1.6, 0.1, 5]} />
                 <meshStandardMaterial
-                    color="#ffffff"
-                    emissive="#ffffff"
+                    color={whiteColor}
+                    emissive={whiteColor}
                     emissiveIntensity={whiteBrightness * 9}
                     toneMapped={false}
                 />
@@ -65,8 +70,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[-0.7, 0.6, -2.1]} visible={redBrightness > 0.01}>
                 <sphereGeometry args={[1, 16, 16]} />
                 <meshStandardMaterial
-                    color="#ff0000"
-                    emissive="#ff0000"
+                    color={redColor}
+                    emissive={redColor}
                     emissiveIntensity={redBrightness * 9}
                     toneMapped={false}
                 />
@@ -74,8 +79,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[0.7, 0.6, -2.1]} visible={redBrightness > 0.01}>
                 <sphereGeometry args={[1, 16, 16]} />
                 <meshStandardMaterial
-                    color="#ff0000"
-                    emissive="#ff0000"
+                    color={redColor}
+                    emissive={redColor}
                     emissiveIntensity={redBrightness * 9}
                     toneMapped={false}
                 />
@@ -86,8 +91,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[-0.9, 0.5, 1.5]} visible={yellowBrightness > 0.01}>
                 <sphereGeometry args={[0.3, 16, 16]} />
                 <meshStandardMaterial
-                    color="#ffaa00"
-                    emissive="#ffaa00"
+                    color={yellowColor}
+                    emissive={yellowColor}
                     emissiveIntensity={yellowBrightness * 9}
                     toneMapped={false}
                 />
@@ -95,8 +100,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[0.9, 0.5, 1.5]} visible={yellowBrightness > 0.01}>
                 <sphereGeometry args={[0.3, 16, 16]} />
                 <meshStandardMaterial
-                    color="#ffaa00"
-                    emissive="#ffaa00"
+                    color={yellowColor}
+                    emissive={yellowColor}
                     emissiveIntensity={yellowBrightness * 9}
                     toneMapped={false}
                 />
@@ -105,8 +110,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[-1.05, 0.7, 0.5]} visible={yellowBrightness > 0.01}>
                 <boxGeometry args={[0.1, 0.2, 0.4]} />
                 <meshStandardMaterial
-                    color="#ffaa00"
-                    emissive="#ffaa00"
+                    color={yellowColor}
+                    emissive={yellowColor}
                     emissiveIntensity={yellowBrightness * 9}
                     toneMapped={false}
                 />
@@ -114,8 +119,8 @@ export default function CarModel3D({ position = [0, 0, 0], rotation = 0, frameDa
             <mesh position={[1.05, 0.7, 0.5]} visible={yellowBrightness > 0.01}>
                 <boxGeometry args={[0.1, 0.2, 0.4]} />
                 <meshStandardMaterial
-                    color="#ffaa00"
-                    emissive="#ffaa00"
+                    color={yellowColor}
+                    emissive={yellowColor}
                     emissiveIntensity={yellowBrightness * 9}
                     toneMapped={false}
                 />

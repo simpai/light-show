@@ -267,12 +267,30 @@ export class ShowRenderer {
     }
 
     renderClip(clip, clipTime, frame, row = null, col = null, gridSize = null, layer = null) {
-        // Linear fade in/out calc
+        // Linear fade in/out calc (deprecated/legacy logic if used in other ways)
         let intensity = 1.0;
-        if (clipTime < clip.fadeIn) {
-            intensity = clipTime / clip.fadeIn;
-        } else if (clipTime > (clip.duration - clip.fadeOut)) {
-            intensity = (clip.duration - clipTime) / clip.fadeOut;
+
+        // Ramping logic for EffectClips
+        if (clip.type === 'effect' && clip.rampingEnabled) {
+            const rampOnDur = (clip.rampOnEnabled !== false) ? (clip.rampOnDuration || 0) : 0;
+            const rampOffDur = (clip.rampOffEnabled !== false) ? (clip.rampOffDuration || 0) : 0;
+
+            if (rampOnDur > 0 && clipTime < rampOnDur) {
+                intensity = clipTime / rampOnDur;
+            } else if (rampOffDur > 0 && clipTime > (clip.duration - rampOffDur)) {
+                // If turn off ramping is requested, it should finish at the end of the clip
+                // So at clip.duration, intensity should be 0.
+                intensity = Math.max(0, (clip.duration - clipTime) / rampOffDur);
+            } else {
+                intensity = 1.0;
+            }
+        } else {
+            // Standard fadeIn/fadeOut logic
+            if (clipTime < clip.fadeIn) {
+                intensity = clipTime / clip.fadeIn;
+            } else if (clipTime > (clip.duration - clip.fadeOut)) {
+                intensity = (clip.duration - clipTime) / clip.fadeOut;
+            }
         }
 
         if (clip.type === 'effect') {

@@ -572,7 +572,50 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             style={{
                                                 left: clipLeft,
                                                 width: clipWidth,
-                                                backgroundColor: clip.type === 'effect' ? '#444' : '#4a90e2',
+                                                background: (() => {
+                                                    // 1. Determine Base Color/Gradient (vertical stripes for groups)
+                                                    let baseStyle = '#444'; // Default
+                                                    if (clip.type === 'gif') {
+                                                        baseStyle = '#4a90e2';
+                                                    } else if (usedGroups.length === 1) {
+                                                        baseStyle = usedGroups[0].color;
+                                                    } else if (usedGroups.length > 1) {
+                                                        const segments = usedGroups.map((g, i) => {
+                                                            const start = (i / usedGroups.length) * 100;
+                                                            const end = ((i + 1) / usedGroups.length) * 100;
+                                                            return `${g.color} ${start}%, ${g.color} ${end}%`;
+                                                        });
+                                                        baseStyle = `linear-gradient(to bottom, ${segments.join(', ')})`;
+                                                    }
+
+                                                    // 2. Handle Ramping (horizontal shading overlay)
+                                                    if (clip.type === 'effect' && clip.rampingEnabled) {
+                                                        const rampOnPct = (clip.rampOnEnabled !== false) ? ((clip.rampOnDuration || 500) / clip.duration) * 100 : 0;
+                                                        const rampOffPct = (clip.rampOffEnabled !== false) ? ((clip.rampOffDuration || 500) / clip.duration) * 100 : 0;
+
+                                                        const stops = [];
+                                                        const darkColor = 'rgba(0,0,0,0.85)';
+
+                                                        if (rampOnPct > 0) {
+                                                            stops.push(`${darkColor} 0%`);
+                                                            stops.push(`transparent ${rampOnPct}%`);
+                                                        } else {
+                                                            stops.push(`transparent 0%`);
+                                                        }
+
+                                                        if (rampOffPct > 0) {
+                                                            stops.push(`transparent ${100 - rampOffPct}%`);
+                                                            stops.push(`${darkColor} 100%`);
+                                                        } else {
+                                                            stops.push(`transparent 100%`);
+                                                        }
+
+                                                        const shading = `linear-gradient(to right, ${stops.join(', ')})`;
+                                                        return `${shading}, ${baseStyle}`;
+                                                    }
+
+                                                    return baseStyle;
+                                                })(),
                                                 zIndex: (isDragging && !isDuplicating) ? 20 : (selectedClipIds.includes(clip.id) ? 5 : 1),
                                                 position: 'absolute',
                                                 display: 'flex',
@@ -580,13 +623,6 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             }}
                                             title={`${clip.effectType || 'Clip'} | Start: ${(displayClip.startTime / 1000).toFixed(2)}s | Duration: ${(clip.duration / 1000).toFixed(2)}s`}
                                         >
-                                            {usedGroups.length > 0 && (
-                                                <div className="clip-group-colors" style={{ width: '12px', display: 'flex', flexDirection: 'column', height: '100%', flexShrink: 0 }}>
-                                                    {usedGroups.map(g => (
-                                                        <div key={g.name} style={{ flex: 1, backgroundColor: g.color }} title={g.name} />
-                                                    ))}
-                                                </div>
-                                            )}
                                             <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', overflow: 'hidden' }}>
                                                 {clip.type === 'effect' && <div className="resize-handle left" />}
                                                 {/* <span className="clip-label" style={{ zIndex: 2 }}>{clip.effectType || 'Clip'}</span> */}
@@ -618,21 +654,54 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             style={{
                                                 left: clipLeft,
                                                 width: clipWidth,
-                                                backgroundColor: dragging.type === 'effect' ? '#444' : '#4a90e2',
-                                                opacity: 0.7,
+                                                background: (() => {
+                                                    let baseStyle = '#444';
+                                                    if (dragging.type === 'gif') {
+                                                        baseStyle = '#4a90e2';
+                                                    } else if (usedGroups.length === 1) {
+                                                        baseStyle = usedGroups[0].color;
+                                                    } else if (usedGroups.length > 1) {
+                                                        const segments = usedGroups.map((g, i) => {
+                                                            const start = (i / usedGroups.length) * 100;
+                                                            const end = ((i + 1) / usedGroups.length) * 100;
+                                                            return `${g.color} ${start}%, ${g.color} ${end}%`;
+                                                        });
+                                                        baseStyle = `linear-gradient(to bottom, ${segments.join(', ')})`;
+                                                    }
+
+                                                    if (dragging.type === 'effect' && dragging.rampingEnabled) {
+                                                        const rampOnPct = (dragging.rampOnEnabled !== false) ? ((dragging.rampOnDuration || 500) / dragging.duration) * 100 : 0;
+                                                        const rampOffPct = (dragging.rampOffEnabled !== false) ? ((dragging.rampOffDuration || 500) / dragging.duration) * 100 : 0;
+
+                                                        const stops = [];
+                                                        const darkColor = 'rgba(0,0,0,0.85)';
+
+                                                        if (rampOnPct > 0) {
+                                                            stops.push(`${darkColor} 0%`);
+                                                            stops.push(`transparent ${rampOnPct}%`);
+                                                        } else {
+                                                            stops.push(`transparent 0%`);
+                                                        }
+
+                                                        if (rampOffPct > 0) {
+                                                            stops.push(`transparent ${100 - rampOffPct}%`);
+                                                            stops.push(`${darkColor} 100%`);
+                                                        } else {
+                                                            stops.push(`transparent 100%`);
+                                                        }
+
+                                                        const shading = `linear-gradient(to right, ${stops.join(', ')})`;
+                                                        return `${shading}, ${baseStyle}`;
+                                                    }
+                                                    return baseStyle;
+                                                })(),
+                                                opacity: 0.5,
                                                 zIndex: 20,
                                                 pointerEvents: 'none',
                                                 display: 'flex',
                                                 flexDirection: 'row'
                                             }}
                                         >
-                                            {usedGroups.length > 0 && (
-                                                <div className="clip-group-colors" style={{ width: '12px', display: 'flex', flexDirection: 'column', height: '100%', flexShrink: 0 }}>
-                                                    {usedGroups.map(g => (
-                                                        <div key={g.name} style={{ flex: 1, backgroundColor: g.color }} />
-                                                    ))}
-                                                </div>
-                                            )}
                                             <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', overflow: 'hidden' }}>
                                                 {/* <span className="clip-label">{dragging.effectType || 'Clip'} (Copy)</span> */}
                                             </div>
@@ -662,7 +731,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .track-headers-fixed { flex-shrink: 0; border-right: 1px solid #333; position: sticky; left: 0; z-index: 15; background: #151515; }
                 .track-header { height: 50px; background: #1f1f1f; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid #222; }
                 .track-header:hover { background: #2a2a2a; }
-                .track-header.selected { background: #2a2a2a; border-left: 3px solid #e82020; }
+                .track-header.selected { background: #451a1a; border-left: 3px solid #e82020; }
                 .track-settings-btn {
                     background: transparent;
                     border: none;
@@ -716,7 +785,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .timeline-tracks { flex: 1; min-width: 0; }
                 .track-lanes { position: relative; min-height: 100%; }
                 .track-lane { height: 50px; position: relative; background: #151515; border-bottom: 1px solid #222; cursor: crosshair; }
-                .track-lane.selected { background: rgba(232, 32, 32, 0.05); }
+                .track-lane.selected { background: #2a1515; }
                 .grid-line {
                     position: absolute;
                     top: 0;
@@ -730,7 +799,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .track-lane.muted .clip { opacity: 0.2; pointer-events: none; }
                 .clip.effect { cursor: move; }
                 .clip:hover { opacity: 1; outline: 1px solid white; outline-offset: -1px; }
-                .clip.selected { opacity: 1; outline: 3px solid white; outline-offset: -2px; z-index: 5; box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
+                .clip.selected { opacity: 1; outline: 2px solid #22c55e; outline-offset: -1px; z-index: 5; box-shadow: 0 0 8px rgba(34, 197, 94, 0.4); }
                 .clip.dragging { opacity: 0.6; pointer-events: none; outline: 2px solid #e82020; box-shadow: 0 0 15px rgba(232, 32, 32, 0.5); }
                 .resize-handle {
                     position: absolute;

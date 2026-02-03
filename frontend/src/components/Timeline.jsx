@@ -171,6 +171,39 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         document.addEventListener('mouseup', handleMouseUp);
     };
 
+    const handleLaneMouseDown = (e, layerId) => {
+        // Only trigger if clicking on the lane itself, not on a clip
+        if (e.target !== e.currentTarget && !e.target.classList.contains('grid-line')) return;
+
+        onLayerSelect(layerId);
+
+        const rect = lanesScrollRef.current.getBoundingClientRect();
+
+        const seek = (moveEvent) => {
+            const x = moveEvent.clientX - rect.left + lanesScrollRef.current.scrollLeft;
+            const timeInMs = (x / pixelsPerSecond) * 1000;
+            const snappedTimeMs = getSnappedTime(timeInMs);
+
+            if (onSeek) {
+                onSeek(Math.max(0, Math.min(snappedTimeMs, duration)));
+            }
+        };
+
+        seek(e);
+
+        const handleMouseMove = (moveEvent) => {
+            seek(moveEvent);
+        };
+
+        const handleMouseUp = () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    };
+
     const handleDragStart = (e, clip, layerId) => {
         e.stopPropagation();
         onClipSelect(clip.id);
@@ -180,17 +213,44 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         const xInClipPx = e.clientX - rect.left;
         const xInClipMs = (xInClipPx / pixelsPerSecond) * 1000;
 
-        setDraggingClip({ ...clip, originalStartTime: clip.startTime, layerId });
+        // Detect if resizing (only for effect clips)
+        const isEffect = clip.type === 'effect';
+        const resizeThresholdPx = 8;
+        let dragMode = 'move';
+
+        if (isEffect) {
+            if (xInClipPx < resizeThresholdPx) dragMode = 'resize-left';
+            else if (xInClipPx > rect.width - resizeThresholdPx) dragMode = 'resize-right';
+        }
+
+        setDraggingClip({ ...clip, originalStartTime: clip.startTime, originalDuration: clip.duration, layerId, dragMode });
         setDragOffset(xInClipMs);
 
         const handleMouseMove = (moveEvent) => {
             const laneRect = lanesScrollRef.current.getBoundingClientRect();
             const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft;
-            let newTimeMs = (xInLanePx / pixelsPerSecond) * 1000 - xInClipMs;
+            const currentTimeMs = (xInLanePx / pixelsPerSecond) * 1000;
 
-            const snappedTime = getSnappedTime(newTimeMs);
+            setDraggingClip(prev => {
+                if (!prev) return null;
+                const snappedTime = getSnappedTime(currentTimeMs);
 
-            setDraggingClip(prev => ({ ...prev, startTime: Math.max(0, snappedTime) }));
+                if (prev.dragMode === 'resize-left') {
+                    const newStart = Math.max(0, snappedTime);
+                    const diff = prev.startTime - newStart;
+                    const newDuration = Math.max(20, prev.duration + diff);
+                    return { ...prev, startTime: newStart, duration: newDuration };
+                } else if (prev.dragMode === 'resize-right') {
+                    const newEnd = snappedTime;
+                    const newDuration = Math.max(20, newEnd - prev.startTime);
+                    return { ...prev, duration: newDuration };
+                } else {
+                    // Move mode
+                    const newTimeMs = (xInLanePx / pixelsPerSecond) * 1000 - xInClipMs;
+                    const snappedMoveTime = getSnappedTime(newTimeMs);
+                    return { ...prev, startTime: Math.max(0, snappedMoveTime) };
+                }
+            });
         };
 
         const handleMouseUp = () => {
@@ -198,7 +258,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             document.removeEventListener('mouseup', handleMouseUp);
 
             setDraggingClip(prev => {
-                if (prev && Math.abs(prev.startTime - prev.originalStartTime) > 1) {
+                if (prev && (Math.abs(prev.startTime - prev.originalStartTime) > 1 || Math.abs(prev.duration - prev.originalDuration) > 1)) {
                     // Save change using deep clone to ensure history snapshot works
                     const json = project.toJSON();
                     const newProject = ProjectState.fromJSONSync(json);
@@ -209,6 +269,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                         const clipIdx = layer.clips.findIndex(c => c.id === prev.id);
                         if (clipIdx !== -1) {
                             layer.clips[clipIdx].startTime = prev.startTime;
+                            layer.clips[clipIdx].duration = prev.duration;
                             if (onProjectChange) onProjectChange(newProject);
                         }
                     }
@@ -295,8 +356,11 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{layer.name}</span>
                             <button
                                 className="track-settings-btn"
+                                tabIndex={-1}
+                                onMouseDown={(e) => e.preventDefault()}
                                 onClick={(e) => {
                                     e.stopPropagation();
+                                    e.currentTarget.blur();
                                     onLayerSelect(layer.id);
                                     onLayerDoubleClick(layer.id);
                                 }}
@@ -341,6 +405,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             <div
                                 key={layer.id}
                                 className={`track-lane ${selectedLayerId === layer.id ? 'selected' : ''}`}
+                                onMouseDown={(e) => handleLaneMouseDown(e, layer.id)}
                             >
                                 {layer.clips.map(clip => {
                                     const isDragging = draggingClip?.id === clip.id;
@@ -352,7 +417,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                     return (
                                         <div
                                             key={clip.id}
-                                            className={`clip ${isDragging ? 'dragging' : ''} ${selectedClipId === clip.id ? 'selected' : ''}`}
+                                            className={`clip ${isDragging ? 'dragging' : ''} ${selectedClipId === clip.id ? 'selected' : ''} ${clip.type}`}
                                             onMouseDown={(e) => handleDragStart(e, clip, layer.id)}
                                             style={{
                                                 left: clipLeft,
@@ -362,7 +427,9 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             }}
                                             title={`${clip.effectType || 'Clip'} | Start: ${(displayClip.startTime / 1000).toFixed(2)}s | Duration: ${(clip.duration / 1000).toFixed(2)}s`}
                                         >
+                                            {clip.type === 'effect' && <div className="resize-handle left" />}
                                             <span className="clip-label">{clip.effectType || 'Clip'}</span>
+                                            {clip.type === 'effect' && <div className="resize-handle right" />}
                                         </div>
                                     );
                                 })}
@@ -427,10 +494,24 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     z-index: 0;
                 }
                 .clip { position: absolute; top: 5px; bottom: 5px; border-radius: 4px; cursor: move; opacity: 0.8; display: flex; align-items: center; font-size: 11px; overflow: hidden; white-space: nowrap; transition: opacity 0.1s; border: 1px solid rgba(255,255,255,0.1); }
+                .clip.effect { cursor: move; }
                 .clip:hover { opacity: 1; outline: 1px solid white; outline-offset: -1px; }
                 .clip.selected { opacity: 1; outline: 3px solid white; outline-offset: -2px; z-index: 5; box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
                 .clip.dragging { opacity: 0.6; pointer-events: none; outline: 2px solid #e82020; box-shadow: 0 0 15px rgba(232, 32, 32, 0.5); }
-                .clip-label { padding: 0 5px; pointer-events: none; }
+                .resize-handle {
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    width: 8px;
+                    background: rgba(255, 255, 255, 0.2);
+                    cursor: ew-resize;
+                    display: none;
+                }
+                .clip:hover .resize-handle { display: block; }
+                .resize-handle:hover { background: rgba(255, 255, 255, 0.5); }
+                .resize-handle.left { left: 0; }
+                .resize-handle.right { right: 0; }
+                .clip-label { padding: 0 5px; pointer-events: none; flex: 1; text-align: center; }
                 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e82020; z-index: 10; pointer-events: none; }
                 .bookmark-marker-ruler { 
                     position: absolute; 

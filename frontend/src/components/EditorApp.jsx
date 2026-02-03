@@ -381,6 +381,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         e.preventDefault();
                         togglePlay();
                         break;
+                    case 'enter':
+                        e.preventDefault();
+                        handlePlayFromBookmark();
+                        break;
                     case 'delete':
                     case 'backspace':
                         if (selectedClipId) {
@@ -393,7 +397,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [project, history, redoStack, selectedClipId, selectedLayerId, clipboard, currentTime]);
+    }, [project, history, redoStack, selectedClipId, selectedLayerId, clipboard, currentTime, isPlaying, audioFile]);
 
     useEffect(() => {
         requestRef.current = requestAnimationFrame(animate);
@@ -961,7 +965,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     />
                     <button
                         className="btn-icon"
-                        onClick={() => fileInputRef.current?.click()}
+                        tabIndex={-1}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                            e.currentTarget.blur();
+                            fileInputRef.current?.click();
+                        }}
                         title="Upload Audio"
                     >
                         <Music size={20} />
@@ -990,7 +999,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                     <button
                         className="btn-icon"
-                        onClick={handleSaveProject}
+                        tabIndex={-1}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                            e.currentTarget.blur();
+                            handleSaveProject();
+                        }}
                         title="Save Project"
                     >
                         <Save size={20} />
@@ -1006,7 +1020,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     />
                     <button
                         className="btn-icon"
-                        onClick={() => layoutInputRef.current?.click()}
+                        tabIndex={-1}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                            e.currentTarget.blur();
+                            layoutInputRef.current?.click();
+                        }}
                         title="Upload Layout Image (PNG)"
                         style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
                     >
@@ -1020,7 +1039,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                     <button
                         className={`btn-icon ${activeModal === 'lightGroups' ? 'active' : ''}`}
-                        onClick={() => setActiveModal('lightGroups')}
+                        tabIndex={-1}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                            e.currentTarget.blur();
+                            setActiveModal('lightGroups');
+                        }}
                         title="Light Group Editor"
                         style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
                     >
@@ -1095,7 +1119,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     <div className="view-mode-toggle" style={{ display: 'flex', background: '#333', borderRadius: '4px', padding: '2px', marginLeft: '10px' }}>
                         <button
                             className={`toggle-btn ${viewMode === '2d' ? 'active' : ''}`}
-                            onClick={() => setViewMode('2d')}
+                            tabIndex={-1}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => {
+                                e.currentTarget.blur();
+                                setViewMode('2d');
+                            }}
                             style={{
                                 padding: '4px 8px',
                                 border: 'none',
@@ -1108,7 +1137,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         >2D</button>
                         <button
                             className={`toggle-btn ${viewMode === '3d' ? 'active' : ''}`}
-                            onClick={() => setViewMode('3d')}
+                            tabIndex={-1}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => {
+                                e.currentTarget.blur();
+                                setViewMode('3d');
+                            }}
                             style={{
                                 padding: '4px 8px',
                                 border: 'none',
@@ -1121,11 +1155,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         >3D</button>
                     </div>
                     <div className="toolbar-group" style={{ display: 'flex', gap: '10px', borderLeft: '1px solid #444', paddingLeft: '12px', marginLeft: '12px' }}>
-                        <button className="btn-secondary" onClick={handleExportXsq} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
+                        <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.currentTarget.blur(); handleExportXsq(); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
                             <Save size={18} />
                             .xsq
                         </button>
-                        <button className="btn-secondary" onClick={handleExportMatrix} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
+                        <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.currentTarget.blur(); handleExportMatrix(); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
                             <Save size={18} />
                             .fseq
                         </button>

@@ -353,9 +353,9 @@ export class ShowRenderer {
             const mapping = layer.lightMapping;
             const groups = this.project.lightGroups;
 
-            const channelsR = groups[mapping.R] || [];
-            const channelsG = groups[mapping.G] || [];
-            const channelsB = groups[mapping.B] || [];
+            const channelsR = groups[mapping.R]?.channels || [];
+            const channelsG = groups[mapping.G]?.channels || [];
+            const channelsB = groups[mapping.B]?.channels || [];
 
             const valR = Math.floor(r * (a / 255) * intensity);
             const valG = Math.floor(g * (a / 255) * intensity);

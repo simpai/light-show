@@ -156,14 +156,14 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
     const displayGroups = Object.keys(lightGroups).length > 0
         ? lightGroups
         : {
-            "Main Beams": [0, 1],
-            "Main Beams 2": [2, 3],
-            "Signature": [4, 5],
-            "Turn Signals": [12, 13],
-            "Fog Lights": [14, 15],
-            "Tail Lights": [25, 26],
-            "Brake": [24],
-            "Reverse": [22, 23]
+            "Main Beams": { channels: [0, 1] },
+            "Main Beams 2": { channels: [2, 3] },
+            "Signature": { channels: [4, 5] },
+            "Turn Signals": { channels: [12, 13] },
+            "Fog Lights": { channels: [14, 15] },
+            "Tail Lights": { channels: [25, 26] },
+            "Brake": { channels: [24] },
+            "Reverse": { channels: [22, 23] }
         };
 
     return (
@@ -374,8 +374,9 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     <div className="form-group vertical-group">
                         <label>Target Lights</label>
                         <div className="channels-list">
-                            {Object.entries(displayGroups).map(([label, groupChs]) => {
-                                const isChecked = groupChs.every(c => (clip.channels || []).includes(c));
+                            {Object.entries(displayGroups).map(([label, groupData]) => {
+                                const groupChs = Array.isArray(groupData) ? groupData : (groupData.channels || []);
+                                const isChecked = groupChs.length > 0 && groupChs.every(c => (clip.channels || []).includes(c));
                                 return (
                                     <label key={label} className="channel-item">
                                         <input

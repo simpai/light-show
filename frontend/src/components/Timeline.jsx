@@ -151,6 +151,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         }
 
         const seek = (moveEvent) => {
+            if (!rect || !rulerScrollRef.current) return;
             const x = moveEvent.clientX - rect.left + rulerScrollRef.current.scrollLeft;
             const timeInSeconds = x / pixelsPerSecond;
             const timeInMs = timeInSeconds * 1000;
@@ -186,6 +187,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         const rect = lanesScrollRef.current.getBoundingClientRect();
 
         const seek = (moveEvent) => {
+            if (!rect || !lanesScrollRef.current) return;
             const x = moveEvent.clientX - rect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
             const timeInMs = (x / pixelsPerSecond) * 1000;
             const snappedTimeMs = getSnappedTime(timeInMs);
@@ -269,6 +271,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         setDragOffset(xInClipMs);
 
         const handleMouseMove = (moveEvent) => {
+            if (!lanesScrollRef.current) return;
             const laneRect = lanesScrollRef.current.getBoundingClientRect();
             const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
             const currentTimeMs = (xInLanePx / pixelsPerSecond) * 1000;
@@ -551,6 +554,16 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                     const clipWidth = (displayClip.duration / 1000) * pixelsPerSecond;
                                     const clipLeft = (displayClip.startTime / 1000) * pixelsPerSecond;
 
+                                    const usedGroups = [];
+                                    if (clip.type === 'effect' && clip.channels && project.lightGroups) {
+                                        Object.entries(project.lightGroups).forEach(([name, data]) => {
+                                            const groupChannels = data.channels || [];
+                                            if (clip.channels.some(ch => groupChannels.includes(ch))) {
+                                                usedGroups.push({ name, color: data.color });
+                                            }
+                                        });
+                                    }
+
                                     return (
                                         <div
                                             key={clip.id}
@@ -559,14 +572,26 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             style={{
                                                 left: clipLeft,
                                                 width: clipWidth,
-                                                backgroundColor: clip.type === 'effect' ? '#e82020' : '#4a90e2',
-                                                zIndex: (isDragging && !isDuplicating) ? 20 : (selectedClipIds.includes(clip.id) ? 5 : 1)
+                                                backgroundColor: clip.type === 'effect' ? '#444' : '#4a90e2',
+                                                zIndex: (isDragging && !isDuplicating) ? 20 : (selectedClipIds.includes(clip.id) ? 5 : 1),
+                                                position: 'absolute',
+                                                display: 'flex',
+                                                flexDirection: 'row'
                                             }}
                                             title={`${clip.effectType || 'Clip'} | Start: ${(displayClip.startTime / 1000).toFixed(2)}s | Duration: ${(clip.duration / 1000).toFixed(2)}s`}
                                         >
-                                            {clip.type === 'effect' && <div className="resize-handle left" />}
-                                            <span className="clip-label">{clip.effectType || 'Clip'}</span>
-                                            {clip.type === 'effect' && <div className="resize-handle right" />}
+                                            {usedGroups.length > 0 && (
+                                                <div className="clip-group-colors" style={{ width: '12px', display: 'flex', flexDirection: 'column', height: '100%', flexShrink: 0 }}>
+                                                    {usedGroups.map(g => (
+                                                        <div key={g.name} style={{ flex: 1, backgroundColor: g.color }} title={g.name} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', overflow: 'hidden' }}>
+                                                {clip.type === 'effect' && <div className="resize-handle left" />}
+                                                {/* <span className="clip-label" style={{ zIndex: 2 }}>{clip.effectType || 'Clip'}</span> */}
+                                                {clip.type === 'effect' && <div className="resize-handle right" />}
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -575,6 +600,17 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                 {draggingClips.filter(c => c.layerId === layer.id && c.isDuplicateMode).map(dragging => {
                                     const clipWidth = (dragging.duration / 1000) * pixelsPerSecond;
                                     const clipLeft = (dragging.startTime / 1000) * pixelsPerSecond;
+
+                                    const usedGroups = [];
+                                    if (dragging.type === 'effect' && dragging.channels && project.lightGroups) {
+                                        Object.entries(project.lightGroups).forEach(([name, data]) => {
+                                            const groupChannels = data.channels || [];
+                                            if (dragging.channels.some(ch => groupChannels.includes(ch))) {
+                                                usedGroups.push({ name, color: data.color });
+                                            }
+                                        });
+                                    }
+
                                     return (
                                         <div
                                             key={`preview-${dragging.id}`}
@@ -582,13 +618,24 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             style={{
                                                 left: clipLeft,
                                                 width: clipWidth,
-                                                backgroundColor: dragging.type === 'effect' ? '#e82020' : '#4a90e2',
+                                                backgroundColor: dragging.type === 'effect' ? '#444' : '#4a90e2',
                                                 opacity: 0.7,
                                                 zIndex: 20,
-                                                pointerEvents: 'none'
+                                                pointerEvents: 'none',
+                                                display: 'flex',
+                                                flexDirection: 'row'
                                             }}
                                         >
-                                            <span className="clip-label">{dragging.effectType || 'Clip'} (Copy)</span>
+                                            {usedGroups.length > 0 && (
+                                                <div className="clip-group-colors" style={{ width: '12px', display: 'flex', flexDirection: 'column', height: '100%', flexShrink: 0 }}>
+                                                    {usedGroups.map(g => (
+                                                        <div key={g.name} style={{ flex: 1, backgroundColor: g.color }} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', overflow: 'hidden' }}>
+                                                {/* <span className="clip-label">{dragging.effectType || 'Clip'} (Copy)</span> */}
+                                            </div>
                                         </div>
                                     );
                                 })}

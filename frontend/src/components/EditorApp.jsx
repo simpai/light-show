@@ -1577,7 +1577,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             <audio
                 ref={audioRef}
-                src={audioUrlRef.current || ''}
+                src={audioUrlRef.current || null}
                 onEnded={() => setIsPlaying(false)}
                 onError={(e) => console.error('Audio error:', e)}
                 onLoadedData={() => console.log('Audio loaded successfully')}
@@ -1688,7 +1688,7 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
     const handleAddGroup = () => {
         const name = prompt("Enter light group name:");
         if (name && !lightGroups[name]) {
-            onUpdate({ ...lightGroups, [name]: [] });
+            onUpdate({ ...lightGroups, [name]: { channels: [], color: '#ffffff' } });
         }
     };
 
@@ -1702,10 +1702,21 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
 
     const toggleChannel = (groupName, channel) => {
         const group = lightGroups[groupName];
-        const newChannels = group.includes(channel)
-            ? group.filter(c => c !== channel)
-            : [...group, channel].sort((a, b) => a - b);
-        onUpdate({ ...lightGroups, [groupName]: newChannels });
+        const channels = group.channels || [];
+        const newChannels = channels.includes(channel)
+            ? channels.filter(c => c !== channel)
+            : [...channels, channel].sort((a, b) => a - b);
+        onUpdate({
+            ...lightGroups,
+            [groupName]: { ...group, channels: newChannels }
+        });
+    };
+
+    const updateGroupColor = (name, color) => {
+        onUpdate({
+            ...lightGroups,
+            [name]: { ...lightGroups[name], color }
+        });
     };
 
     return (
@@ -1717,45 +1728,66 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
             </div>
 
             <div className="groups-list">
-                {Object.entries(lightGroups).map(([name, channels]) => (
-                    <div key={name} className="group-card">
-                        <div className="group-header">
-                            <div className="group-info">
-                                <span className="group-name">{name}</span>
-                                <span className="channel-count">{channels.length} channels</span>
-                            </div>
-                            <div className="group-actions">
-                                <button
-                                    className={`btn-secondary ${editingGroup === name ? 'active' : ''}`}
-                                    onClick={() => setEditingGroup(editingGroup === name ? null : name)}
-                                >
-                                    {editingGroup === name ? "Finish" : "Edit Channels"}
-                                </button>
-                                <button onClick={() => handleDeleteGroup(name)} className="btn-delete-plain">
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        </div>
+                {Object.entries(lightGroups).map(([name, groupData]) => {
+                    const channels = groupData.channels || [];
+                    const color = groupData.color || '#ffffff';
 
-                        {editingGroup === name && (
-                            <div className="channels-grid-container">
-                                <div className="channels-grid">
-                                    {Array.from({ length: 48 }).map((_, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => toggleChannel(name, i)}
-                                            className={`channel-btn ${channels.includes(i) ? 'selected' : ''}`}
-                                            title={CHANNEL_NAMES[i]}
-                                        >
-                                            <div className="ch-num">CH{i}</div>
-                                            <div className="ch-name">{CHANNEL_NAMES[i]}</div>
-                                        </button>
-                                    ))}
+                    return (
+                        <div key={name} className="group-card">
+                            <div className="group-header">
+                                <div className="group-info">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <input
+                                            type="color"
+                                            value={color}
+                                            onChange={(e) => updateGroupColor(name, e.target.value)}
+                                            style={{
+                                                width: '24px',
+                                                height: '24px',
+                                                border: 'none',
+                                                padding: 0,
+                                                background: 'none',
+                                                cursor: 'pointer'
+                                            }}
+                                            title="Set group color"
+                                        />
+                                        <span className="group-name">{name}</span>
+                                    </div>
+                                    <span className="channel-count">{channels.length} channels</span>
+                                </div>
+                                <div className="group-actions">
+                                    <button
+                                        className={`btn-secondary ${editingGroup === name ? 'active' : ''}`}
+                                        onClick={() => setEditingGroup(editingGroup === name ? null : name)}
+                                    >
+                                        {editingGroup === name ? "Finish" : "Edit Channels"}
+                                    </button>
+                                    <button onClick={() => handleDeleteGroup(name)} className="btn-delete-plain">
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                             </div>
-                        )}
-                    </div>
-                ))}
+
+                            {editingGroup === name && (
+                                <div className="channels-grid-container">
+                                    <div className="channels-grid">
+                                        {Array.from({ length: 48 }).map((_, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => toggleChannel(name, i)}
+                                                className={`channel-btn ${channels.includes(i) ? 'selected' : ''}`}
+                                                title={CHANNEL_NAMES[i]}
+                                            >
+                                                <div className="ch-num">CH{i}</div>
+                                                <div className="ch-name">{CHANNEL_NAMES[i]}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
             <style>{`
                 .light-group-editor { color: white; }

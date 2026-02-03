@@ -42,14 +42,17 @@ export default function MatrixPreview2D({
         ctx.fillStyle = '#111';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const getGroupBrightness = (lights, groupName) => {
-            const channels = lightGroups[groupName] || [];
-            if (channels.length === 0) return 0;
+        const getGroupInfo = (lights, groupName) => {
+            const group = lightGroups[groupName] || { channels: [], color: '#ffffff' };
+            const channels = Array.isArray(group) ? group : group.channels || [];
+            const color = (group && !Array.isArray(group) && group.color) ? group.color : '#ffffff';
+
+            if (channels.length === 0) return { brightness: 0, color };
             let maxVal = 0;
             channels.forEach(ch => {
                 if (lights[ch] > maxVal) maxVal = lights[ch];
             });
-            return maxVal;
+            return { brightness: maxVal, color };
         };
 
         for (let r = 0; r < rows; r++) {
@@ -80,21 +83,25 @@ export default function MatrixPreview2D({
                     const isFlipped = normRot > 90 && normRot < 270;
 
                     // Light mapping using groups
-                    const whiteVal = getGroupBrightness(lights, 'MainWhite');
-                    const redVal = getGroupBrightness(lights, 'Red');
-                    const yellowVal = getGroupBrightness(lights, 'Yellow');
+                    const whiteGroup = getGroupInfo(lights, 'MainWhite');
+                    const redGroup = getGroupInfo(lights, 'Red');
+                    const yellowGroup = getGroupInfo(lights, 'Yellow'); // Use 'Yellow' for signals
 
                     if (showGroundLight) {
-                        // Draw Headlight Ground (White)
-                        if (whiteVal > 0) {
-                            ctx.fillStyle = `rgba(255, 255, 255, ${whiteVal / 355})`;
+                        // Draw Headlight Ground
+                        if (whiteGroup.brightness > 0) {
+                            ctx.fillStyle = (whiteGroup.color && whiteGroup.color.startsWith('#'))
+                                ? hexToRgba(whiteGroup.color, whiteGroup.brightness / 355)
+                                : `rgba(255, 255, 255, ${whiteGroup.brightness / 355})`;
                             const headY = isFlipped ? carY - carH - 2 : carY + carH;
                             ctx.fillRect(carX, headY, 3, carH + 2);
                         }
 
-                        // Draw Tail Light Ground (Red)
-                        if (redVal > 0) {
-                            ctx.fillStyle = `rgba(255, 0, 0, ${redVal / 355})`;
+                        // Draw Tail Light Ground
+                        if (redGroup.brightness > 0) {
+                            ctx.fillStyle = (redGroup.color && redGroup.color.startsWith('#'))
+                                ? hexToRgba(redGroup.color, redGroup.brightness / 355)
+                                : `rgba(255, 0, 0, ${redGroup.brightness / 355})`;
                             const tailY = isFlipped ? carY + carH - 1 : carY - 2;
                             ctx.fillRect(carX, tailY, 3, 3);
                         }
@@ -102,24 +109,30 @@ export default function MatrixPreview2D({
 
                     // Draw Lights on car body
                     // Headlights
-                    if (whiteVal > 0) {
-                        ctx.fillStyle = `rgba(255, 255, 255, ${whiteVal / 255})`;
+                    if (whiteGroup.brightness > 0) {
+                        ctx.fillStyle = (whiteGroup.color && whiteGroup.color.startsWith('#'))
+                            ? hexToRgba(whiteGroup.color, whiteGroup.brightness / 255)
+                            : `rgba(255, 255, 255, ${whiteGroup.brightness / 255})`;
                         const headY = isFlipped ? carY : carY + carH - 1;
                         ctx.fillRect(carX, headY, 1, 1);
                         ctx.fillRect(carX + carW - 1, headY, 1, 1);
                     }
 
                     // Tail Lights
-                    if (redVal > 0) {
-                        ctx.fillStyle = `rgba(255, 0, 0, ${redVal / 255})`;
+                    if (redGroup.brightness > 0) {
+                        ctx.fillStyle = (redGroup.color && redGroup.color.startsWith('#'))
+                            ? hexToRgba(redGroup.color, redGroup.brightness / 255)
+                            : `rgba(255, 0, 0, ${redGroup.brightness / 255})`;
                         const tailY = isFlipped ? carY + carH - 1 : carY;
                         ctx.fillRect(carX, tailY, 1, 1);
                         ctx.fillRect(carX + carW - 1, tailY, 1, 1);
                     }
 
                     // Yellow Lights (Side Repeaters)
-                    if (yellowVal > 0) {
-                        ctx.fillStyle = `rgba(255, 170, 0, ${yellowVal / 255})`;
+                    if (yellowGroup.brightness > 0) {
+                        ctx.fillStyle = (yellowGroup.color && yellowGroup.color.startsWith('#'))
+                            ? hexToRgba(yellowGroup.color, yellowGroup.brightness / 255)
+                            : `rgba(255, 170, 0, ${yellowGroup.brightness / 255})`;
                         const yellowY = carY + Math.floor(carH / 2);
                         ctx.fillRect(carX, yellowY, 1, 1);
                         ctx.fillRect(carX + carW - 1, yellowY, 1, 1);
@@ -351,4 +364,21 @@ export default function MatrixPreview2D({
             `}</style>
         </div>
     );
+}
+
+function hexToRgba(hex, alpha) {
+    let r = 255, g = 255, b = 255;
+    if (hex.startsWith('#')) {
+        const hexVal = hex.substring(1);
+        if (hexVal.length === 3) {
+            r = parseInt(hexVal[0] + hexVal[0], 16);
+            g = parseInt(hexVal[1] + hexVal[1], 16);
+            b = parseInt(hexVal[2] + hexVal[2], 16);
+        } else if (hexVal.length === 6) {
+            r = parseInt(hexVal.substring(0, 2), 16);
+            g = parseInt(hexVal.substring(2, 4), 16);
+            b = parseInt(hexVal.substring(4, 6), 16);
+        }
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

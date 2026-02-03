@@ -19,9 +19,9 @@ export class ProjectState {
         this.duration = 0;
         this.analysis = null;
         this.lightGroups = {
-            'Red': [14, 25, 26, 24], // Fog (Rear), Tail, Tail, Brake
-            'MainWhite': [0, 1, 2, 3], // Front High/Low
-            'Yellow': [8, 9, 10, 11, 12, 13] // Front/Rear/Side Signals
+            'Red': { channels: [14, 25, 26, 24], color: '#ff0000' }, // Fog (Rear), Tail, Tail, Brake
+            'MainWhite': { channels: [0, 1, 2, 3], color: '#ffffff' }, // Front High/Low
+            'Yellow': { channels: [8, 9, 10, 11, 12, 13], color: '#ffff00' } // Front/Rear/Side Signals
         };
         this.carGroups = []; // Array of { id, name, selection: string[], thumbnail: string }
     }
@@ -119,9 +119,45 @@ export class ProjectState {
         project.layers = JSON.parse(JSON.stringify(data.layers)); // Deep copy layers/clips
         project.duration = data.duration;
         project.analysis = data.analysis;
-        project.lightGroups = data.lightGroups || project.lightGroups;
+
+        // Migration: Ensure lightGroups is in the new { channels, color } format
+        if (data.lightGroups) {
+            const migrated = {};
+            Object.entries(data.lightGroups).forEach(([name, group]) => {
+                if (Array.isArray(group)) {
+                    // Default colors for known groups
+                    let color = '#ffffff';
+                    if (name === 'Red') color = '#ff0000';
+                    else if (name === 'MainWhite') color = '#ffffff';
+                    else if (name === 'Yellow' || name === 'B') color = '#ffff00';
+                    migrated[name] = { channels: group, color };
+                } else if (group && typeof group === 'object' && !group.color) {
+                    // Object format but missing color
+                    let color = '#ffffff';
+                    if (name === 'Red') color = '#ff0000';
+                    else if (name === 'MainWhite') color = '#ffffff';
+                    else if (name === 'Yellow' || name === 'B') color = '#ffff00';
+                    migrated[name] = { ...group, color };
+                } else {
+                    migrated[name] = group;
+                }
+            });
+
+            // Ensure 'Yellow' group exists
+            if (!migrated['Yellow']) {
+                if (migrated['B']) {
+                    migrated['Yellow'] = { ...migrated['B'] };
+                } else {
+                    migrated['Yellow'] = { channels: [8, 9, 10, 11, 12, 13], color: '#ffff00' };
+                }
+            }
+
+            project.lightGroups = migrated;
+        } else {
+            project.lightGroups = project.lightGroups;
+        }
+
         project.carGroups = data.carGroups || [];
-        // Skip assets for sync clone as they're not needed for basic timeline state
         return project;
     }
 

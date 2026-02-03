@@ -112,7 +112,7 @@ const GifPreview = ({ asset, fps = 15 }) => {
     );
 };
 
-export default function ClipEditor({ clip, onChange, onDelete, assets = {}, lightGroups = {} }) {
+export default function ClipEditor({ clip, onChange, onDelete, assets = {}, lightGroups = {}, carGroups = [], allCarsThumbnail = null }) {
     if (!clip) return <div className="p-4 text-gray-500">No clip selected</div>;
 
     const handleChange = (field, value) => {
@@ -174,6 +174,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     <Trash2 size={18} />
                 </button>
             </div>
+
 
             <div className="form-group">
                 <label>Start Time (ms)</label>
@@ -406,6 +407,29 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 </div>
             )}
 
+            <div className="group-selection-section">
+                <label className="section-title">Target Car Group</label>
+                <div className="group-grid">
+                    <button
+                        className={`group-grid-item ${!clip.carGroupId ? 'active' : ''}`}
+                        onClick={() => handleChange('carGroupId', '')}
+                    >
+                        <img src={allCarsThumbnail} alt="All Cars" className="all-cars-icon" />
+                        <span>All Cars</span>
+                    </button>
+                    {carGroups.map(group => (
+                        <button
+                            key={group.id}
+                            className={`group-grid-item ${clip.carGroupId === group.id ? 'active' : ''}`}
+                            onClick={() => handleChange('carGroupId', group.id)}
+                        >
+                            <img src={group.thumbnail} alt={group.name} />
+                            <span>{group.name}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             <style>{`
                 .clip-editor {
                     padding: 16px;
@@ -615,6 +639,91 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 input[type="range"] {
                     width: 100%;
                     cursor: pointer;
+                }
+
+                .group-selection-section {
+                    margin-top: 24px;
+                    padding-top: 16px;
+                    border-top: 1px solid #333;
+                }
+
+                .section-title {
+                    display: block;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #888;
+                    margin-bottom: 12px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                }
+
+                .group-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 8px;
+                }
+
+                .group-grid-item {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 6px;
+                    background: #1a1a1a;
+                    border: 1px solid #333;
+                    border-radius: 8px;
+                    padding: 8px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .group-grid-item:hover {
+                    border-color: #555;
+                    background: #252525;
+                }
+
+                .group-grid-item.active {
+                    border-color: #e82020;
+                    background: rgba(232, 32, 32, 0.1);
+                    box-shadow: 0 0 10px rgba(232, 32, 32, 0.2);
+                }
+
+                .group-grid-item img {
+                    width: 100%;
+                    aspect-ratio: 63 / 32;
+                    object-fit: contain;
+                    image-rendering: pixelated;
+                    border-radius: 4px;
+                    background: #000;
+                }
+
+                .all-cars-icon {
+                    width: 100%;
+                    aspect-ratio: 63 / 32;
+                    object-fit: contain;
+                    image-rendering: pixelated;
+                    border-radius: 4px;
+                    background: #000;
+                    border: 1px solid #333;
+                }
+
+                .active .all-cars-icon {
+                    border-color: #4ade80;
+                    box-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
+                }
+
+                .group-grid-item span {
+                    font-size: 11px;
+                    color: #999;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    width: 100%;
+                    text-align: center;
+                }
+
+                .group-grid-item.active span {
+                    color: white;
+                    font-weight: 600;
                 }
             `}</style>
         </div>

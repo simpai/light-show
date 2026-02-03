@@ -23,6 +23,7 @@ export class ProjectState {
             'MainWhite': [0, 1, 2, 3], // Front High/Low
             'Yellow': [8, 9, 10, 11, 12, 13] // Front/Rear/Side Signals
         };
+        this.carGroups = []; // Array of { id, name, selection: string[], thumbnail: string }
     }
 
     addLayer(name = 'New Layer') {
@@ -82,7 +83,8 @@ export class ProjectState {
             assets: this.serializeAssets(),
             duration: this.duration,
             analysis: this.analysis,
-            lightGroups: this.lightGroups
+            lightGroups: this.lightGroups,
+            carGroups: this.carGroups
         };
     }
 
@@ -118,6 +120,7 @@ export class ProjectState {
         project.duration = data.duration;
         project.analysis = data.analysis;
         project.lightGroups = data.lightGroups || project.lightGroups;
+        project.carGroups = data.carGroups || [];
         // Skip assets for sync clone as they're not needed for basic timeline state
         return project;
     }

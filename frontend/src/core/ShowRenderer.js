@@ -150,6 +150,16 @@ export class ShowRenderer {
             );
 
             if (clip) {
+                // Filter by Car Group if applicable
+                if (clip.carGroupId) {
+                    const group = this.project.carGroups?.find(g => g.id === clip.carGroupId);
+                    if (group) {
+                        const key = `${row},${col}`;
+                        const isSelected = group.selection.includes(key);
+                        if (!isSelected) continue; // Skip rendering for this car
+                    }
+                }
+
                 // Calculate position-based time offset
                 let timeOffset = 0;
                 if (clip.pattern && clip.pattern !== 'uniform') {

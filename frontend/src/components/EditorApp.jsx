@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -64,6 +64,7 @@ const CHANNEL_NAMES = {
 };
 
 
+
 export default function EditorApp({ audioFile: initialAudioFile, analysis: initialAnalysis, bundledData, onExit }) {
     const [project, setProject] = useState(new ProjectState());
     const [isPlaying, setIsPlaying] = useState(false);
@@ -89,7 +90,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [rowSpacing, setRowSpacing] = useState(6);
     const [viewMode, setViewMode] = useState('2d'); // '2d' or '3d'
     const [showGroundLight, setShowGroundLight] = useState(true);
-    const [activeModal, setActiveModal] = useState(null); // 'lightGroups', 'trackProperties'
+    const [activeModal, setActiveModal] = useState(null); // 'lightGroups', 'trackProperties', 'carGroups'
+    const [selectedCars, setSelectedCars] = useState(new Set());
 
     const audioRef = useRef(null);
     const rendererRef = useRef(new ShowRenderer());
@@ -132,6 +134,31 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         handleSeek(targetTime);
         if (!isPlaying) togglePlay();
     };
+
+    const allCarsThumbnail = useMemo(() => {
+        if (!matrixConfig) return null;
+        const canvas = document.createElement('canvas');
+        const tRows = matrixConfig.rows;
+        const tCols = matrixConfig.cols;
+        const tW = 1; // pixel per car width (as requested)
+        const tH = 2; // pixel per car height (1:2 ratio)
+        canvas.width = tCols * tW;
+        canvas.height = tRows * tH;
+        const tCtx = canvas.getContext('2d');
+        tCtx.fillStyle = '#000';
+        tCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let r = 0; r < tRows; r++) {
+            for (let c = 0; c < tCols; c++) {
+                const carExists = !layoutData || (layoutData.layout[r]?.[c]?.exists);
+                if (carExists) {
+                    tCtx.fillStyle = '#0f0'; // All selected style
+                    tCtx.fillRect(c * tW, r * tH, tW, tH);
+                }
+            }
+        }
+        return canvas.toDataURL('image/png');
+    }, [matrixConfig, layoutData]);
 
     const handleDelete = (clipId) => {
         const json = project.toJSON();
@@ -607,6 +634,53 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setSelectedClipId(null);
     };
 
+    const handleAddCarGroup = () => {
+        if (selectedCars.size === 0) {
+            alert('Please select cars in the 2D view first');
+            return;
+        }
+
+        const name = prompt('Enter car group name:');
+        if (!name) return;
+
+        // Generate thumbnail
+        const canvas = document.createElement('canvas');
+        const tRows = matrixConfig.rows;
+        const tCols = matrixConfig.cols;
+        const tW = 1;
+        const tH = 2; // 1:2 ratio
+        canvas.width = tCols * tW;
+        canvas.height = tRows * tH;
+        const tCtx = canvas.getContext('2d');
+        tCtx.fillStyle = '#000';
+        tCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let r = 0; r < tRows; r++) {
+            for (let c = 0; c < tCols; c++) {
+                if (selectedCars.has(`${r},${c}`)) {
+                    tCtx.fillStyle = '#0f0';
+                    tCtx.fillRect(c * tW, r * tH, tW, tH);
+                } else if (!layoutData || layoutData.layout[r]?.[c]?.exists) {
+                    tCtx.fillStyle = '#333';
+                    tCtx.fillRect(c * tW, r * tH, tW, tH);
+                }
+            }
+        }
+        const thumbnail = canvas.toDataURL('image/png');
+
+        const newGroup = {
+            id: crypto.randomUUID(),
+            name,
+            selection: Array.from(selectedCars),
+            thumbnail
+        };
+
+        const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+        newProject.carGroups = [...(project.carGroups || []), newGroup];
+        saveToHistory(newProject);
+        setSelectedCars(new Set());
+    };
+
     const handleAddClip = (type = 'effect') => {
         if (project.layers.length > 0) {
             const json = project.toJSON();
@@ -1051,6 +1125,25 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <Car size={20} />
                     </button>
 
+                    {/* Car Group Controls */}
+                    <div className="car-group-controls" style={{ display: 'flex', gap: '8px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
+                        <button
+                            className="btn-icon"
+                            title="Add Selected Cars to Group"
+                            onClick={handleAddCarGroup}
+                            disabled={selectedCars.size === 0}
+                        >
+                            <Plus size={20} />
+                        </button>
+                        <button
+                            className={`btn-icon ${activeModal === 'carGroups' ? 'active' : ''}`}
+                            title="Manage Car Groups"
+                            onClick={() => setActiveModal('carGroups')}
+                        >
+                            <Layers size={20} />
+                        </button>
+                    </div>
+
                     {/* Matrix Size Controls */}
                     <div className="matrix-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
                         <span style={{ fontSize: '12px', color: '#666' }}>Grid:</span>
@@ -1188,6 +1281,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             layoutData={layoutData}
                             showGroundLight={showGroundLight}
                             lightGroups={project.lightGroups}
+                            selectedCars={selectedCars}
+                            onSelectionChange={setSelectedCars}
                         />
                     )}
                 </div>
@@ -1200,6 +1295,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             onDelete={handleClipDelete}
                             assets={project.assets}
                             lightGroups={project.lightGroups}
+                            carGroups={project.carGroups}
+                            allCarsThumbnail={allCarsThumbnail}
                         />
                     ) : selectedLayerId ? (
                         <div className="p-4">
@@ -1345,6 +1442,23 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
                             newProject.layers = newProject.layers.map(l => l.id === updatedLayer.id ? updatedLayer : l);
                             saveToHistory(newProject);
+                        }}
+                    />
+                </Modal>
+            )}
+
+            {activeModal === 'carGroups' && (
+                <Modal title="Car Group Manager" onClose={() => setActiveModal(null)}>
+                    <CarGroupManager
+                        carGroups={project.carGroups}
+                        onUpdate={(updatedGroups) => {
+                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                            newProject.carGroups = updatedGroups;
+                            saveToHistory(newProject);
+                        }}
+                        onSelect={(selection) => {
+                            setSelectedCars(new Set(selection));
+                            setActiveModal(null);
                         }}
                     />
                 </Modal>
@@ -1710,6 +1824,157 @@ function TrackProperties({ layer, lightGroups, onUpdate }) {
                     outline: none;
                 }
                 .mapping-select-wrapper select:focus { border-color: #e82020; }
+            `}</style>
+        </div>
+    );
+}
+
+function CarGroupManager({ carGroups = [], onUpdate, onSelect }) {
+    const fileInputRef = useRef(null);
+
+    const handleDelete = (id) => {
+        if (confirm('Delete this car group?')) {
+            onUpdate(carGroups.filter(g => g.id !== id));
+        }
+    };
+
+    const handleExport = () => {
+        const data = JSON.stringify(carGroups, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `car_groups_${new Date().getTime()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImport = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const imported = JSON.parse(event.target.result);
+                if (Array.isArray(imported)) {
+                    // Merge or replace? Let's append with new IDs to avoid collisions
+                    const merged = [...carGroups];
+                    imported.forEach(g => {
+                        if (g.name && g.selection) {
+                            merged.push({
+                                ...g,
+                                id: crypto.randomUUID()
+                            });
+                        }
+                    });
+                    onUpdate(merged);
+                    alert(`Imported ${imported.length} groups`);
+                }
+            } catch (err) {
+                alert('Failed to parse car groups file');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    return (
+        <div className="car-group-manager">
+            <div className="manager-toolbar mb-4">
+                <button className="btn-tesla-sm" onClick={handleExport}>
+                    <Download size={18} style={{ marginRight: 6 }} /> Export Groups
+                </button>
+                <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ marginLeft: 8 }}>
+                    <Upload size={18} style={{ marginRight: 6 }} /> Import Groups
+                </button>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    style={{ display: 'none' }}
+                    onChange={handleImport}
+                />
+            </div>
+
+            <div className="groups-grid">
+                {carGroups.length === 0 && (
+                    <div className="text-muted text-center p-8">No groups saved yet. Select cars and click the + button in the toolbar.</div>
+                )}
+                {carGroups.map(group => (
+                    <div key={group.id} className="group-item-card">
+                        <div className="group-thumbnail" onClick={() => onSelect(group.selection)}>
+                            <img src={group.thumbnail} alt={group.name} />
+                            <div className="hover-overlay">Apply Selection</div>
+                        </div>
+                        <div className="group-info">
+                            <span className="group-name">{group.name}</span>
+                            <span className="car-count">{group.selection.length} cars</span>
+                            <button className="btn-delete-plain" onClick={() => handleDelete(group.id)}>
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <style>{`
+                .car-group-manager { color: white; }
+                .manager-toolbar { display: flex; align-items: center; margin-bottom: 20px; }
+                .groups-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                    gap: 16px;
+                }
+                .group-item-card {
+                    background: #252525;
+                    border: 1px solid #333;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    transition: transform 0.2s;
+                }
+                .group-item-card:hover { transform: translateY(-2px); border-color: #444; }
+                .group-thumbnail {
+                    aspect-ratio: 16/9;
+                    background: #000;
+                    position: relative;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .group-thumbnail img {
+                    max-width: 100%;
+                    max-height: 100%;
+                    image-rendering: pixelated;
+                }
+                .hover-overlay {
+                    position: absolute;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(232, 32, 32, 0.7);
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: 600;
+                    opacity: 0;
+                    transition: opacity 0.2s;
+                }
+                .group-thumbnail:hover .hover-overlay { opacity: 1; }
+                .group-info {
+                    padding: 8px 10px;
+                    display: flex;
+                    flex-direction: column;
+                    position: relative;
+                }
+                .group-name { font-size: 13px; font-weight: 600; color: #eee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 20px; }
+                .car-count { font-size: 11px; color: #888; }
+                .group-info .btn-delete-plain {
+                    position: absolute;
+                    top: 8px; right: 6px;
+                    color: #444;
+                }
+                .group-info .btn-delete-plain:hover { color: #ef4444; }
             `}</style>
         </div>
     );

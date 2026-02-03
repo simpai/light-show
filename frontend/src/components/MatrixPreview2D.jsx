@@ -1,24 +1,42 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 /**
  * 2D Matrix Preview component using Canvas for high-performance rendering.
- * Each car is represented as a 3x6 pixel block.
+ * Each car is represented as a 4x8 pixel block (including gaps) for 1:2 ratio.
  */
-export default function MatrixPreview2D({ matrixData, cols = 63, rows = 16, layoutData = null, showGroundLight = true, lightGroups = {} }) {
+export default function MatrixPreview2D({
+    matrixData,
+    cols = 63,
+    rows = 16,
+    layoutData = null,
+    showGroundLight = true,
+    lightGroups = {},
+    selectedCars = new Set(), // Set of "r,c" strings
+    onSelectionChange
+}) {
     const canvasRef = useRef(null);
+    const [dragStart, setDragStart] = useState(null);
+    const [dragEnd, setDragEnd] = useState(null);
+    const [tempSelection, setTempSelection] = useState(new Set());
+    // selectionMode: 'new' | 'add' (ctrl) | 'subtract' (shift)
+    const [selectionMode, setSelectionMode] = useState('new');
+
+    // Car dimensions for 1:2 ratio (including 1px gap)
+    const carW = 3;
+    const carH = 7;
+    const gap = 1;
+    const cellW = 4; // carW + gap
+    const cellH = 8; // carH + gap
 
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas || !matrixData) return;
 
         const ctx = canvas.getContext('2d');
-        const carW = 3;
-        const carH = 6;
-        const gap = 1;
 
         // Set canvas internal dimensions
-        canvas.width = cols * (carW + gap);
-        canvas.height = rows * (carH + gap);
+        canvas.width = cols * cellW;
+        canvas.height = rows * cellH;
 
         // Clear background
         ctx.fillStyle = '#111';
@@ -36,8 +54,8 @@ export default function MatrixPreview2D({ matrixData, cols = 63, rows = 16, layo
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                const carY = r * (carH + gap);
-                const carX = c * (carW + gap);
+                const carY = r * cellH;
+                const carX = c * cellW;
 
                 let carExists = true;
                 let rotation = 0;
@@ -51,7 +69,7 @@ export default function MatrixPreview2D({ matrixData, cols = 63, rows = 16, layo
                 if (!carExists) continue;
 
                 // Base car body (Gray)
-                ctx.fillStyle = '#666';
+                ctx.fillStyle = '#333';
                 ctx.fillRect(carX, carY, carW, carH);
 
                 if (matrixData[r]?.[c]) {
@@ -107,19 +125,218 @@ export default function MatrixPreview2D({ matrixData, cols = 63, rows = 16, layo
                         ctx.fillRect(carX + carW - 1, yellowY, 1, 1);
                     }
                 }
+
+                // Selection Overlay
+                const key = `${r},${c}`;
+                let isActuallySelected = selectedCars.has(key);
+                let visualOverlay = null; // 'green' | 'red' | null
+
+                if (dragStart && dragEnd) {
+                    const isMarked = tempSelection.has(key);
+                    if (selectionMode === 'add') {
+                        if (isActuallySelected || isMarked) visualOverlay = 'green';
+                    } else if (selectionMode === 'subtract') {
+                        if (isActuallySelected) {
+                            visualOverlay = isMarked ? 'red' : 'green';
+                        }
+                    } else {
+                        // 'new' mode
+                        if (isMarked) visualOverlay = 'green';
+                    }
+                } else if (isActuallySelected) {
+                    visualOverlay = 'green';
+                }
+
+                if (visualOverlay === 'green') {
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.4)';
+                    ctx.fillRect(carX, carY, carW, carH);
+                    ctx.strokeStyle = '#0f0';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(carX, carY, carW, carH);
+                } else if (visualOverlay === 'red') {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+                    ctx.fillRect(carX, carY, carW, carH);
+                    ctx.strokeStyle = '#f00';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(carX, carY, carW, carH);
+                }
             }
         }
-    }, [matrixData, rows, cols, layoutData, showGroundLight, lightGroups]);
+
+        // Marquee Draw
+        if (dragStart && dragEnd) {
+            const isSub = selectionMode === 'subtract';
+            ctx.fillStyle = isSub ? 'rgba(255, 0, 0, 0.1)' : 'rgba(0, 255, 0, 0.1)';
+            ctx.strokeStyle = isSub ? '#f00' : '#0f0';
+            ctx.lineWidth = 1;
+            const x = Math.min(dragStart.x, dragEnd.x);
+            const y = Math.min(dragStart.y, dragEnd.y);
+            const w = Math.abs(dragStart.x - dragEnd.x);
+            const h = Math.abs(dragStart.y - dragEnd.y);
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
+        }
+    }, [matrixData, rows, cols, layoutData, showGroundLight, lightGroups, selectedCars, dragStart, dragEnd, tempSelection, selectionMode]);
+
+    const getCoord = (e) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return { x: 0, y: 0 };
+        const rect = canvas.getBoundingClientRect();
+
+        // Accurate mapping for object-fit: contain
+        const canvasAspect = canvas.width / canvas.height;
+        const rectAspect = rect.width / rect.height;
+
+        let visualWidth, visualHeight, offsetX, offsetY;
+
+        if (rectAspect > canvasAspect) {
+            // Letterboxed on sides
+            visualHeight = rect.height;
+            visualWidth = visualHeight * canvasAspect;
+            offsetX = (rect.width - visualWidth) / 2;
+            offsetY = 0;
+        } else {
+            // Letterboxed on top/bottom
+            visualWidth = rect.width;
+            visualHeight = visualWidth / canvasAspect;
+            offsetX = 0;
+            offsetY = (rect.height - visualHeight) / 2;
+        }
+
+        const scale = canvas.width / visualWidth;
+
+        return {
+            x: (e.clientX - rect.left - offsetX) * scale,
+            y: (e.clientY - rect.top - offsetY) * scale
+        };
+    };
+
+    const handleMouseDown = (e) => {
+        const coord = getCoord(e);
+        setDragStart(coord);
+        setDragEnd(coord);
+        setTempSelection(new Set());
+
+        if (e.shiftKey) {
+            setSelectionMode('add');
+        } else if (e.altKey) {
+            e.preventDefault(); // Prevent Windows Alt menu
+            setSelectionMode('subtract');
+        } else {
+            setSelectionMode('new');
+        }
+    };
+
+    const handleMouseMove = (e) => {
+        if (!dragStart) return;
+        const coord = getCoord(e);
+        setDragEnd(coord);
+
+        // Update mode in case key was pressed/released during move
+        if (e.shiftKey) setSelectionMode('add');
+        else if (e.altKey) setSelectionMode('subtract');
+        else setSelectionMode('new');
+
+        const dist = Math.sqrt(Math.pow(coord.x - dragStart.x, 2) + Math.pow(coord.y - dragStart.y, 2));
+        if (dist > 5) {
+            const x1 = Math.min(dragStart.x, coord.x);
+            const y1 = Math.min(dragStart.y, coord.y);
+            const x2 = Math.max(dragStart.x, coord.x);
+            const y2 = Math.max(dragStart.y, coord.y);
+
+            const newTemp = new Set();
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const carX = c * cellW;
+                    const carY = r * cellH;
+                    if (carX + carW > x1 && carX < x2 && carY + carH > y1 && carY < y2) {
+                        const carExists = !layoutData || (layoutData.layout[r]?.[c]?.exists);
+                        if (carExists) {
+                            newTemp.add(`${r},${c}`);
+                        }
+                    }
+                }
+            }
+            setTempSelection(newTemp);
+        }
+    };
+
+    const handleMouseUp = (e) => {
+        if (!dragStart || !dragEnd) {
+            setDragStart(null);
+            setDragEnd(null);
+            setTempSelection(new Set());
+            return;
+        }
+
+        const dist = Math.sqrt(Math.pow(dragEnd.x - dragStart.x, 2) + Math.pow(dragEnd.y - dragStart.y, 2));
+        const mode = e.shiftKey ? 'add' : (e.altKey ? 'subtract' : 'new');
+
+        if (dist <= 5) {
+            // Individual click
+            const col = Math.floor(dragEnd.x / cellW);
+            const row = Math.floor(dragEnd.y / cellH);
+            if (row >= 0 && row < rows && col >= 0 && col < cols) {
+                const carExists = !layoutData || (layoutData.layout[row]?.[col]?.exists);
+                if (carExists) {
+                    const key = `${row},${col}`;
+                    const newSelection = new Set(selectedCars);
+                    if (mode === 'add') {
+                        newSelection.add(key);
+                    } else if (mode === 'subtract') {
+                        newSelection.delete(key);
+                    } else {
+                        // Toggle logic for 'new' mode click
+                        if (newSelection.has(key)) newSelection.delete(key);
+                        else {
+                            newSelection.clear();
+                            newSelection.add(key);
+                        }
+                    }
+                    if (onSelectionChange) onSelectionChange(newSelection);
+                }
+            } else if (mode === 'new') {
+                if (onSelectionChange) onSelectionChange(new Set());
+            }
+        } else {
+            // Marquee selection
+            let newSelection;
+            if (mode === 'add') {
+                newSelection = new Set(selectedCars);
+                tempSelection.forEach(key => newSelection.add(key));
+            } else if (mode === 'subtract') {
+                newSelection = new Set(selectedCars);
+                tempSelection.forEach(key => newSelection.delete(key));
+            } else {
+                newSelection = new Set(tempSelection);
+            }
+            if (onSelectionChange) onSelectionChange(newSelection);
+        }
+
+        setDragStart(null);
+        setDragEnd(null);
+        setTempSelection(new Set());
+        setSelectionMode('new');
+    };
 
     return (
-        <div className="matrix-2d-container">
+        <div
+            className="matrix-2d-container"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+        >
             <canvas
                 ref={canvasRef}
                 style={{
                     width: '100%',
                     height: '100%',
                     imageRendering: 'pixelated',
-                    objectFit: 'contain'
+                    objectFit: 'contain',
+                    cursor: 'crosshair',
+                    display: 'block',
+                    pointerEvents: 'none' // Let container handle events
                 }}
             />
             <style>{`
@@ -131,8 +348,11 @@ export default function MatrixPreview2D({ matrixData, cols = 63, rows = 16, layo
                     align-items: center;
                     justify-content: center;
                     margin: 0;
-                    padding: 0;
+                    padding: 40px;
                     box-sizing: border-box;
+                    user-select: none;
+                    overflow: hidden;
+                    cursor: crosshair;
                 }
             `}</style>
         </div>

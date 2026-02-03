@@ -1498,6 +1498,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         bpm={bpm}
                         onZoomChange={setZoom}
                         selectedClipIds={selectedClipIds}
+                        selectedLayerId={selectedLayerId}
                         onClipSelect={handleClipSelect}
                         onLayerSelect={setSelectedLayerId}
                         onLayerDoubleClick={() => setActiveModal('trackProperties')}

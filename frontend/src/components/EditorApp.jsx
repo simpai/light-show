@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -82,6 +82,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
     const [bookmarks, setBookmarks] = useState([]);
+    const [showHelpModal, setShowHelpModal] = useState(false);
 
     // Sync UI settings to localStorage
     useEffect(() => {
@@ -1411,6 +1412,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <button onClick={() => handleAddClip('gif')} className="btn-icon" title="Add GIF at Cursor (G)" style={{ color: '#4a90e2' }}>
                             <ImageIcon size={20} /> GIF
                         </button>
+                        <button onClick={() => setShowHelpModal(true)} className="btn-icon" title="Help / Shortcuts" style={{ marginLeft: '10px', color: '#888' }}>
+                            <HelpCircle size={20} />
+                        </button>
                     </div>
                 </div>
 
@@ -1481,6 +1485,75 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 </Modal>
             )}
 
+            {showHelpModal && (
+                <Modal title="Help & Shortcuts" onClose={() => setShowHelpModal(false)}>
+                    <div className="help-content">
+                        <table className="help-table">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Shortcut</th>
+                                    <th>Function</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td rowSpan="2" className="cat-cell">Playback</td>
+                                    <td><kbd>Space</kbd></td>
+                                    <td>Play / Pause</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Enter</kbd></td>
+                                    <td>Play from Bookmark</td>
+                                </tr>
+                                <tr>
+                                    <td rowSpan="4" className="cat-cell">Editing</td>
+                                    <td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td>
+                                    <td>Undo / Redo</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Ctrl+C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></td>
+                                    <td>Copy / Paste / Cut</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Ctrl+D</kbd></td>
+                                    <td>Duplicate Clip</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Del</kbd> / <kbd>Backspace</kbd></td>
+                                    <td>Delete Clip</td>
+                                </tr>
+                                <tr>
+                                    <td rowSpan="2" className="cat-cell">Add Clip</td>
+                                    <td><kbd>E</kbd></td>
+                                    <td>Add Effect at Cursor</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>G</kbd></td>
+                                    <td>Add GIF/Image at Cursor</td>
+                                </tr>
+                                <tr>
+                                    <td rowSpan="3" className="cat-cell">Timeline</td>
+                                    <td><kbd>Ctrl + Wheel</kbd></td>
+                                    <td>Zoom In/Out</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Shift + Wheel</kbd></td>
+                                    <td>Horizontal Scroll</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Ctrl + Click</kbd></td>
+                                    <td>Toggle Bookmark (in Ruler)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div className="help-extras">
+                            <p><strong>Pro Tip:</strong> Click and drag bookmarks in the ruler to move them. Double-click a track header to open track-specific settings.</p>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
             <audio
                 ref={audioRef}
                 src={audioUrlRef.current || ''}
@@ -1505,6 +1578,13 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .btn-icon.active { color: #e82020; }
         .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
         .text-muted { color: #888; }
+        
+        .help-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+        .help-table th { text-align: left; padding: 10px; border-bottom: 2px solid #333; color: #888; font-weight: 500; }
+        .help-table td { padding: 10px; border-bottom: 1px solid #222; vertical-align: middle; }
+        .help-table kbd { background: #333; padding: 2px 6px; border-radius: 4px; border: 1px solid #444; font-family: monospace; font-size: 12px; color: #ef4444; }
+        .cat-cell { font-weight: bold; color: #e82020; border-right: 1px solid #222; }
+        .help-extras { background: rgba(232, 32, 32, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #e82020; font-size: 13px; color: #ccc; }
       `}</style>
         </div>
     );

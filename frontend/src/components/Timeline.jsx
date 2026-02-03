@@ -118,23 +118,27 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 onToggleBookmark(nearbyBookmark);
                 return;
             } else {
-                onBookmarkSelect(nearbyBookmark);
-
                 // Dragging logic for bookmark
                 let lastTime = nearbyBookmark;
+                document.body.style.cursor = 'grabbing';
+
                 const handleMouseMove = (moveEvent) => {
                     const moveX = moveEvent.clientX - rect.left + rulerScrollRef.current.scrollLeft;
                     const newTime = Math.max(0, (moveX / pixelsPerSecond) * 1000);
                     const snapped = getSnappedTime(newTime);
-                    if (snapped !== lastTime && onBookmarkMove) {
+
+                    if (Math.abs(snapped - lastTime) > 1 && onBookmarkMove) {
                         onBookmarkMove(lastTime, snapped);
                         lastTime = snapped;
                     }
                 };
+
                 const handleMouseUp = () => {
+                    document.body.style.cursor = '';
                     document.removeEventListener('mousemove', handleMouseMove);
                     document.removeEventListener('mouseup', handleMouseUp);
                 };
+
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
                 return;

@@ -289,10 +289,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                         <div
                             key={layer.id}
                             className={`track-header ${selectedLayerId === layer.id ? 'selected' : ''}`}
-                            onClick={() => {
-                                onLayerSelect(layer.id);
-                                onLayerDoubleClick && onLayerDoubleClick(layer.id);
-                            }}
+                            onClick={() => onLayerSelect(layer.id)}
                             onDoubleClick={() => onLayerDoubleClick && onLayerDoubleClick(layer.id)}
                         >
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{layer.name}</span>

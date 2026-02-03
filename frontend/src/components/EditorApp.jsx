@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Wand2, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -70,7 +70,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [currentTime, setCurrentTime] = useState(0);
     const [selectedClipId, setSelectedClipId] = useState(null);
     const [selectedLayerId, setSelectedLayerId] = useState(null);
-    const [matrixConfig, setMatrixConfig] = useState({ rows: 16, cols: 63 });
+    const [matrixConfig, setMatrixConfig] = useState({ cols: 63, rows: 16 });
     const [audioFile, setAudioFile] = useState(null);
     const [audioFileName, setAudioFileName] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -972,14 +972,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </span>
                     )}
 
-                    <button
-                        className="btn-icon"
-                        onClick={handleAnalyzeAudio}
-                        disabled={!audioFile || isAnalyzing}
-                        title="Analyze Audio (Add Beat Markers)"
-                    >
-                        <Wand2 size={20} />
-                    </button>
+
 
                     <label
                         className="btn-icon"
@@ -1039,22 +1032,22 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <span style={{ fontSize: '12px', color: '#666' }}>Grid:</span>
                         <input
                             type="number"
-                            value={matrixConfig.rows}
-                            onChange={e => setMatrixConfig(prev => ({ ...prev, rows: parseInt(e.target.value) || 1 }))}
-                            style={{ width: '45px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
-                            min="1"
-                            max="50"
-                            title="Rows"
-                        />
-                        <span style={{ color: '#666' }}>×</span>
-                        <input
-                            type="number"
                             value={matrixConfig.cols}
                             onChange={e => setMatrixConfig(prev => ({ ...prev, cols: parseInt(e.target.value) || 1 }))}
                             style={{ width: '45px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
                             min="1"
                             max="100"
                             title="Columns"
+                        />
+                        <span style={{ color: '#666' }}>×</span>
+                        <input
+                            type="number"
+                            value={matrixConfig.rows}
+                            onChange={e => setMatrixConfig(prev => ({ ...prev, rows: parseInt(e.target.value) || 1 }))}
+                            style={{ width: '45px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
+                            min="1"
+                            max="50"
+                            title="Rows"
                         />
                     </div>
 

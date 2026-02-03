@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react';
  * 2D Matrix Preview component using Canvas for high-performance rendering.
  * Each car is represented as a 3x6 pixel block.
  */
-export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layoutData = null, showGroundLight = true, lightGroups = {} }) {
+export default function MatrixPreview2D({ matrixData, cols = 63, rows = 16, layoutData = null, showGroundLight = true, lightGroups = {} }) {
     const canvasRef = useRef(null);
 
     useEffect(() => {

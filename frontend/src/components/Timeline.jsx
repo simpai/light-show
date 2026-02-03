@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
+import { Settings } from 'lucide-react';
 
-export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipId, selectedLayerId, onLayerSelect, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
+export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipId, selectedLayerId, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
     const pixelsPerSecond = zoom || 50;
     const totalWidth = (duration / 1000) * pixelsPerSecond;
     const trackHeaderWidth = 150;
@@ -288,9 +289,24 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                         <div
                             key={layer.id}
                             className={`track-header ${selectedLayerId === layer.id ? 'selected' : ''}`}
-                            onClick={() => onLayerSelect(layer.id)}
+                            onClick={() => {
+                                onLayerSelect(layer.id);
+                                onLayerDoubleClick && onLayerDoubleClick(layer.id);
+                            }}
+                            onDoubleClick={() => onLayerDoubleClick && onLayerDoubleClick(layer.id)}
                         >
-                            <span>{layer.name}</span>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{layer.name}</span>
+                            <button
+                                className="track-settings-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onLayerSelect(layer.id);
+                                    onLayerDoubleClick(layer.id);
+                                }}
+                                title="Track Settings"
+                            >
+                                <Settings size={14} />
+                            </button>
                         </div>
                     ))}
                 </div>
@@ -362,7 +378,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 </div>
             </div>
 
-            <style jsx>{`
+            <style>{`
                 .timeline-container { display: flex; flex-direction: column; height: 100%; background: #151515; user-select: none; }
                 .timeline-header-row { display: flex; border-bottom: 1px solid #333; flex-shrink: 0; }
                 .timeline-corner { background: #1f1f1f; border-right: 1px solid #333; flex-shrink: 0; }
@@ -374,9 +390,32 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .onset-marker { position: absolute; bottom: 0; width: 2px; height: 10px; background: #fbbf24; opacity: 0.7; }
                 .timeline-tracks-row { display: flex; flex: 1; overflow: hidden; }
                 .track-headers-fixed { flex-shrink: 0; overflow-y: auto; border-right: 1px solid #333; }
-                .track-header { height: 50px; background: #1f1f1f; display: flex; align-items: center; padding: 0 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid #222; }
+                .track-header { height: 50px; background: #1f1f1f; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid #222; }
                 .track-header:hover { background: #2a2a2a; }
                 .track-header.selected { background: #2a2a2a; border-left: 3px solid #e82020; }
+                .track-settings-btn {
+                    background: transparent;
+                    border: none;
+                    color: #555;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 4px;
+                    border-radius: 4px;
+                    transition: all 0.2s;
+                }
+                .track-settings-btn:hover {
+                    color: white;
+                    background: #444;
+                }
+                .track-header.selected .track-settings-btn {
+                    color: #888;
+                }
+                .track-header.selected .track-settings-btn:hover {
+                    color: white;
+                    background: #e82020;
+                }
                 .track-lanes-container { flex: 1; overflow: auto; }
                 .track-lanes { position: relative; min-height: 100%; }
                 .track-lane { height: 50px; position: relative; background: #151515; border-bottom: 1px solid #222; cursor: crosshair; }

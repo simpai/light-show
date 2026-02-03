@@ -7,7 +7,7 @@ import CarModel3D from './CarModel3D';
  * 3D Scene component that displays a grid of cars
  * Replaces the 2D MatrixPreview component
  */
-export default function Scene3D({ matrixData, rows = 16, cols = 63, layoutData = null, colSpacing = 2.5, rowSpacing = 6 }) {
+export default function Scene3D({ matrixData, rows = 16, cols = 63, layoutData = null, colSpacing = 2.5, rowSpacing = 6, lightGroups = {} }) {
     const [ambientIntensity, setAmbientIntensity] = useState(1.0);
 
     if (!matrixData || matrixData.length === 0) {
@@ -61,13 +61,13 @@ export default function Scene3D({ matrixData, rows = 16, cols = 63, layoutData =
                 const finalX = baseX + offsetX;
                 const finalZ = baseZ + offsetY;
 
-                const lightStates = matrixData[r][c];
+                const frameData = matrixData[r][c];
 
                 cars.push({
                     key: `car-${r}-${c}`,
                     position: [finalX, 0, finalZ],
                     rotation: rotation,
-                    lightStates: lightStates
+                    frameData: frameData
                 });
             }
         }
@@ -120,7 +120,8 @@ export default function Scene3D({ matrixData, rows = 16, cols = 63, layoutData =
                         key={car.key}
                         position={car.position}
                         rotation={car.rotation}
-                        lightStates={car.lightStates}
+                        frameData={car.frameData}
+                        lightGroups={lightGroups}
                     />
                 ))}
 

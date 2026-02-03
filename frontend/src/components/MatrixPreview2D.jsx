@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react';
  * 2D Matrix Preview component using Canvas for high-performance rendering.
  * Each car is represented as a 3x6 pixel block.
  */
-export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layoutData = null }) {
+export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layoutData = null, showGroundLight = true, lightGroups = {} }) {
     const canvasRef = useRef(null);
 
     useEffect(() => {
@@ -23,6 +23,16 @@ export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layo
         // Clear background
         ctx.fillStyle = '#111';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const getGroupBrightness = (lights, groupName) => {
+            const channels = lightGroups[groupName] || [];
+            if (channels.length === 0) return 0;
+            let maxVal = 0;
+            channels.forEach(ch => {
+                if (lights[ch] > maxVal) maxVal = lights[ch];
+            });
+            return maxVal;
+        };
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
@@ -48,81 +58,58 @@ export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layo
                     const lights = matrixData[r][c];
 
                     // Determine if car is flipped (near 180 degrees)
-                    // Normalize rotation to 0-360
                     const normRot = ((rotation % 360) + 360) % 360;
                     const isFlipped = normRot > 90 && normRot < 270;
 
-                    // Light mapping
-                    // Front Headlights (Bottom row in normal, Top row in flipped)
-                    const leftBeam = lights[0] || 0;
-                    const rightBeam = lights[1] || 0;
+                    // Light mapping using groups
+                    const whiteVal = getGroupBrightness(lights, 'MainWhite');
+                    const redVal = getGroupBrightness(lights, 'Red');
+                    const yellowVal = getGroupBrightness(lights, 'Yellow');
 
-                    // Rear Tail/Brake Lights (Top row in normal, Bottom row in flipped)
-                    const leftTail = Math.max(lights[25] || 0, lights[24] || 0);
-                    const rightTail = Math.max(lights[26] || 0, lights[24] || 0);
-
-                    const groundLight = true;
-                    if (groundLight) {
-                        // Draw Headlights (White)
-                        if (leftBeam > 0 || rightBeam > 0) {
-                            ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(leftBeam, rightBeam) / 255})`;
+                    if (showGroundLight) {
+                        // Draw Headlight Ground (White)
+                        if (whiteVal > 0) {
+                            ctx.fillStyle = `rgba(255, 255, 255, ${whiteVal / 355})`;
                             const headY = isFlipped ? carY - carH - 2 : carY + carH;
-                            if (leftBeam > 0) {
-                                ctx.fillStyle = `rgba(255, 255, 255, ${leftBeam / 355})`;
-                                ctx.fillRect(carX - 1, headY, 3, carH + 2);
-                            } 11
-                            if (rightBeam > 0) {
-                                ctx.fillStyle = `rgba(255, 255, 255, ${rightBeam / 355})`;
-                                ctx.fillRect(carX + carW - 2, headY, 3, carH + 2);
-                            }
+                            ctx.fillRect(carX, headY, 3, carH + 2);
                         }
 
-                        // Draw Tail Lights (Red)
-                        if (leftTail > 0 || rightTail > 0) {
+                        // Draw Tail Light Ground (Red)
+                        if (redVal > 0) {
+                            ctx.fillStyle = `rgba(255, 0, 0, ${redVal / 355})`;
                             const tailY = isFlipped ? carY + carH - 1 : carY - 2;
-                            if (leftTail > 0) {
-                                ctx.fillStyle = `rgba(255, 0, 0, ${leftTail / 355})`;
-                                ctx.fillRect(carX - 1, tailY, 3, 3);
-                            }
-                            if (rightTail > 0) {
-                                ctx.fillStyle = `rgba(255, 0, 0, ${rightTail / 355})`;
-                                ctx.fillRect(carX + carW - 2, tailY, 3, 3);
-                            }
+                            ctx.fillRect(carX, tailY, 3, 3);
                         }
-
                     }
-                    else {
-                        // Draw Headlights (White)
-                        if (leftBeam > 0 || rightBeam > 0) {
-                            ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(leftBeam, rightBeam) / 255})`;
-                            const headY = isFlipped ? carY - carH - 2 : carY + carH;
-                            if (leftBeam > 0) {
-                                ctx.fillStyle = `rgba(255, 255, 255, ${leftBeam / 355})`;
-                                ctx.fillRect(carX - 1, headY, 3, carH + 2);
-                            } 11
-                            if (rightBeam > 0) {
-                                ctx.fillStyle = `rgba(255, 255, 255, ${rightBeam / 355})`;
-                                ctx.fillRect(carX + carW - 2, headY, 3, carH + 2);
-                            }
-                        }
 
-                        // Draw Tail Lights (Red)
-                        if (leftTail > 0 || rightTail > 0) {
-                            const tailY = isFlipped ? carY + carH - 1 : carY - 2;
-                            if (leftTail > 0) {
-                                ctx.fillStyle = `rgba(255, 0, 0, ${leftTail / 355})`;
-                                ctx.fillRect(carX - 1, tailY, 3, 3);
-                            }
-                            if (rightTail > 0) {
-                                ctx.fillStyle = `rgba(255, 0, 0, ${rightTail / 355})`;
-                                ctx.fillRect(carX + carW - 2, tailY, 3, 3);
-                            }
-                        }
+                    // Draw Lights on car body
+                    // Headlights
+                    if (whiteVal > 0) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${whiteVal / 255})`;
+                        const headY = isFlipped ? carY : carY + carH - 1;
+                        ctx.fillRect(carX, headY, 1, 1);
+                        ctx.fillRect(carX + carW - 1, headY, 1, 1);
+                    }
+
+                    // Tail Lights
+                    if (redVal > 0) {
+                        ctx.fillStyle = `rgba(255, 0, 0, ${redVal / 255})`;
+                        const tailY = isFlipped ? carY + carH - 1 : carY;
+                        ctx.fillRect(carX, tailY, 1, 1);
+                        ctx.fillRect(carX + carW - 1, tailY, 1, 1);
+                    }
+
+                    // Yellow Lights (Side Repeaters)
+                    if (yellowVal > 0) {
+                        ctx.fillStyle = `rgba(255, 170, 0, ${yellowVal / 255})`;
+                        const yellowY = carY + Math.floor(carH / 2);
+                        ctx.fillRect(carX, yellowY, 1, 1);
+                        ctx.fillRect(carX + carW - 1, yellowY, 1, 1);
                     }
                 }
             }
         }
-    }, [matrixData, rows, cols, layoutData]);
+    }, [matrixData, rows, cols, layoutData, showGroundLight, lightGroups]);
 
     return (
         <div className="matrix-2d-container">
@@ -131,11 +118,11 @@ export default function MatrixPreview2D({ matrixData, rows = 16, cols = 63, layo
                 style={{
                     width: '100%',
                     height: '100%',
-                    imageRendering: 'pixelated', // Keep it crisp
+                    imageRendering: 'pixelated',
                     objectFit: 'contain'
                 }}
             />
-            <style jsx>{`
+            <style>{`
                 .matrix-2d-container {
                     width: 100%;
                     height: 100%;

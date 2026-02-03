@@ -75,7 +75,7 @@ const GifPreview = ({ asset, fps = 15 }) => {
             <div className="gif-info">
                 {asset.width}x{asset.height} • {asset.frames.length} frames • {fps || '?'} FPS • {scale}x Zoom
             </div>
-            <style jsx>{`
+            <style>{`
                 .gif-preview {
                     margin-top: 10px;
                     border: 1px solid #333;
@@ -112,7 +112,7 @@ const GifPreview = ({ asset, fps = 15 }) => {
     );
 };
 
-export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
+export default function ClipEditor({ clip, onChange, onDelete, assets = {}, lightGroups = {} }) {
     if (!clip) return <div className="p-4 text-gray-500">No clip selected</div>;
 
     const handleChange = (field, value) => {
@@ -151,6 +151,20 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
         }
         handleChange('channels', Array.from(current));
     };
+
+    // Use provided lightGroups or fall back to default grouping
+    const displayGroups = Object.keys(lightGroups).length > 0
+        ? lightGroups
+        : {
+            "Main Beams": [0, 1],
+            "Main Beams 2": [2, 3],
+            "Signature": [4, 5],
+            "Turn Signals": [12, 13],
+            "Fog Lights": [14, 15],
+            "Tail Lights": [25, 26],
+            "Brake": [24],
+            "Reverse": [22, 23]
+        };
 
     return (
         <div className="clip-editor">
@@ -359,7 +373,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                     <div className="form-group vertical-group">
                         <label>Target Lights</label>
                         <div className="channels-list">
-                            {Object.entries(CHANNELS).map(([label, groupChs]) => {
+                            {Object.entries(displayGroups).map(([label, groupChs]) => {
                                 const isChecked = groupChs.every(c => (clip.channels || []).includes(c));
                                 return (
                                     <label key={label} className="channel-item">
@@ -392,7 +406,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {} }) {
                 </div>
             )}
 
-            <style jsx>{`
+            <style>{`
                 .clip-editor {
                     padding: 16px;
                     font-size: 14px;

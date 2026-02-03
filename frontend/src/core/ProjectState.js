@@ -7,12 +7,22 @@ export class ProjectState {
                 id: 'layer-1',
                 name: 'Main Track',
                 muted: false,
-                clips: []
+                clips: [],
+                lightMapping: {
+                    R: 'Red',
+                    G: 'MainWhite',
+                    B: 'Yellow'
+                }
             }
         ];
         this.assets = {}; // Store blob URLs or Image objects for GIFs
         this.duration = 0;
         this.analysis = null;
+        this.lightGroups = {
+            'Red': [14, 25, 26, 24], // Fog (Rear), Tail, Tail, Brake
+            'MainWhite': [0, 1, 2, 3], // Front High/Low
+            'Yellow': [8, 9, 10, 11, 12, 13] // Front/Rear/Side Signals
+        };
     }
 
     addLayer(name = 'New Layer') {
@@ -20,7 +30,12 @@ export class ProjectState {
             id: uuidv4(),
             name,
             muted: false,
-            clips: []
+            clips: [],
+            lightMapping: {
+                R: 'Red',
+                G: 'MainWhite',
+                B: 'Yellow'
+            }
         });
     }
 
@@ -66,7 +81,8 @@ export class ProjectState {
             layers: this.layers,
             assets: this.serializeAssets(),
             duration: this.duration,
-            analysis: this.analysis
+            analysis: this.analysis,
+            lightGroups: this.lightGroups
         };
     }
 
@@ -101,6 +117,7 @@ export class ProjectState {
         project.layers = JSON.parse(JSON.stringify(data.layers)); // Deep copy layers/clips
         project.duration = data.duration;
         project.analysis = data.analysis;
+        project.lightGroups = data.lightGroups || project.lightGroups;
         // Skip assets for sync clone as they're not needed for basic timeline state
         return project;
     }

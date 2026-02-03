@@ -1,18 +1,38 @@
 export const CHANNELS = {
-    // Standard Tesla Model 3/Y Channels (approximate map based on generator.py)
-    LeftBeam: 0,
-    RightBeam: 1,
-    LeftBeam2: 2,
-    RightBeam2: 3,
-    LeftSignature: 4,
-    RightSignature: 5,
-    LeftTurn: 12,
-    RightTurn: 13,
-    LeftFog: 14,
-    RightFog: 15,
-    LeftTail: 25,
-    RightTail: 26,
-    // Add more as needed based on official spec or generator.py
+    "Left High Beam": 0,
+    "Right High Beam": 1,
+    "Left Low Beam": 2,
+    "Right Low Beam": 3,
+    "Left Signature": 4,
+    "Right Signature": 5,
+    "Left Turn Front": 12,
+    "Right Turn Front": 13,
+    "Left Fog Front": 14,
+    "Right Fog Front": 15,
+    "Left Tail": 25,
+    "Right Tail": 26,
+    "Brake": 24,
+    "Left Turn Rear": 10,
+    "Right Turn Rear": 11,
+    "Left Repeater": 8,
+    "Right Repeater": 9,
+    "Left Reverse": 22,
+    "Right Reverse": 23,
+    "Inner Main Beam L": 16,
+    "Inner Main Beam R": 17,
+    "Outer Main Beam L": 18,
+    "Outer Main Beam R": 19,
+    "Tail Light Inner L": 20,
+    "Tail Light Inner R": 21,
+    // Add more indices to fill 48
+};
+
+// Fill remaining channels if not explicitly named
+for (let i = 0; i < 48; i++) {
+    const name = Object.keys(CHANNELS).find(key => CHANNELS[key] === i);
+    if (!name) {
+        CHANNELS[`Channel ${i}`] = i;
+    }
 }
 
 export class ShowRenderer {
@@ -152,7 +172,7 @@ export class ShowRenderer {
                 // Only render if within clip duration
                 if (clipTime >= 0 && clipTime < clip.duration) {
                     const cellFrame = new Uint8Array(48).fill(0);
-                    this.renderClip(clip, clipTime, cellFrame, row, col, gridSize);
+                    this.renderClip(clip, clipTime, cellFrame, row, col, gridSize, layer);
 
                     // Mix into frame
                     for (let i = 0; i < 48; i++) {
@@ -230,13 +250,13 @@ export class ShowRenderer {
 
         if (clip) {
             const clipTime = timeMs - clip.startTime;
-            this.renderClip(clip, clipTime, frame);
+            this.renderClip(clip, clipTime, frame, null, null, null, layer);
         }
 
         return frame;
     }
 
-    renderClip(clip, clipTime, frame, row = null, col = null, gridSize = null) {
+    renderClip(clip, clipTime, frame, row = null, col = null, gridSize = null, layer = null) {
         // Linear fade in/out calc
         let intensity = 1.0;
         if (clipTime < clip.fadeIn) {
@@ -249,7 +269,7 @@ export class ShowRenderer {
             this.renderEffect(clip, clipTime, intensity, frame);
         } else if (clip.type === 'gif') {
             if (row !== null && col !== null && gridSize !== null) {
-                this.renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize);
+                this.renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize, layer);
             }
         }
     }
@@ -266,18 +286,18 @@ export class ShowRenderer {
             const sine = (Math.sin(clipTime / 1000 * Math.PI * 2 * freq) + 1) / 2;
             const pulseVal = Math.floor(val * sine);
             this.applyToChannels(clip.channels, pulseVal, frame);
+        } else if (clip.effectType === 'strobe') {
+            const freq = clip.speed || 5;
+            const isOn = Math.floor(clipTime / 1000 * 2 * freq) % 2 === 0;
+            const strobeVal = isOn ? val : 0;
+            this.applyToChannels(clip.channels, strobeVal, frame);
         }
-    }
-
-    renderPattern(clip, clipTime, intensity, frame) {
-        // Pattern rendering is now handled per-cell in getFrameForPosition
-        // This method is kept for compatibility but does nothing
     }
 
     /**
      * Render pattern for a specific grid position
      */
-    renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize) {
+    renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize, layer) {
         if (!clip.assetId || !this.project.assets[clip.assetId]) {
             return;
         }
@@ -285,32 +305,26 @@ export class ShowRenderer {
         const asset = this.project.assets[clip.assetId];
 
         // Calculate frame duration based on timing mode
-        // Default to 'frame' mode if not specified
         const timingMode = clip.timingMode || 'frame';
         let frameDuration;
 
         if (timingMode === 'beat') {
-            // Beat-based: calculate from BPM and Beats per Frame
             const bpm = clip.bpm || 120;
             const beatsPerFrame = clip.beatsPerFrame || 1;
             const msPerBeat = 60000 / bpm;
             frameDuration = msPerBeat * beatsPerFrame;
         } else {
-            // Frame-based: use frameDuration directly (ignore GIF's original fps)
             frameDuration = clip.frameDuration || 100;
         }
 
-
-        // Calculate frame index considering repetitions
         const repetitions = clip.repetitions || 1;
-        const totalFrames = asset.frames.length * repetitions;
+        const assetFrameCount = asset.frames.length;
+        const totalFrames = assetFrameCount * repetitions;
         const rawFrameIndex = Math.floor(clipTime / frameDuration);
 
-        // Clamp to total frames (don't loop beyond repetitions)
+        // Clamp to total frames
         const clampedFrameIndex = Math.min(rawFrameIndex, totalFrames - 1);
-
-        // Map to actual asset frame (loop within the asset frames)
-        const frameIndex = clampedFrameIndex % asset.frames.length;
+        const frameIndex = clampedFrameIndex % assetFrameCount;
         const imageData = asset.frames[frameIndex];
 
         // Check if grid position is within image bounds
@@ -318,31 +332,42 @@ export class ShowRenderer {
             return; // Out of bounds
         }
 
-        // Map grid position to pixel
-        // Grid: row=0 is top, col=0 is left
-        // ImageData: same convention
         const pixelIndex = (row * imageData.width + col) * 4; // RGBA
         const r = imageData.data[pixelIndex];
         const g = imageData.data[pixelIndex + 1];
         const b = imageData.data[pixelIndex + 2];
         const a = imageData.data[pixelIndex + 3];
 
-        // Convert to brightness (0-255)
-        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-        let brightness = Math.floor(luminance * (a / 255));
+        // Use track mapping if available
+        if (layer && layer.lightMapping && this.project.lightGroups) {
+            const mapping = layer.lightMapping;
+            const groups = this.project.lightGroups;
 
-        // Apply brightness mode
-        const mode = clip.brightnessMode || 'gradient';
-        if (mode === 'binary') {
-            const threshold = clip.brightnessThreshold || 128;
-            brightness = brightness > threshold ? 255 : 0;
+            const channelsR = groups[mapping.R] || [];
+            const channelsG = groups[mapping.G] || [];
+            const channelsB = groups[mapping.B] || [];
+
+            const valR = Math.floor(r * (a / 255) * intensity);
+            const valG = Math.floor(g * (a / 255) * intensity);
+            const valB = Math.floor(b * (a / 255) * intensity);
+
+            this.applyToChannels(channelsR, valR, frame);
+            this.applyToChannels(channelsG, valG, frame);
+            this.applyToChannels(channelsB, valB, frame);
+        } else {
+            // Fallback to legacy channel-based logic
+            const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+            let brightness = Math.floor(luminance * (a / 255));
+
+            const mode = clip.brightnessMode || 'gradient';
+            if (mode === 'binary') {
+                const threshold = clip.brightnessThreshold || 128;
+                brightness = brightness > threshold ? 255 : 0;
+            }
+
+            const value = Math.floor(brightness * intensity);
+            this.applyToChannels(clip.channels, value, frame);
         }
-
-        // Apply intensity
-        const value = Math.floor(brightness * intensity);
-
-        // Apply to channels
-        this.applyToChannels(clip.channels, value, frame);
     }
 
     applyToChannels(channels, value, frame) {

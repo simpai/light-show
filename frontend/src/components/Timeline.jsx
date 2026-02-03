@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
-import { Settings } from 'lucide-react';
+import { Settings, Eye, EyeOff } from 'lucide-react';
 
 export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipId, selectedLayerId, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
     const pixelsPerSecond = zoom || 50;
@@ -289,7 +289,20 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             {/* Fixed header row */}
             <div className="timeline-header-row">
                 <div className="timeline-corner" style={{ width: trackHeaderWidth }}>
-                    {/* Empty corner */}
+                    <button
+                        className="global-visibility-btn"
+                        onClick={() => {
+                            const allMuted = project.layers.every(l => l.muted);
+                            const json = project.toJSON();
+                            const newProject = ProjectState.fromJSONSync(json);
+                            newProject.assets = project.assets;
+                            newProject.layers.forEach(l => l.muted = !allMuted);
+                            if (onProjectChange) onProjectChange(newProject);
+                        }}
+                        title="Toggle All Tracks Visibility"
+                    >
+                        {project.layers.every(l => l.muted) ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                 </div>
                 <div
                     className="timeline-ruler-container"
@@ -359,7 +372,24 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             onClick={() => onLayerSelect(layer.id)}
                             onDoubleClick={() => onLayerDoubleClick && onLayerDoubleClick(layer.id)}
                         >
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{layer.name}</span>
+                            <button
+                                className={`track-visibility-btn ${layer.muted ? 'muted' : ''}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const json = project.toJSON();
+                                    const newProject = ProjectState.fromJSONSync(json);
+                                    newProject.assets = project.assets;
+                                    const l = newProject.layers.find(l => l.id === layer.id);
+                                    if (l) {
+                                        l.muted = !l.muted;
+                                        if (onProjectChange) onProjectChange(newProject);
+                                    }
+                                }}
+                                title={layer.muted ? "Show Track" : "Hide Track"}
+                            >
+                                {layer.muted ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', opacity: layer.muted ? 0.5 : 1 }}>{layer.name}</span>
                             <button
                                 className="track-settings-btn"
                                 tabIndex={-1}
@@ -408,7 +438,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                         {project.layers.map(layer => (
                             <div
                                 key={layer.id}
-                                className={`track-lane ${selectedLayerId === layer.id ? 'selected' : ''}`}
+                                className={`track-lane ${selectedLayerId === layer.id ? 'selected' : ''} ${layer.muted ? 'muted' : ''}`}
                                 onMouseDown={(e) => handleLaneMouseDown(e, layer.id)}
                             >
                                 {layer.clips.map(clip => {
@@ -484,6 +514,33 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     color: white;
                     background: #e82020;
                 }
+                .timeline-corner {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .global-visibility-btn, .track-visibility-btn {
+                    background: transparent;
+                    border: none;
+                    color: #555;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 4px;
+                    border-radius: 4px;
+                    transition: all 0.2s;
+                }
+                .global-visibility-btn:hover, .track-visibility-btn:hover {
+                    color: white;
+                    background: #444;
+                }
+                .track-visibility-btn {
+                    margin-right: 4px;
+                }
+                .track-visibility-btn.muted {
+                    color: #e82020;
+                }
                 .timeline-tracks { flex: 1; min-width: 0; }
                 .track-lanes { position: relative; min-height: 100%; }
                 .track-lane { height: 50px; position: relative; background: #151515; border-bottom: 1px solid #222; cursor: crosshair; }
@@ -498,6 +555,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     z-index: 0;
                 }
                 .clip { position: absolute; top: 5px; bottom: 5px; border-radius: 4px; cursor: move; opacity: 0.8; display: flex; align-items: center; font-size: 11px; overflow: hidden; white-space: nowrap; transition: opacity 0.1s; border: 1px solid rgba(255,255,255,0.1); }
+                .track-lane.muted .clip { opacity: 0.2; pointer-events: none; }
                 .clip.effect { cursor: move; }
                 .clip:hover { opacity: 1; outline: 1px solid white; outline-offset: -1px; }
                 .clip.selected { opacity: 1; outline: 3px solid white; outline-offset: -2px; z-index: 5; box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }

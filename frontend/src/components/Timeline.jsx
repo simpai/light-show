@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
 import { Settings, Eye, EyeOff } from 'lucide-react';
 
-export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipId, selectedLayerId, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
+export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipIds = [], selectedLayerId, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
     const pixelsPerSecond = zoom || 50;
     const totalWidth = (duration / 1000) * pixelsPerSecond;
     const trackHeaderWidth = 150;
@@ -10,8 +10,8 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
     const rulerScrollRef = useRef(null);
     const lanesScrollRef = useRef(null);
 
-    const [draggingClip, setDraggingClip] = useState(null);
-    const [dragOffset, setDragOffset] = useState(0); // Offset within clip in ms
+    const [draggingClips, setDraggingClips] = useState([]);
+    const [dragOffset, setDragOffset] = useState(0); // Offset within primary clip in ms
 
     // Synchronize scroll between ruler and lanes
     const handleRulerScroll = (e) => {
@@ -210,26 +210,62 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         document.addEventListener('mouseup', handleMouseUp);
     };
 
-    const handleDragStart = (e, clip, layerId) => {
+    const handleDragStart = (e, primaryClip, primaryLayerId) => {
         e.stopPropagation();
-        onClipSelect(clip.id);
-        onLayerSelect(layerId);
+
+        // Determine which clips to drag
+        let clipsToDrag = [];
+        const isPrimarySelected = selectedClipIds.includes(primaryClip.id);
+
+        if (isPrimarySelected) {
+            // Drag all selected clips
+            selectedClipIds.forEach(id => {
+                for (const layer of project.layers) {
+                    const found = layer.clips.find(c => c.id === id);
+                    if (found) {
+                        clipsToDrag.push({ ...found, originalStartTime: found.startTime, originalDuration: found.duration, layerId: layer.id });
+                        break;
+                    }
+                }
+            });
+        } else {
+            // Select only this clip and drag it
+            if (onClipSelect) onClipSelect(primaryClip.id, e);
+            clipsToDrag = [{ ...primaryClip, originalStartTime: primaryClip.startTime, originalDuration: primaryClip.duration, layerId: primaryLayerId }];
+        }
+
+        // If it's a multi-selection but we clicked a non-selected clip WITHOUT Ctrl, 
+        // the onClipSelect above will handle the selection change in parent, 
+        // but for the immediate drag we use this clip.
+
+        onLayerSelect(primaryLayerId);
 
         const rect = e.currentTarget.getBoundingClientRect();
         const xInClipPx = e.clientX - rect.left;
         const xInClipMs = (xInClipPx / pixelsPerSecond) * 1000;
 
-        // Detect if resizing (only for effect clips)
-        const isEffect = clip.type === 'effect';
-        const resizeThresholdPx = 8;
+        // Detect if resizing (only allowed when dragging a single clip)
         let dragMode = 'move';
-
-        if (isEffect) {
-            if (xInClipPx < resizeThresholdPx) dragMode = 'resize-left';
-            else if (xInClipPx > rect.width - resizeThresholdPx) dragMode = 'resize-right';
+        if (clipsToDrag.length === 1) {
+            const isEffect = primaryClip.type === 'effect';
+            const resizeThresholdPx = 8;
+            if (isEffect) {
+                if (xInClipPx < resizeThresholdPx) dragMode = 'resize-left';
+                else if (xInClipPx > rect.width - resizeThresholdPx) dragMode = 'resize-right';
+            }
         }
 
-        setDraggingClip({ ...clip, originalStartTime: clip.startTime, originalDuration: clip.duration, layerId, dragMode });
+        const isDuplicateMode = e.altKey;
+
+        const draggingClipsWithMode = clipsToDrag.map(c => ({
+            ...c,
+            dragMode: c.id === primaryClip.id ? dragMode : 'move',
+            isDuplicateMode,
+            // Store offset relative to the PRIMARY clip's start time
+            relativeOffset: c.startTime - primaryClip.startTime
+        }));
+
+        setDraggingClips(draggingClipsWithMode);
         setDragOffset(xInClipMs);
 
         const handleMouseMove = (moveEvent) => {
@@ -237,24 +273,35 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
             const currentTimeMs = (xInLanePx / pixelsPerSecond) * 1000;
 
-            setDraggingClip(prev => {
-                if (!prev) return null;
+            setDraggingClips(prev => {
+                if (!prev || prev.length === 0) return [];
+
+                // Find the primary clip in the dragging set
+                const primary = prev.find(c => c.id === primaryClip.id);
+                if (!primary) return prev;
+
                 const snappedTime = getSnappedTime(currentTimeMs);
 
-                if (prev.dragMode === 'resize-left') {
+                if (primary.dragMode === 'resize-left') {
                     const newStart = Math.max(0, snappedTime);
-                    const diff = prev.startTime - newStart;
-                    const newDuration = Math.max(20, prev.duration + diff);
-                    return { ...prev, startTime: newStart, duration: newDuration };
-                } else if (prev.dragMode === 'resize-right') {
+                    const diff = primary.startTime - newStart;
+                    const newDuration = Math.max(20, primary.duration + diff);
+                    return prev.map(c => c.id === primary.id ? { ...c, startTime: newStart, duration: newDuration } : c);
+                } else if (primary.dragMode === 'resize-right') {
                     const newEnd = snappedTime;
-                    const newDuration = Math.max(20, newEnd - prev.startTime);
-                    return { ...prev, duration: newDuration };
+                    const newDuration = Math.max(20, newEnd - primary.startTime);
+                    return prev.map(c => c.id === primary.id ? { ...c, duration: newDuration } : c);
                 } else {
-                    // Move mode
-                    const newTimeMs = (xInLanePx / pixelsPerSecond) * 1000 - xInClipMs;
-                    const snappedMoveTime = getSnappedTime(newTimeMs);
-                    return { ...prev, startTime: Math.max(0, snappedMoveTime) };
+                    // Move mode for all
+                    const primaryNewTimeMs = (xInLanePx / pixelsPerSecond) * 1000 - xInClipMs;
+                    const snappedPrimaryTime = getSnappedTime(primaryNewTimeMs);
+                    const clampedPrimaryTime = Math.max(0, snappedPrimaryTime);
+
+                    // All other clips move relative to the primary clip's snapped position
+                    return prev.map(c => ({
+                        ...c,
+                        startTime: Math.max(0, clampedPrimaryTime + c.relativeOffset)
+                    }));
                 }
             });
         };
@@ -263,24 +310,71 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
 
-            setDraggingClip(prev => {
-                if (prev && (Math.abs(prev.startTime - prev.originalStartTime) > 1 || Math.abs(prev.duration - prev.originalDuration) > 1)) {
-                    // Save change using deep clone to ensure history snapshot works
-                    const json = project.toJSON();
-                    const newProject = ProjectState.fromJSONSync(json);
-                    // Preserve assets (fromJSONSync skips them for performance)
-                    newProject.assets = project.assets;
-                    const layer = newProject.layers.find(l => l.id === prev.layerId);
-                    if (layer) {
-                        const clipIdx = layer.clips.findIndex(c => c.id === prev.id);
-                        if (clipIdx !== -1) {
-                            layer.clips[clipIdx].startTime = prev.startTime;
-                            layer.clips[clipIdx].duration = prev.duration;
-                            if (onProjectChange) onProjectChange(newProject);
+            setDraggingClips(prev => {
+                if (prev && prev.length > 0) {
+                    // Check if anything actually moved
+                    const hasMoved = prev.some(c =>
+                        Math.abs(c.startTime - c.originalStartTime) > 1 ||
+                        Math.abs(c.duration - c.originalDuration) > 1
+                    );
+
+                    if (hasMoved) {
+                        const json = project.toJSON();
+                        const newProject = ProjectState.fromJSONSync(json);
+                        newProject.assets = project.assets;
+
+                        const isDuplicating = prev[0]?.isDuplicateMode;
+                        const newSelectionIds = [];
+
+                        prev.forEach(dragging => {
+                            const layer = newProject.layers.find(l => l.id === dragging.layerId);
+                            if (layer) {
+                                if (isDuplicating) {
+                                    // Clone mode
+                                    const newClip = {
+                                        ...dragging,
+                                        id: crypto.randomUUID(),
+                                        // startTime and duration already set to new values in dragging state
+                                    };
+                                    delete newClip.originalStartTime;
+                                    delete newClip.originalDuration;
+                                    delete newClip.relativeOffset;
+                                    delete newClip.isDuplicateMode;
+                                    delete newClip.dragMode;
+                                    delete newClip.layerId;
+
+                                    layer.clips.push(newClip);
+                                    newSelectionIds.push(newClip.id);
+                                } else {
+                                    // Move mode
+                                    const clipIdx = layer.clips.findIndex(c => c.id === dragging.id);
+                                    if (clipIdx !== -1) {
+                                        layer.clips[clipIdx].startTime = dragging.startTime;
+                                        layer.clips[clipIdx].duration = dragging.duration;
+                                    }
+                                }
+                            }
+                        });
+
+                        if (onProjectChange) onProjectChange(newProject);
+
+                        // Select new clones if duplicated
+                        if (isDuplicating && newSelectionIds.length > 0 && onClipSelect) {
+                            // Single batch selection in parent
+                            if (newSelectionIds.length === 1) {
+                                onClipSelect(newSelectionIds[0], { ctrlKey: false });
+                            } else {
+                                // Clear and then add (or just pass array if onClipSelect supports it)
+                                // Since we don't know if onClipSelect supports arrays, we'll assume it's the standard handler
+                                onClipSelect(newSelectionIds[0], { ctrlKey: false });
+                                newSelectionIds.slice(1).forEach(id => {
+                                    onClipSelect(id, { ctrlKey: true });
+                                });
+                            }
                         }
                     }
                 }
-                return null;
+                return [];
             });
         };
 
@@ -446,8 +540,13 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                 onMouseDown={(e) => handleLaneMouseDown(e, layer.id)}
                             >
                                 {layer.clips.map(clip => {
-                                    const isDragging = draggingClip?.id === clip.id;
-                                    const displayClip = isDragging ? draggingClip : clip;
+                                    const dragging = draggingClips.find(c => c.id === clip.id);
+                                    const isDragging = !!dragging;
+                                    const isDuplicating = isDragging && dragging.isDuplicateMode;
+
+                                    // In move mode, we show the dragging version.
+                                    // In duplicate mode, we show the original version here.
+                                    const displayClip = (isDragging && !isDuplicating) ? dragging : clip;
 
                                     const clipWidth = (displayClip.duration / 1000) * pixelsPerSecond;
                                     const clipLeft = (displayClip.startTime / 1000) * pixelsPerSecond;
@@ -455,19 +554,41 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                     return (
                                         <div
                                             key={clip.id}
-                                            className={`clip ${isDragging ? 'dragging' : ''} ${selectedClipId === clip.id ? 'selected' : ''} ${clip.type}`}
+                                            className={`clip ${isDragging && !isDuplicating ? 'dragging' : ''} ${selectedClipIds.includes(clip.id) ? 'selected' : ''} ${clip.type}`}
                                             onMouseDown={(e) => handleDragStart(e, clip, layer.id)}
                                             style={{
                                                 left: clipLeft,
                                                 width: clipWidth,
                                                 backgroundColor: clip.type === 'effect' ? '#e82020' : '#4a90e2',
-                                                zIndex: isDragging ? 20 : 1
+                                                zIndex: (isDragging && !isDuplicating) ? 20 : (selectedClipIds.includes(clip.id) ? 5 : 1)
                                             }}
                                             title={`${clip.effectType || 'Clip'} | Start: ${(displayClip.startTime / 1000).toFixed(2)}s | Duration: ${(clip.duration / 1000).toFixed(2)}s`}
                                         >
                                             {clip.type === 'effect' && <div className="resize-handle left" />}
                                             <span className="clip-label">{clip.effectType || 'Clip'}</span>
                                             {clip.type === 'effect' && <div className="resize-handle right" />}
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Duplicate previews - rendered as separate semi-transparent elements */}
+                                {draggingClips.filter(c => c.layerId === layer.id && c.isDuplicateMode).map(dragging => {
+                                    const clipWidth = (dragging.duration / 1000) * pixelsPerSecond;
+                                    const clipLeft = (dragging.startTime / 1000) * pixelsPerSecond;
+                                    return (
+                                        <div
+                                            key={`preview-${dragging.id}`}
+                                            className={`clip dragging preview ${dragging.type}`}
+                                            style={{
+                                                left: clipLeft,
+                                                width: clipWidth,
+                                                backgroundColor: dragging.type === 'effect' ? '#e82020' : '#4a90e2',
+                                                opacity: 0.7,
+                                                zIndex: 20,
+                                                pointerEvents: 'none'
+                                            }}
+                                        >
+                                            <span className="clip-label">{dragging.effectType || 'Clip'} (Copy)</span>
                                         </div>
                                     );
                                 })}

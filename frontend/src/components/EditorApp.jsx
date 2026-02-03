@@ -1550,13 +1550,17 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                                     <td>Add GIF/Image at Cursor</td>
                                 </tr>
                                 <tr>
-                                    <td rowSpan="4" className="cat-cell">Timeline</td>
+                                    <td rowSpan="5" className="cat-cell">Timeline</td>
                                     <td><kbd>Ctrl + Wheel</kbd></td>
                                     <td>Zoom In/Out</td>
                                 </tr>
                                 <tr>
                                     <td><kbd>Ctrl + Click</kbd></td>
                                     <td>Multi-select Clips (in Tracks)</td>
+                                </tr>
+                                <tr>
+                                    <td><kbd>Alt + Drag</kbd></td>
+                                    <td>Duplicate selection while moving</td>
                                 </tr>
                                 <tr>
                                     <td><kbd>Shift + Wheel</kbd></td>

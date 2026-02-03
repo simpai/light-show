@@ -39,18 +39,20 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
     useEffect(() => {
         const handleWheelManual = (e) => {
-            e.preventDefault();
             if (e.ctrlKey) {
+                e.preventDefault();
                 // Zoom logic
                 const zoomAmount = e.deltaY > 0 ? 0.9 : 1.1;
                 const newZoom = Math.max(10, Math.min(200, zoom * zoomAmount));
                 if (onZoomChange) onZoomChange(newZoom);
-            } else {
+            } else if (e.shiftKey) {
+                e.preventDefault();
                 // Horizontal scroll logic
                 if (lanesScrollRef.current) {
                     lanesScrollRef.current.scrollLeft += e.deltaY;
                 }
             }
+            // Otherwise, let default vertical scroll happen
         };
 
         const ruler = rulerScrollRef.current;
@@ -180,7 +182,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         const rect = lanesScrollRef.current.getBoundingClientRect();
 
         const seek = (moveEvent) => {
-            const x = moveEvent.clientX - rect.left + lanesScrollRef.current.scrollLeft;
+            const x = moveEvent.clientX - rect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
             const timeInMs = (x / pixelsPerSecond) * 1000;
             const snappedTimeMs = getSnappedTime(timeInMs);
 
@@ -228,7 +230,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
         const handleMouseMove = (moveEvent) => {
             const laneRect = lanesScrollRef.current.getBoundingClientRect();
-            const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft;
+            const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
             const currentTimeMs = (xInLanePx / pixelsPerSecond) * 1000;
 
             setDraggingClip(prev => {
@@ -343,7 +345,11 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             </div>
 
             {/* Tracks area with scroll */}
-            <div className="timeline-tracks-row">
+            <div
+                className="timeline-tracks-row"
+                ref={lanesScrollRef}
+                onScroll={handleLanesScroll}
+            >
                 {/* Fixed track headers */}
                 <div className="track-headers-fixed" style={{ width: trackHeaderWidth }}>
                     {project.layers.map(layer => (
@@ -375,9 +381,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 {/* Scrollable track lanes */}
                 <div
                     className="timeline-tracks"
-                    ref={lanesScrollRef}
-                    onScroll={handleLanesScroll}
-                    style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', position: 'relative' }}
+                    style={{ flex: 1, position: 'relative' }}
                 >
                     <div className="track-lanes" style={{ width: totalWidth }}>
                         {/* Grid lines */}
@@ -452,8 +456,8 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .ruler-mark { position: absolute; top: 0; font-size: 10px; color: #666; border-left: 1px solid #333; padding-left: 2px; height: 100%; }
                 .beat-marker { position: absolute; bottom: 0; width: 2px; height: 15px; background: #4a90e2; opacity: 0.6; }
                 .onset-marker { position: absolute; bottom: 0; width: 2px; height: 10px; background: #fbbf24; opacity: 0.7; }
-                .timeline-tracks-row { display: flex; flex: 1; overflow: hidden; }
-                .track-headers-fixed { flex-shrink: 0; overflow-y: auto; border-right: 1px solid #333; }
+                .timeline-tracks-row { display: flex; flex: 1; overflow: auto; position: relative; }
+                .track-headers-fixed { flex-shrink: 0; border-right: 1px solid #333; position: sticky; left: 0; z-index: 15; background: #151515; }
                 .track-header { height: 50px; background: #1f1f1f; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid #222; }
                 .track-header:hover { background: #2a2a2a; }
                 .track-header.selected { background: #2a2a2a; border-left: 3px solid #e82020; }
@@ -480,7 +484,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     color: white;
                     background: #e82020;
                 }
-                .track-lanes-container { flex: 1; overflow: auto; }
+                .timeline-tracks { flex: 1; min-width: 0; }
                 .track-lanes { position: relative; min-height: 100%; }
                 .track-lane { height: 50px; position: relative; background: #151515; border-bottom: 1px solid #222; cursor: crosshair; }
                 .track-lane.selected { background: rgba(232, 32, 32, 0.05); }

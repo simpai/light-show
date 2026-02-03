@@ -148,17 +148,11 @@ export default function MatrixPreview2D({
                 }
 
                 if (visualOverlay === 'green') {
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.4)';
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
                     ctx.fillRect(carX, carY, carW, carH);
-                    ctx.strokeStyle = '#0f0';
-                    ctx.lineWidth = 0.5;
-                    ctx.strokeRect(carX, carY, carW, carH);
                 } else if (visualOverlay === 'red') {
                     ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
                     ctx.fillRect(carX, carY, carW, carH);
-                    ctx.strokeStyle = '#f00';
-                    ctx.lineWidth = 0.5;
-                    ctx.strokeRect(carX, carY, carW, carH);
                 }
             }
         }

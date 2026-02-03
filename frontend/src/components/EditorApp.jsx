@@ -75,13 +75,26 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [audioFile, setAudioFile] = useState(null);
     const [audioFileName, setAudioFileName] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [zoom, setZoom] = useState(50); // pixels per second
-    const [snapMode, setSnapMode] = useState('1/4'); // '1', '1/2', '1/4', '1/8', 'off'
-    const [bpm, setBpm] = useState(120);
+    const [zoom, setZoom] = useState(() => parseFloat(localStorage.getItem('ls_editor_zoom')) || 50);
+    const [snapMode, setSnapMode] = useState(() => localStorage.getItem('ls_editor_snap') || '1/4');
+    const [bpm, setBpm] = useState(() => parseFloat(localStorage.getItem('ls_editor_bpm')) || 120);
     const [clipboard, setClipboard] = useState(null);
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
     const [bookmarks, setBookmarks] = useState([]);
+
+    // Sync UI settings to localStorage
+    useEffect(() => {
+        localStorage.setItem('ls_editor_zoom', zoom);
+    }, [zoom]);
+
+    useEffect(() => {
+        localStorage.setItem('ls_editor_snap', snapMode);
+    }, [snapMode]);
+
+    useEffect(() => {
+        localStorage.setItem('ls_editor_bpm', bpm);
+    }, [bpm]);
 
     // Layout system state
     const [layoutData, setLayoutData] = useState(null);
@@ -214,6 +227,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 setLayoutFileName(bundledData.layoutFileName || '');
                 if (bundledData.colSpacing !== undefined) setColSpacing(bundledData.colSpacing);
                 if (bundledData.rowSpacing !== undefined) setRowSpacing(bundledData.rowSpacing);
+                if (bundledData.bookmarks) setBookmarks(bundledData.bookmarks);
 
                 // 2. Load Audio if provided via bundle (already set in setAudioFile in App.jsx but we need local state)
                 if (audioFile) {
@@ -640,7 +654,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             return;
         }
 
-        const name = prompt('Enter car group name:');
+        const defaultName = `Group ${(project.carGroups?.length || 0) + 1}`;
+        const name = prompt('Enter car group name:', defaultName);
         if (!name) return;
 
         // Generate thumbnail
@@ -944,7 +959,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 layoutFileName,
                 layoutData,
                 colSpacing,
-                rowSpacing
+                rowSpacing,
+                bookmarks
             };
 
             // 1. Add project metadata
@@ -995,6 +1011,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             setLayoutFileName(data.layoutFileName || '');
             if (data.colSpacing !== undefined) setColSpacing(data.colSpacing);
             if (data.rowSpacing !== undefined) setRowSpacing(data.rowSpacing);
+            if (data.bookmarks) setBookmarks(data.bookmarks);
 
             // 3. Load Audio from bundle
             const audioName = data.audioFileName;

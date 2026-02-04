@@ -19,9 +19,9 @@ export class ProjectState {
         this.duration = 0;
         this.analysis = null;
         this.lightGroups = {
-            'Red': { channels: [14, 25, 26, 24], color: '#ff0000' }, // Fog (Rear), Tail, Tail, Brake
-            'MainWhite': { channels: [0, 1, 2, 3], color: '#ffffff' }, // Front High/Low
-            'Yellow': { channels: [8, 9, 10, 11, 12, 13], color: '#ffbb00' } // Front/Rear/Side Signals
+            'Red': { channels: [24, 25, 26], color: '#ff0000' }, // Brake, Tail, Tail
+            'MainWhite': { channels: [0, 1, 2, 3], color: '#ffffff' }, // Front Outer/Inner Main Beam
+            'Yellow': { channels: [12, 13, 20, 21, 22, 23], color: '#ffbb00' } // Front Turn and Side Repeaters
         };
         this.carGroups = []; // Array of { id, name, selection: string[], thumbnail: string }
     }
@@ -153,7 +153,7 @@ export class ProjectState {
                 if (migrated['B']) {
                     migrated['Yellow'] = { ...migrated['B'] };
                 } else {
-                    migrated['Yellow'] = { channels: [8, 9, 10, 11, 12, 13], color: '#ffff00' };
+                    migrated['Yellow'] = { channels: [12, 13, 20, 21, 22, 23], color: '#ffff00' };
                 }
             }
 

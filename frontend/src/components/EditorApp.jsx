@@ -13,54 +13,54 @@ import JSZip from 'jszip';
 import MatrixPreview2D from './MatrixPreview2D';
 
 const CHANNEL_NAMES = {
-    0: "Left High Beam",
-    1: "Right High Beam",
-    2: "Left Low Beam",
-    3: "Right Low Beam",
+    0: "Left Outer Main Beam",
+    1: "Right Outer Main Beam",
+    2: "Left Inner Main Beam",
+    3: "Right Inner Main Beam",
     4: "Left Signature",
     5: "Right Signature",
-    6: "Falcon Door Left",
-    7: "Falcon Door Right",
-    8: "Left Repeater",
-    9: "Right Repeater",
-    10: "Left Turn Rear",
-    11: "Right Turn Rear",
-    12: "Left Turn Front",
-    13: "Right Turn Front",
-    14: "Left Fog Front",
-    15: "Right Fog Front",
-    16: "Inner Main Beam L",
-    17: "Inner Main Beam R",
-    18: "Outer Main Beam L",
-    19: "Outer Main Beam R",
-    20: "Tail Light Inner L",
-    21: "Tail Light Inner R",
-    22: "Left Reverse",
-    23: "Right Reverse",
-    24: "Brake",
+    6: "Left Channel 4",
+    7: "Right Channel 4",
+    8: "Left Channel 5",
+    9: "Right Channel 5",
+    10: "Left Channel 6",
+    11: "Right Channel 6",
+    12: "Left Front Turn",
+    13: "Right Front Turn",
+    14: "Left Front Fog",
+    15: "Right Front Fog",
+    16: "Left Aux Park",
+    17: "Right Aux Park",
+    18: "Left Side Marker",
+    19: "Right Side Marker",
+    20: "Left Side Repeater",
+    21: "Right Side Repeater",
+    22: "Left Rear Turn",
+    23: "Right Rear Turn",
+    24: "Brake Lights",
     25: "Left Tail",
     26: "Right Tail",
-    27: "Cabin Light",
-    28: "Sill Plate L",
-    29: "Sill Plate R",
-    30: "Door Handle FR",
-    31: "Door Handle FL",
-    32: "Door Handle RR",
-    33: "Door Handle RL",
-    34: "Puddle Light FR",
-    35: "Puddle Light FL",
-    36: "Puddle Light RR",
-    37: "Puddle Light RL",
-    38: "Charge Port",
-    39: "Front Trunk",
-    40: "Rear Trunk",
-    41: "Mirror Fold L",
-    42: "Mirror Fold R",
-    43: "Window FR",
-    44: "Window FL",
-    45: "Window RR",
-    46: "Window RL",
-    47: "Wiper",
+    27: "Reverse Lights",
+    28: "Rear Fog Lights",
+    29: "License Plate Lights",
+    30: "Left Falcon Door",
+    31: "Right Falcon Door",
+    32: "Left Front Door",
+    33: "Right Front Door",
+    34: "Left Mirror",
+    35: "Right Mirror",
+    36: "Left Front Window",
+    37: "Right Front Window",
+    38: "Left Rear Window",
+    39: "Right Rear Window",
+    40: "Liftgate",
+    41: "Left Front Door Handle",
+    42: "Right Front Door Handle",
+    43: "Left Rear Door Handle",
+    44: "Right Rear Door Handle",
+    45: "Charge Port",
+    46: "Wiper",
+    47: "Cabin Light",
 };
 
 
@@ -1778,12 +1778,50 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
         });
     };
 
+    const handleExportLightGroups = () => {
+        const dataStr = JSON.stringify(lightGroups, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+        const exportFileDefaultName = 'tesla_light_groups.json';
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    };
+
+    const handleImportLightGroups = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.readAsText(file, 'UTF-8');
+            reader.onload = (readerEvent) => {
+                try {
+                    const content = JSON.parse(readerEvent.target.result);
+                    onUpdate(content);
+                } catch (err) {
+                    alert('Invalid JSON file');
+                }
+            };
+        };
+        input.click();
+    };
+
     return (
         <div className="light-group-editor">
-            <div className="editor-controls mb-4">
+            <div className="editor-controls mb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button onClick={handleAddGroup} className="btn-tesla-sm">
                     <Plus size={18} /> Add New Group
                 </button>
+                <div className="header-actions" style={{ display: 'flex', gap: '8px' }}>
+                    <button className="import-btn" onClick={handleImportLightGroups} title="Import Light Groups">
+                        <Upload size={16} style={{ marginRight: '6px' }} /> Import
+                    </button>
+                    <button className="export-btn" onClick={handleExportLightGroups} title="Export Light Groups">
+                        <Download size={16} style={{ marginRight: '6px' }} /> Export
+                    </button>
+                </div>
             </div>
 
             <div className="groups-list">
@@ -1864,7 +1902,47 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
                     transition: background 0.2s;
                 }
                 .btn-tesla-sm:hover { background: #c01818; }
-                .groups-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+                .light-group-editor .editor-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 16px;
+                    padding-bottom: 12px;
+                    border-bottom: 1px solid #333;
+                }
+                .light-group-editor .editor-header h3 {
+                    margin: 0;
+                    font-size: 18px;
+                    color: white;
+                }
+                .light-group-editor .header-actions {
+                    display: flex;
+                    gap: 8px;
+                }
+                .light-group-editor .export-btn,
+                .light-group-editor .import-btn {
+                    padding: 6px 14px;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    background: #333;
+                    color: #eee;
+                    border: 1px solid #444;
+                    transition: all 0.2s;
+                }
+                .light-group-editor .export-btn:hover,
+                .light-group-editor .import-btn:hover {
+                    background: #444;
+                    color: white;
+                    border-color: #666;
+                }
+                .groups-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                    margin-top: 16px;
+                }
                 .group-card {
                     background: #252525;
                     border: 1px solid #333;

@@ -15,33 +15,33 @@ const cellH = 10; // carH + gap
 // Relative coordinates (x: 0-4, y: 0-8) for each of the 48 channels.
 // x=0 is left, x=4 is right. y=0 is back, y=8 is front.
 const LIGHT_COORDINATES = {
-    0: [{ x: 0, y: 8 }], // Left Outer Main Beam
-    1: [{ x: 4, y: 8 }], // Right Outer Main Beam
-    2: [{ x: 1, y: 8 }], // Left Inner Main Beam
-    3: [{ x: 3, y: 8 }], // Right Inner Main Beam
-    4: [{ x: 0, y: 7 }], // Left Signature
-    5: [{ x: 4, y: 7 }], // Right Signature
-    6: [{ x: 1, y: 9 }], // Left channel 4
-    7: [{ x: 3, y: 9 }], // right channel 4
-    8: [{ x: 1, y: 9 }], // Left channel 5
-    9: [{ x: 3, y: 9 }], // right channel 5
-    10: [{ x: 1, y: 9 }], // Left channel 6
-    11: [{ x: 3, y: 9 }], // right channel 6
-    12: [{ x: 0, y: 7 }], // Left Front Turn
-    13: [{ x: 4, y: 7 }], // Right Front Turn
-    14: [{ x: 0, y: 9 }], // Left fog
-    15: [{ x: 4, y: 9 }], // right fog
-    16: [{ x: 1, y: 9 }], // Left aux park
-    17: [{ x: 3, y: 9 }], // right aux park
-    18: [{ x: 0, y: 9 }], // Left side marker
-    19: [{ x: 4, y: 9 }], // right side marker
-    20: [{ x: 0, y: 6 }], // Left side repeater
-    21: [{ x: 4, y: 6 }], // Right side repeater
-    22: [{ x: 0, y: 1 }], // Left Rear Turn
-    23: [{ x: 4, y: 1 }], // Right Rear Turn
+    0: [{ x: 4, y: 8 }], // Left Outer Main Beam
+    1: [{ x: 0, y: 8 }], // Right Outer Main Beam
+    2: [{ x: 3, y: 8 }], // Left Inner Main Beam
+    3: [{ x: 1, y: 8 }], // Right Inner Main Beam
+    4: [{ x: 4, y: 7 }], // Left Signature
+    5: [{ x: 0, y: 7 }], // Right Signature
+    6: [{ x: 3, y: 9 }], // Left channel 4
+    7: [{ x: 1, y: 9 }], // right channel 4
+    8: [{ x: 3, y: 9 }], // Left channel 5
+    9: [{ x: 1, y: 9 }], // right channel 5
+    10: [{ x: 3, y: 9 }], // Left channel 6
+    11: [{ x: 1, y: 9 }], // right channel 6
+    12: [{ x: 4, y: 7 }], // Left Front Turn
+    13: [{ x: 0, y: 7 }], // Right Front Turn
+    14: [{ x: 4, y: 9 }], // Left fog
+    15: [{ x: 0, y: 9 }], // right fog
+    16: [{ x: 3, y: 9 }], // Left aux park
+    17: [{ x: 1, y: 9 }], // right aux park
+    18: [{ x: 4, y: 9 }], // Left side marker
+    19: [{ x: 0, y: 9 }], // right side marker
+    20: [{ x: 4, y: 6 }], // Left side repeater
+    21: [{ x: 0, y: 6 }], // Right side repeater
+    22: [{ x: 4, y: 1 }], // Left Rear Turn
+    23: [{ x: 0, y: 1 }], // Right Rear Turn
     24: [{ x: 2, y: 0 }, { x: 0, y: 0 }, { x: 4, y: 0 }], // break
-    25: [{ x: 1, y: 0 }], // Left Tail
-    26: [{ x: 3, y: 0 }], // Right Tail
+    25: [{ x: 3, y: 0 }], // Left Tail
+    26: [{ x: 1, y: 0 }], // Right Tail
 
     27: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // reverse
     28: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // rear fog
@@ -129,20 +129,46 @@ export default function MatrixPreview2D({
                             ctx.fillStyle = hexToRgba('#ffffff', (lights[0] / 255) * 0.5);
                             const groundY = isFlipped ? carY - carH : carY + carH;
                             if (isFlipped)
-                                ctx.fillRect(carX + carW - 3, groundY - 2, 3, carH + 2);
+                                ctx.fillRect(carX - 1, groundY - 2, 4, carH + 2);
                             else
-                                ctx.fillRect(carX, groundY, 3, carH + 2);
+                                ctx.fillRect(carX + carW - 3, groundY, 4, carH + 2);
+
+                            ctx.fillStyle = hexToRgba('#000', 0.5);
+                            if (isFlipped) {
+                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH * 0.4);
+                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH);
+                                ctx.fillRect(carX - 1, groundY + carH, 1, -carH * 0.4);
+                                ctx.fillRect(carX - 1, groundY + carH, 1, -carH);
+                            }
+                            else {
+                                ctx.fillRect(carX + 2, groundY, 1, carH * 0.4);
+                                ctx.fillRect(carX + 2, groundY, 1, carH);
+                                ctx.fillRect(carX + 5, groundY, 1, carH * 0.4);
+                                ctx.fillRect(carX + 5, groundY, 1, carH);
+                            }
                         }
                         // Right Headlight Ground (Ch 1)
                         if (lights[1] > 0) {
-                            ctx.fillStyle = hexToRgba('#0a0707ff', (lights[1] / 255) * 0.5);
+                            ctx.fillStyle = hexToRgba('#ffffff', (lights[1] / 255) * 0.5);
                             const groundY = isFlipped ? carY - carH : carY + carH;
                             if (isFlipped)
-                                ctx.fillRect(carX, groundY - 2, 3, carH + 2);
+                                ctx.fillRect(carX + carW - 3, groundY - 2, 4, carH + 2);
                             else
-                                ctx.fillRect(carX + carW - 3, groundY, 3, carH + 2);
+                                ctx.fillRect(carX - 1, groundY, 4, carH + 2);
+                            ctx.fillStyle = hexToRgba('#000', 0.5);
+                            if (isFlipped) {
+                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH * 0.4);
+                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH);
+                                ctx.fillRect(carX + 5, groundY + carH, 1, -carH * 0.4);
+                                ctx.fillRect(carX + 5, groundY + carH, 1, -carH);
+                            }
+                            else {
+                                ctx.fillRect(carX + 2, groundY, 1, carH * 0.4);
+                                ctx.fillRect(carX + 2, groundY, 1, carH);
+                                ctx.fillRect(carX - 1, groundY, 1, carH * 0.4);
+                                ctx.fillRect(carX - 1, groundY, 1, carH);
+                            }
                         }
-
                         // 2. Brake Lights (Ch 24) - 2x2 red at rear corners
                         if (lights[24] > 0) {
                             ctx.fillStyle = hexToRgba('#ff0000', (lights[24] / 255) * 0.5);
@@ -163,7 +189,7 @@ export default function MatrixPreview2D({
                             const coords = LIGHT_COORDINATES[ch];
                             const points = Array.isArray(coords) ? coords : [coords];
 
-                            ctx.fillStyle = hexToRgba(channelColors[ch], val / 400);
+                            ctx.fillStyle = hexToRgba(channelColors[ch], val / 300);
 
                             points.forEach(coord => {
                                 let dx = coord.x;

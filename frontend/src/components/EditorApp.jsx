@@ -1416,7 +1416,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             <Redo size={18} />
                         </button>
                     </div>
-                    <span className="time-display" style={{ marginLeft: '10px' }}>{(currentTime / 1000).toFixed(2)}s</span>
+                    <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>
 
                     <div className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: '20px' }}>
                         <span style={{ fontSize: '12px', color: '#666' }}>Zoom:</span>
@@ -1664,6 +1664,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .help-table kbd { background: #333; padding: 2px 6px; border-radius: 4px; border: 1px solid #444; font-family: monospace; font-size: 12px; color: #ef4444; }
         .cat-cell { font-weight: bold; color: #e82020; border-right: 1px solid #222; }
         .help-extras { background: rgba(232, 32, 32, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #e82020; font-size: 13px; color: #ccc; }
+        .time-display { font-family: monospace; min-width: 80px; display: inline-block; font-size: 14px; color: #ef4444; margin-left: 10px; }
       `}</style>
         </div>
     );

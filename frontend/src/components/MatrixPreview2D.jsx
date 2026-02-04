@@ -2,8 +2,58 @@ import React, { useEffect, useRef, useState } from 'react';
 
 /**
  * 2D Matrix Preview component using Canvas for high-performance rendering.
- * Each car is represented as a 4x8 pixel block (including gaps) for 1:2 ratio.
+ * Each car is represented as a 5x9 pixel block for detailed visualization.
  */
+
+// Car dimensions for detailed view (including 1px gap)
+const carW = 5;
+const carH = 9;
+const gap = 1;
+const cellW = 6; // carW + gap
+const cellH = 10; // carH + gap
+
+// Relative coordinates (x: 0-4, y: 0-8) for each of the 48 channels.
+// x=0 is left, x=4 is right. y=0 is back, y=8 is front.
+const LIGHT_COORDINATES = {
+    0: [{ x: 0, y: 8 }], // Left Outer Main Beam
+    1: [{ x: 4, y: 8 }], // Right Outer Main Beam
+    2: [{ x: 1, y: 8 }], // Left Inner Main Beam
+    3: [{ x: 3, y: 8 }], // Right Inner Main Beam
+    4: [{ x: 0, y: 7 }], // Left Signature
+    5: [{ x: 4, y: 7 }], // Right Signature
+    6: [{ x: 1, y: 9 }], // Left channel 4
+    7: [{ x: 3, y: 9 }], // right channel 4
+    8: [{ x: 1, y: 9 }], // Left channel 5
+    9: [{ x: 3, y: 9 }], // right channel 5
+    10: [{ x: 1, y: 9 }], // Left channel 6
+    11: [{ x: 3, y: 9 }], // right channel 6
+    12: [{ x: 0, y: 7 }], // Left Front Turn
+    13: [{ x: 4, y: 7 }], // Right Front Turn
+    14: [{ x: 0, y: 9 }], // Left fog
+    15: [{ x: 4, y: 9 }], // right fog
+    16: [{ x: 1, y: 9 }], // Left aux park
+    17: [{ x: 3, y: 9 }], // right aux park
+    18: [{ x: 0, y: 9 }], // Left side marker
+    19: [{ x: 4, y: 9 }], // right side marker
+    20: [{ x: 0, y: 6 }], // Left side repeater
+    21: [{ x: 4, y: 6 }], // Right side repeater
+    22: [{ x: 0, y: 1 }], // Left Rear Turn
+    23: [{ x: 4, y: 1 }], // Right Rear Turn
+    24: [{ x: 2, y: 0 }, { x: 0, y: 0 }, { x: 4, y: 0 }], // break
+    25: [{ x: 1, y: 0 }], // Left Tail
+    26: [{ x: 3, y: 0 }], // Right Tail
+
+    27: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // reverse
+    28: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // rear fog
+    29: [{ x: 2, y: 0 }], // license plate
+    // ... User will fill the rest
+};
+
+// Fill missing coordinates with defaults so the loop doesn't break
+for (let i = 0; i < 48; i++) {
+    if (!LIGHT_COORDINATES[i]) LIGHT_COORDINATES[i] = [{ x: 2, y: 4 }]; // Center default
+}
+
 export default function MatrixPreview2D({
     matrixData,
     cols = 63,
@@ -21,44 +71,34 @@ export default function MatrixPreview2D({
     // selectionMode: 'new' | 'add' (ctrl) | 'subtract' (shift)
     const [selectionMode, setSelectionMode] = useState('new');
 
-    // Car dimensions for 1:2 ratio (including 1px gap)
-    const carW = 3;
-    const carH = 7;
-    const gap = 1;
-    const cellW = 4; // carW + gap
-    const cellH = 8; // carH + gap
-
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas || !matrixData) return;
 
         const ctx = canvas.getContext('2d');
 
-        // Set canvas internal dimensions
-        canvas.width = cols * cellW;
-        canvas.height = rows * cellH;
+        // Set canvas internal dimensions (with 1px margin on all sides)
+        canvas.width = cols * cellW + 2;
+        canvas.height = rows * cellH + 2;
 
         // Clear background
-        ctx.fillStyle = '#111';
+        ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const getGroupInfo = (lights, groupName) => {
-            const group = lightGroups[groupName] || { channels: [], color: '#ffffff' };
+        // Pre-calculate channel colors based on lightGroups
+        const channelColors = new Array(48).fill('#ffffff');
+        Object.entries(lightGroups).forEach(([name, group]) => {
             const channels = Array.isArray(group) ? group : group.channels || [];
             const color = (group && !Array.isArray(group) && group.color) ? group.color : '#ffffff';
-
-            if (channels.length === 0) return { brightness: 0, color };
-            let maxVal = 0;
             channels.forEach(ch => {
-                if (lights[ch] > maxVal) maxVal = lights[ch];
+                if (ch >= 0 && ch < 48) channelColors[ch] = color;
             });
-            return { brightness: maxVal, color };
-        };
+        });
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                const carY = r * cellH;
-                const carX = c * cellW;
+                const carY = r * cellH + 1; // 1px margin
+                const carX = c * cellW + 1; // 1px margin
 
                 let carExists = true;
                 let rotation = 0;
@@ -71,78 +111,79 @@ export default function MatrixPreview2D({
 
                 if (!carExists) continue;
 
-                // Base car body (Gray)
-                ctx.fillStyle = '#333';
+                // Determine if car is flipped (near 180 degrees)
+                const normRot = ((rotation % 360) + 360) % 360;
+                const isFlipped = normRot > 90 && normRot < 270;
+
+                // Base car body (Dark Gray)
+                ctx.fillStyle = '#222';
                 ctx.fillRect(carX, carY, carW, carH);
 
                 if (matrixData[r]?.[c]) {
                     const lights = matrixData[r][c];
 
-                    // Determine if car is flipped (near 180 degrees)
-                    const normRot = ((rotation % 360) + 360) % 360;
-                    const isFlipped = normRot > 90 && normRot < 270;
-
-                    // Light mapping using groups
-                    const whiteGroup = getGroupInfo(lights, 'MainWhite');
-                    const redGroup = getGroupInfo(lights, 'Red');
-                    const yellowGroup = getGroupInfo(lights, 'Yellow'); // Use 'Yellow' for signals
-
+                    // 1. Ground Light Logic
                     if (showGroundLight) {
-                        // Draw Headlight Ground
-                        if (whiteGroup.brightness > 0) {
-                            ctx.fillStyle = (whiteGroup.color && whiteGroup.color.startsWith('#'))
-                                ? hexToRgba(whiteGroup.color, whiteGroup.brightness / 355)
-                                : `rgba(255, 255, 255, ${whiteGroup.brightness / 355})`;
-                            const headY = isFlipped ? carY - carH - 2 : carY + carH;
-                            ctx.fillRect(carX, headY, 3, carH + 2);
+                        // Left Headlight Ground (Ch 0)
+                        if (lights[0] > 0) {
+                            ctx.fillStyle = hexToRgba('#ffffff', (lights[0] / 255) * 0.5);
+                            const groundY = isFlipped ? carY - carH : carY + carH;
+                            if (isFlipped)
+                                ctx.fillRect(carX + carW - 3, groundY - 2, 3, carH + 2);
+                            else
+                                ctx.fillRect(carX, groundY, 3, carH + 2);
+                        }
+                        // Right Headlight Ground (Ch 1)
+                        if (lights[1] > 0) {
+                            ctx.fillStyle = hexToRgba('#0a0707ff', (lights[1] / 255) * 0.5);
+                            const groundY = isFlipped ? carY - carH : carY + carH;
+                            if (isFlipped)
+                                ctx.fillRect(carX, groundY - 2, 3, carH + 2);
+                            else
+                                ctx.fillRect(carX + carW - 3, groundY, 3, carH + 2);
                         }
 
-                        // Draw Tail Light Ground
-                        if (redGroup.brightness > 0) {
-                            ctx.fillStyle = (redGroup.color && redGroup.color.startsWith('#'))
-                                ? hexToRgba(redGroup.color, redGroup.brightness / 355)
-                                : `rgba(255, 0, 0, ${redGroup.brightness / 355})`;
-                            const tailY = isFlipped ? carY + carH - 1 : carY - 2;
-                            ctx.fillRect(carX, tailY, 3, 3);
+                        // 2. Brake Lights (Ch 24) - 2x2 red at rear corners
+                        if (lights[24] > 0) {
+                            ctx.fillStyle = hexToRgba('#ff0000', (lights[24] / 255) * 0.5);
+                            if (isFlipped) {
+                                // Rear is at bottom
+                                ctx.fillRect(carX - 1, carY + carH - 1, 7, 2);
+                            } else {
+                                // Rear is at top
+                                ctx.fillRect(carX - 1, carY - 1, 7, 2);
+                            }
                         }
                     }
 
-                    // Draw Lights on car body
-                    // Headlights
-                    if (whiteGroup.brightness > 0) {
-                        ctx.fillStyle = (whiteGroup.color && whiteGroup.color.startsWith('#'))
-                            ? hexToRgba(whiteGroup.color, whiteGroup.brightness / 255)
-                            : `rgba(255, 255, 255, ${whiteGroup.brightness / 255})`;
-                        const headY = isFlipped ? carY : carY + carH - 1;
-                        ctx.fillRect(carX, headY, 1, 1);
-                        ctx.fillRect(carX + carW - 1, headY, 1, 1);
-                    }
+                    // 3. Individual Light Points
+                    for (let ch = 0; ch < 48; ch++) {
+                        const val = lights[ch];
+                        if (val > 0) {
+                            const coords = LIGHT_COORDINATES[ch];
+                            const points = Array.isArray(coords) ? coords : [coords];
 
-                    // Tail Lights
-                    if (redGroup.brightness > 0) {
-                        ctx.fillStyle = (redGroup.color && redGroup.color.startsWith('#'))
-                            ? hexToRgba(redGroup.color, redGroup.brightness / 255)
-                            : `rgba(255, 0, 0, ${redGroup.brightness / 255})`;
-                        const tailY = isFlipped ? carY + carH - 1 : carY;
-                        ctx.fillRect(carX, tailY, 1, 1);
-                        ctx.fillRect(carX + carW - 1, tailY, 1, 1);
-                    }
+                            ctx.fillStyle = hexToRgba(channelColors[ch], val / 400);
 
-                    // Yellow Lights (Side Repeaters)
-                    if (yellowGroup.brightness > 0) {
-                        ctx.fillStyle = (yellowGroup.color && yellowGroup.color.startsWith('#'))
-                            ? hexToRgba(yellowGroup.color, yellowGroup.brightness / 255)
-                            : `rgba(255, 170, 0, ${yellowGroup.brightness / 255})`;
-                        const yellowY = carY + Math.floor(carH / 2);
-                        ctx.fillRect(carX, yellowY, 1, 1);
-                        ctx.fillRect(carX + carW - 1, yellowY, 1, 1);
+                            points.forEach(coord => {
+                                let dx = coord.x;
+                                let dy = coord.y;
+
+                                if (isFlipped) {
+                                    dx = (carW - 1) - dx;
+                                    dy = (carH - 1) - dy;
+                                }
+
+                                ctx.fillRect(carX + dx, carY + dy, 1, 1);
+                            });
+                        }
                     }
                 }
 
                 // Selection Overlay
                 const key = `${r},${c}`;
                 let isActuallySelected = selectedCars.has(key);
-                let visualOverlay = null; // 'green' | 'red' | null
+                let visualOverlay = null;
 
                 if (dragStart && dragEnd) {
                     const isMarked = tempSelection.has(key);
@@ -153,7 +194,6 @@ export default function MatrixPreview2D({
                             visualOverlay = isMarked ? 'red' : 'green';
                         }
                     } else {
-                        // 'new' mode
                         if (isMarked) visualOverlay = 'green';
                     }
                 } else if (isActuallySelected) {
@@ -189,21 +229,17 @@ export default function MatrixPreview2D({
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
-
-        // Accurate mapping for object-fit: contain
         const canvasAspect = canvas.width / canvas.height;
         const rectAspect = rect.width / rect.height;
 
         let visualWidth, visualHeight, offsetX, offsetY;
 
         if (rectAspect > canvasAspect) {
-            // Letterboxed on sides
             visualHeight = rect.height;
             visualWidth = visualHeight * canvasAspect;
             offsetX = (rect.width - visualWidth) / 2;
             offsetY = 0;
         } else {
-            // Letterboxed on top/bottom
             visualWidth = rect.width;
             visualHeight = visualWidth / canvasAspect;
             offsetX = 0;
@@ -223,77 +259,56 @@ export default function MatrixPreview2D({
         setDragStart(coord);
         setDragEnd(coord);
         setTempSelection(new Set());
-
-        if (e.shiftKey) {
-            setSelectionMode('add');
-        } else if (e.altKey) {
-            e.preventDefault(); // Prevent Windows Alt menu
+        if (e.shiftKey) setSelectionMode('add');
+        else if (e.altKey) {
+            e.preventDefault();
             setSelectionMode('subtract');
-        } else {
-            setSelectionMode('new');
-        }
+        } else setSelectionMode('new');
     };
 
     const handleMouseMove = (e) => {
         if (!dragStart) return;
         const coord = getCoord(e);
         setDragEnd(coord);
-
-        // Update mode in case key was pressed/released during move
         if (e.shiftKey) setSelectionMode('add');
         else if (e.altKey) setSelectionMode('subtract');
         else setSelectionMode('new');
 
-        const dist = Math.sqrt(Math.pow(coord.x - dragStart.x, 2) + Math.pow(coord.y - dragStart.y, 2));
-        if (dist > 5) {
-            const x1 = Math.min(dragStart.x, coord.x);
-            const y1 = Math.min(dragStart.y, coord.y);
-            const x2 = Math.max(dragStart.x, coord.x);
-            const y2 = Math.max(dragStart.y, coord.y);
+        const x1 = Math.min(dragStart.x, coord.x);
+        const y1 = Math.min(dragStart.y, coord.y);
+        const x2 = Math.max(dragStart.x, coord.x);
+        const y2 = Math.max(dragStart.y, coord.y);
 
-            const newTemp = new Set();
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    const carX = c * cellW;
-                    const carY = r * cellH;
-                    if (carX + carW > x1 && carX < x2 && carY + carH > y1 && carY < y2) {
-                        const carExists = !layoutData || (layoutData.layout[r]?.[c]?.exists);
-                        if (carExists) {
-                            newTemp.add(`${r},${c}`);
-                        }
-                    }
+        const newTemp = new Set();
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const carX = c * cellW + 1;
+                const carY = r * cellH + 1;
+                if (carX + carW > x1 && carX < x2 && carY + carH > y1 && carY < y2) {
+                    const carExists = !layoutData || (layoutData.layout[r]?.[c]?.exists);
+                    if (carExists) newTemp.add(`${r},${c}`);
                 }
             }
-            setTempSelection(newTemp);
         }
+        setTempSelection(newTemp);
     };
 
     const handleMouseUp = (e) => {
-        if (!dragStart || !dragEnd) {
-            setDragStart(null);
-            setDragEnd(null);
-            setTempSelection(new Set());
-            return;
-        }
-
+        if (!dragStart || !dragEnd) return;
         const dist = Math.sqrt(Math.pow(dragEnd.x - dragStart.x, 2) + Math.pow(dragEnd.y - dragStart.y, 2));
         const mode = e.shiftKey ? 'add' : (e.altKey ? 'subtract' : 'new');
 
         if (dist <= 5) {
-            // Individual click
-            const col = Math.floor(dragEnd.x / cellW);
-            const row = Math.floor(dragEnd.y / cellH);
+            const col = Math.floor((dragEnd.x - 1) / cellW);
+            const row = Math.floor((dragEnd.y - 1) / cellH);
             if (row >= 0 && row < rows && col >= 0 && col < cols) {
                 const carExists = !layoutData || (layoutData.layout[row]?.[col]?.exists);
                 if (carExists) {
                     const key = `${row},${col}`;
                     const newSelection = new Set(selectedCars);
-                    if (mode === 'add') {
-                        newSelection.add(key);
-                    } else if (mode === 'subtract') {
-                        newSelection.delete(key);
-                    } else {
-                        // Toggle logic for 'new' mode click
+                    if (mode === 'add') newSelection.add(key);
+                    else if (mode === 'subtract') newSelection.delete(key);
+                    else {
                         if (newSelection.has(key)) newSelection.delete(key);
                         else {
                             newSelection.clear();
@@ -306,7 +321,6 @@ export default function MatrixPreview2D({
                 if (onSelectionChange) onSelectionChange(new Set());
             }
         } else {
-            // Marquee selection
             let newSelection;
             if (mode === 'add') {
                 newSelection = new Set(selectedCars);
@@ -319,7 +333,6 @@ export default function MatrixPreview2D({
             }
             if (onSelectionChange) onSelectionChange(newSelection);
         }
-
         setDragStart(null);
         setDragEnd(null);
         setTempSelection(new Set());
@@ -343,7 +356,7 @@ export default function MatrixPreview2D({
                     objectFit: 'contain',
                     cursor: 'crosshair',
                     display: 'block',
-                    pointerEvents: 'none' // Let container handle events
+                    pointerEvents: 'none'
                 }}
             />
             <style>{`

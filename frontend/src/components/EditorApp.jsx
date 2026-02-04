@@ -186,15 +186,29 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         return canvas.toDataURL('image/png');
     }, [matrixConfig, layoutData]);
 
-    const handleClipSelect = (id, e) => {
-        if (!id) {
+    const handleClipSelect = (idOrIds, e) => {
+        if (!idOrIds || (Array.isArray(idOrIds) && idOrIds.length === 0)) {
             setSelectedClipIds([]);
             return;
         }
-        if (e && (e.ctrlKey || e.metaKey)) {
-            setSelectedClipIds(prev => prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]);
+
+        const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+        const isMulti = e && (e.ctrlKey || e.metaKey);
+
+        if (isMulti) {
+            setSelectedClipIds(prev => {
+                let next = [...prev];
+                ids.forEach(id => {
+                    if (next.includes(id)) {
+                        next = next.filter(cid => cid !== id);
+                    } else {
+                        next.push(id);
+                    }
+                });
+                return next;
+            });
         } else {
-            setSelectedClipIds([id]);
+            setSelectedClipIds(ids);
         }
     };
 
@@ -1609,13 +1623,17 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                                     <td>Add GIF/Image at Cursor</td>
                                 </tr>
                                 <tr>
-                                    <td rowSpan="5" className="cat-cell">Timeline</td>
+                                    <td rowSpan="6" className="cat-cell">Timeline</td>
                                     <td><kbd>Ctrl + Wheel</kbd></td>
                                     <td>Zoom In/Out</td>
                                 </tr>
                                 <tr>
+                                    <td><kbd>Shift + Drag</kbd></td>
+                                    <td>Marquee Selection</td>
+                                </tr>
+                                <tr>
                                     <td><kbd>Ctrl + Click</kbd></td>
-                                    <td>Multi-select Clips (in Tracks)</td>
+                                    <td>Multi-select Clips</td>
                                 </tr>
                                 <tr>
                                     <td><kbd>Alt + Drag</kbd></td>

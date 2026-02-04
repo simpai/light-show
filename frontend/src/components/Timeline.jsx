@@ -12,6 +12,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
     const [draggingClips, setDraggingClips] = useState([]);
     const [dragOffset, setDragOffset] = useState(0); // Offset within primary clip in ms
+    const [marquee, setMarquee] = useState(null); // { startX, startY, endX, endY }
 
     // Synchronize scroll between ruler and lanes
     const handleRulerScroll = (e) => {
@@ -179,6 +180,58 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
     };
 
     const handleLaneMouseDown = (e, layerId) => {
+        // Marquee selection with Shift
+        if (e.shiftKey) {
+            const laneContainer = e.currentTarget.closest('.track-lanes');
+            const rect = laneContainer.getBoundingClientRect();
+            const startX = e.clientX - rect.left;
+            const startY = e.clientY - rect.top;
+
+            const handleMouseMove = (moveEvent) => {
+                const curX = Math.max(0, moveEvent.clientX - rect.left);
+                const curY = Math.max(0, moveEvent.clientY - rect.top);
+                setMarquee({ startX, startY, endX: curX, endY: curY });
+            };
+
+            const handleMouseUp = (upEvent) => {
+                setMarquee(final => {
+                    if (final) {
+                        const x1 = Math.min(final.startX, final.endX);
+                        const x2 = Math.max(final.startX, final.endX);
+                        const y1 = Math.min(final.startY, final.endY);
+                        const y2 = Math.max(final.startY, final.endY);
+
+                        const startTime = (x1 / pixelsPerSecond) * 1000;
+                        const endTime = (x2 / pixelsPerSecond) * 1000;
+                        const startLayerIdx = Math.floor(y1 / 50);
+                        const endLayerIdx = Math.ceil(y2 / 50) - 1;
+
+                        const selectedIds = [];
+                        project.layers.forEach((layer, idx) => {
+                            if (idx >= startLayerIdx && idx <= endLayerIdx) {
+                                layer.clips.forEach(clip => {
+                                    const clipStart = clip.startTime;
+                                    const clipEnd = clip.startTime + clip.duration;
+                                    if (clipStart < endTime && clipEnd > startTime) {
+                                        selectedIds.push(clip.id);
+                                    }
+                                });
+                            }
+                        });
+
+                        if (onClipSelect) onClipSelect(selectedIds, upEvent);
+                    }
+                    return null;
+                });
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+            };
+
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            return;
+        }
+
         // Only trigger if clicking on the lane itself, not on a clip
         if (e.target !== e.currentTarget && !e.target.classList.contains('grid-line')) return;
 
@@ -728,13 +781,25 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             }}
                                         >
                                             <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', overflow: 'hidden' }}>
-                                                {/* <span className="clip-label">{dragging.effectType || 'Clip'} (Copy)</span> */}
                                             </div>
                                         </div>
                                     );
                                 })}
+
                             </div>
                         ))}
+
+                        {marquee && (
+                            <div
+                                className="marquee-selector"
+                                style={{
+                                    left: Math.min(marquee.startX, marquee.endX),
+                                    top: Math.min(marquee.startY, marquee.endY),
+                                    width: Math.abs(marquee.startX - marquee.endX),
+                                    height: Math.abs(marquee.startY - marquee.endY),
+                                }}
+                            />
+                        )}
 
                         {/* Playhead in Tracks */}
                         <div className="playhead track-playhead" style={{ left: (currentTime / 1000) * pixelsPerSecond }} />
@@ -826,6 +891,14 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .clip:hover { opacity: 1; outline: 1px solid white; outline-offset: -1px; }
                 .clip.selected { opacity: 1; outline: 2px solid #22c55e; outline-offset: -1px; z-index: 5; box-shadow: 0 0 8px rgba(34, 197, 94, 0.4); }
                 .clip.dragging { opacity: 0.6; pointer-events: none; outline: 2px solid #e82020; box-shadow: 0 0 15px rgba(232, 32, 32, 0.5); }
+                .marquee-selector {
+                    position: absolute;
+                    background: rgba(34, 197, 94, 0.1);
+                    border: 1px solid #22c55e;
+                    pointer-events: none;
+                    z-index: 100;
+                    border-radius: 2px;
+                }
                 .resize-handle {
                     position: absolute;
                     top: 0;

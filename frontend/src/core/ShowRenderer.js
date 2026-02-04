@@ -305,20 +305,42 @@ export class ShowRenderer {
     renderEffect(clip, clipTime, intensity, frame) {
         const val = Math.floor(255 * intensity);
 
+        // Resolve channels from symbolic names if present
+        let targetChannels = [];
+        const isSymbolic = Array.isArray(clip.targetLightGroups);
+
+        if (isSymbolic) {
+            if (clip.targetLightGroups.length > 0 && this.project?.lightGroups) {
+                const resolved = new Set();
+                clip.targetLightGroups.forEach(groupName => {
+                    const group = this.project.lightGroups[groupName];
+                    if (group) {
+                        const groupChs = Array.isArray(group) ? group : (group.channels || []);
+                        groupChs.forEach(ch => resolved.add(ch));
+                    }
+                });
+                targetChannels = Array.from(resolved);
+            }
+            // else targetChannels remains empty, which is correct for an empty selection
+        } else {
+            // Fallback for legacy clips
+            targetChannels = clip.channels || [];
+        }
+
         if (clip.effectType === 'flash') {
             // Simple ON
-            this.applyToChannels(clip.channels, val, frame);
+            this.applyToChannels(targetChannels, val, frame);
         } else if (clip.effectType === 'pulse') {
             // Sine wave pulse
             const freq = clip.speed || 1; // Hz
             const sine = (Math.sin(clipTime / 1000 * Math.PI * 2 * freq) + 1) / 2;
             const pulseVal = Math.floor(val * sine);
-            this.applyToChannels(clip.channels, pulseVal, frame);
+            this.applyToChannels(targetChannels, pulseVal, frame);
         } else if (clip.effectType === 'strobe') {
             const freq = clip.speed || 5;
             const isOn = Math.floor(clipTime / 1000 * 2 * freq) % 2 === 0;
             const strobeVal = isOn ? val : 0;
-            this.applyToChannels(clip.channels, strobeVal, frame);
+            this.applyToChannels(targetChannels, strobeVal, frame);
         }
     }
 
@@ -394,7 +416,28 @@ export class ShowRenderer {
             }
 
             const value = Math.floor(brightness * intensity);
-            this.applyToChannels(clip.channels, value, frame);
+
+            // Resolve target channels
+            let targetChannels = [];
+            const isSymbolic = Array.isArray(clip.targetLightGroups);
+
+            if (isSymbolic) {
+                if (clip.targetLightGroups.length > 0 && this.project?.lightGroups) {
+                    const resolved = new Set();
+                    clip.targetLightGroups.forEach(groupName => {
+                        const group = this.project.lightGroups[groupName];
+                        if (group) {
+                            const groupChs = Array.isArray(group) ? group : (group.channels || []);
+                            groupChs.forEach(ch => resolved.add(ch));
+                        }
+                    });
+                    targetChannels = Array.from(resolved);
+                }
+            } else {
+                targetChannels = clip.channels || [];
+            }
+
+            this.applyToChannels(targetChannels, value, frame);
         }
     }
 

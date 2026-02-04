@@ -555,7 +555,16 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                     const clipLeft = (displayClip.startTime / 1000) * pixelsPerSecond;
 
                                     const usedGroups = [];
-                                    if (clip.type === 'effect' && clip.channels && project.lightGroups) {
+                                    const isSymbolic = Array.isArray(clip.targetLightGroups);
+
+                                    if (isSymbolic && project.lightGroups) {
+                                        clip.targetLightGroups.forEach(groupName => {
+                                            const group = project.lightGroups[groupName];
+                                            if (group) {
+                                                usedGroups.push({ name: groupName, color: group.color });
+                                            }
+                                        });
+                                    } else if (clip.type === 'effect' && clip.channels && project.lightGroups) {
                                         Object.entries(project.lightGroups).forEach(([name, data]) => {
                                             const groupChannels = data.channels || [];
                                             if (clip.channels.some(ch => groupChannels.includes(ch))) {
@@ -638,7 +647,16 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                     const clipLeft = (dragging.startTime / 1000) * pixelsPerSecond;
 
                                     const usedGroups = [];
-                                    if (dragging.type === 'effect' && dragging.channels && project.lightGroups) {
+                                    const isSymbolic = Array.isArray(dragging.targetLightGroups);
+
+                                    if (isSymbolic && project.lightGroups) {
+                                        dragging.targetLightGroups.forEach(groupName => {
+                                            const group = project.lightGroups[groupName];
+                                            if (group) {
+                                                usedGroups.push({ name: groupName, color: group.color });
+                                            }
+                                        });
+                                    } else if (dragging.type === 'effect' && dragging.channels && project.lightGroups) {
                                         Object.entries(project.lightGroups).forEach(([name, data]) => {
                                             const groupChannels = data.channels || [];
                                             if (dragging.channels.some(ch => groupChannels.includes(ch))) {

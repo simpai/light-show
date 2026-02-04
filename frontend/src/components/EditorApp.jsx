@@ -808,7 +808,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     duration: 1000,
                     type: type, // 'effect' or 'gif'
                     effectType: type === 'effect' ? 'flash' : 'image',
-                    channels: [0, 1, 2, 3],
+                    channels: [],
+                    targetLightGroups: [],
                     fadeIn: 0,
                     fadeOut: 0,
                     pattern: 'uniform',

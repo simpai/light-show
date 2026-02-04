@@ -140,16 +140,23 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
         return Math.round(duration);
     };
 
-    const toggleChannel = (groupChannels) => {
-        const current = new Set(clip.channels || []);
-        const allPresent = groupChannels.every(c => current.has(c));
+    const toggleLightGroup = (groupName) => {
+        const current = new Set(clip.targetLightGroups || []);
 
-        if (allPresent) {
-            groupChannels.forEach(c => current.delete(c));
+        // Migration/Compatibility: If we're starting to use targetLightGroups, 
+        // we might want to preserve the old 'channels' for the first time, 
+        // but the goal is to shift entirely to symbolic names for UI state.
+        if (current.has(groupName)) {
+            current.delete(groupName);
         } else {
-            groupChannels.forEach(c => current.add(c));
+            current.add(groupName);
         }
-        handleChange('channels', Array.from(current));
+
+        const nextGroups = Array.from(current);
+
+        // Update both to maintain partial backward compatibility during the transition,
+        // but the renderer will prioritize targetLightGroups if present.
+        handleChange('targetLightGroups', nextGroups);
     };
 
     // Use provided lightGroups or fall back to default grouping
@@ -343,14 +350,13 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                         <label className="section-title">Target Light Groups</label>
                         <div className="channels-list">
                             {Object.entries(displayGroups).map(([label, groupData]) => {
-                                const groupChs = Array.isArray(groupData) ? groupData : (groupData.channels || []);
-                                const isChecked = groupChs.length > 0 && groupChs.every(c => (clip.channels || []).includes(c));
+                                const isChecked = (clip.targetLightGroups || []).includes(label);
                                 return (
                                     <label key={label} className="channel-item">
                                         <input
                                             type="checkbox"
                                             checked={isChecked}
-                                            onChange={() => toggleChannel(groupChs)}
+                                            onChange={() => toggleLightGroup(label)}
                                         />
                                         <span>{label}</span>
                                     </label>

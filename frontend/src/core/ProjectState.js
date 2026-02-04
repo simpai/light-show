@@ -50,6 +50,7 @@ export class ProjectState {
                 type: clipConf.type || 'effect', // 'effect' | 'gif'
                 effectType: clipConf.effectType || 'flash',
                 channels: clipConf.channels || [],
+                targetLightGroups: clipConf.targetLightGroups || [],
                 fadeIn: 0,
                 fadeOut: 0,
                 // Position-based pattern properties

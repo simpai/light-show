@@ -46,7 +46,6 @@ const LIGHT_COORDINATES = {
     27: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // reverse
     28: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // rear fog
     29: [{ x: 2, y: 0 }], // license plate
-    // ... User will fill the rest
 };
 
 // Fill missing coordinates with defaults so the loop doesn't break
@@ -65,11 +64,80 @@ export default function MatrixPreview2D({
     onSelectionChange
 }) {
     const canvasRef = useRef(null);
+    const containerRef = useRef(null);
     const [dragStart, setDragStart] = useState(null);
     const [dragEnd, setDragEnd] = useState(null);
     const [tempSelection, setTempSelection] = useState(new Set());
     // selectionMode: 'new' | 'add' (ctrl) | 'subtract' (shift)
     const [selectionMode, setSelectionMode] = useState('new');
+
+    const [viewState, setViewState] = useState({ zoom: 1.0, pan: { x: 0, y: 0 } });
+    const [isPanning, setIsPanning] = useState(false);
+    const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+
+    // Initial Fit logic
+    useEffect(() => {
+        const container = containerRef.current;
+        const canvas = canvasRef.current;
+        if (!container) return;
+
+        const updateFit = () => {
+            const rect = container.getBoundingClientRect();
+            // Expected canvas internal size
+            const iWidth = cols * cellW + 2;
+            const iHeight = rows * cellH + 2;
+
+            const padding = 20;
+            const availableW = rect.width - padding * 2;
+            const availableH = rect.height - padding * 2;
+
+            const zoomW = availableW / iWidth;
+            const zoomH = availableH / iHeight;
+            const fitZoom = Math.min(zoomW, zoomH, 1.0); // Fit but don't over-scale initially
+
+            const panX = (rect.width - iWidth * fitZoom) / 2;
+            const panY = (rect.height - iHeight * fitZoom) / 2;
+
+            setViewState({ zoom: fitZoom, pan: { x: panX, y: panY } });
+        };
+
+        // Delay slightly to ensure layout is ready
+        const timer = setTimeout(updateFit, 50);
+        return () => clearTimeout(timer);
+    }, [cols, rows]);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleWheel = (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                const delta = -e.deltaY;
+                const factor = Math.pow(1.1, delta / 100);
+
+                setViewState(prev => {
+                    const newZoom = Math.min(Math.max(0.1, prev.zoom * factor), 50);
+                    const actualFactor = newZoom / prev.zoom;
+
+                    const rect = container.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+
+                    return {
+                        zoom: newZoom,
+                        pan: {
+                            x: mouseX - (mouseX - prev.pan.x) * actualFactor,
+                            y: mouseY - (mouseY - prev.pan.y) * actualFactor
+                        }
+                    };
+                });
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        return () => container.removeEventListener('wheel', handleWheel);
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -116,7 +184,7 @@ export default function MatrixPreview2D({
                 const isFlipped = normRot > 90 && normRot < 270;
 
                 // Base car body (Dark Gray)
-                ctx.fillStyle = '#222';
+                ctx.fillStyle = '#111';
                 ctx.fillRect(carX, carY, carW, carH);
 
                 if (matrixData[r]?.[c]) {
@@ -255,32 +323,27 @@ export default function MatrixPreview2D({
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
-        const canvasAspect = canvas.width / canvas.height;
-        const rectAspect = rect.width / rect.height;
 
-        let visualWidth, visualHeight, offsetX, offsetY;
+        const x_rect = e.clientX - rect.left;
+        const y_rect = e.clientY - rect.top;
 
-        if (rectAspect > canvasAspect) {
-            visualHeight = rect.height;
-            visualWidth = visualHeight * canvasAspect;
-            offsetX = (rect.width - visualWidth) / 2;
-            offsetY = 0;
-        } else {
-            visualWidth = rect.width;
-            visualHeight = visualWidth / canvasAspect;
-            offsetX = 0;
-            offsetY = (rect.height - visualHeight) / 2;
-        }
-
-        const scale = canvas.width / visualWidth;
+        // Scale between visual width and internal pixels
+        const scale = canvas.width / rect.width;
 
         return {
-            x: (e.clientX - rect.left - offsetX) * scale,
-            y: (e.clientY - rect.top - offsetY) * scale
+            x: x_rect * scale,
+            y: y_rect * scale
         };
     };
 
     const handleMouseDown = (e) => {
+        // Right click (2) or Middle click (1) for panning
+        if (e.button === 1 || e.button === 2) {
+            setIsPanning(true);
+            setLastMousePos({ x: e.clientX, y: e.clientY });
+            return;
+        }
+
         const coord = getCoord(e);
         setDragStart(coord);
         setDragEnd(coord);
@@ -293,6 +356,17 @@ export default function MatrixPreview2D({
     };
 
     const handleMouseMove = (e) => {
+        if (isPanning) {
+            const dx = e.clientX - lastMousePos.x;
+            const dy = e.clientY - lastMousePos.y;
+            setViewState(prev => ({
+                ...prev,
+                pan: { x: prev.pan.x + dx, y: prev.pan.y + dy }
+            }));
+            setLastMousePos({ x: e.clientX, y: e.clientY });
+            return;
+        }
+
         if (!dragStart) return;
         const coord = getCoord(e);
         setDragEnd(coord);
@@ -320,6 +394,11 @@ export default function MatrixPreview2D({
     };
 
     const handleMouseUp = (e) => {
+        if (isPanning) {
+            setIsPanning(false);
+            return;
+        }
+
         if (!dragStart || !dragEnd) return;
         const dist = Math.sqrt(Math.pow(dragEnd.x - dragStart.x, 2) + Math.pow(dragEnd.y - dragStart.y, 2));
         const mode = e.shiftKey ? 'add' : (e.altKey ? 'subtract' : 'new');
@@ -365,40 +444,69 @@ export default function MatrixPreview2D({
         setSelectionMode('new');
     };
 
+    const handleDoubleClick = () => {
+        // Reset to auto-fit
+        const rect = containerRef.current.getBoundingClientRect();
+        const iWidth = cols * cellW + 2;
+        const iHeight = rows * cellH + 2;
+        const zoomW = (rect.width - 40) / iWidth;
+        const zoomH = (rect.height - 40) / iHeight;
+        const fitZoom = Math.min(zoomW, zoomH, 1.0);
+        setViewState({
+            zoom: fitZoom,
+            pan: {
+                x: (rect.width - iWidth * fitZoom) / 2,
+                y: (rect.height - iHeight * fitZoom) / 2
+            }
+        });
+    };
+
     return (
         <div
             className="matrix-2d-container"
+            ref={containerRef}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onContextMenu={(e) => e.preventDefault()}
+            onDoubleClick={handleDoubleClick}
         >
-            <canvas
-                ref={canvasRef}
+            <div
+                className="canvas-wrapper"
                 style={{
-                    width: '100%',
-                    height: '100%',
-                    imageRendering: 'pixelated',
-                    objectFit: 'contain',
-                    cursor: 'crosshair',
-                    display: 'block',
-                    pointerEvents: 'none'
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    transform: `translate(${viewState.pan.x}px, ${viewState.pan.y}px) scale(${viewState.zoom})`,
+                    transformOrigin: '0 0',
                 }}
-            />
+            >
+                <canvas
+                    ref={canvasRef}
+                    style={{
+                        imageRendering: 'pixelated',
+                        cursor: isPanning ? 'grabbing' : 'crosshair',
+                        display: 'block',
+                        pointerEvents: 'none'
+                    }}
+                />
+            </div>
             <style>{`
                 .matrix-2d-container {
                     width: 100%;
                     height: 100%;
-                    background: #000;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    background: #111;
+                    position: relative;
                     margin: 0;
-                    padding: 40px;
+                    padding: 0;
                     box-sizing: border-box;
-                    user-select: none;
                     overflow: hidden;
                     cursor: crosshair;
+                }
+                .canvas-wrapper {
+                   transition: transform 0.05s ease-out;
+                   will-change: transform;
                 }
             `}</style>
         </div>

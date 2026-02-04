@@ -187,6 +187,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     }, [matrixConfig, layoutData]);
 
     const handleClipSelect = (id, e) => {
+        if (!id) {
+            setSelectedClipIds([]);
+            return;
+        }
         if (e && (e.ctrlKey || e.metaKey)) {
             setSelectedClipIds(prev => prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]);
         } else {

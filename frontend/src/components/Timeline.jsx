@@ -182,6 +182,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         // Only trigger if clicking on the lane itself, not on a clip
         if (e.target !== e.currentTarget && !e.target.classList.contains('grid-line')) return;
 
+        if (onClipSelect) onClipSelect(null);
         onLayerSelect(layerId);
 
         const rect = lanesScrollRef.current.getBoundingClientRect();
@@ -215,10 +216,17 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
     const handleDragStart = (e, primaryClip, primaryLayerId) => {
         e.stopPropagation();
 
-        // Determine which clips to drag
-        let clipsToDrag = [];
+        const isCtrl = e.ctrlKey || e.metaKey;
         const isPrimarySelected = selectedClipIds.includes(primaryClip.id);
 
+        if (isCtrl || !isPrimarySelected) {
+            if (onClipSelect) onClipSelect(primaryClip.id, e);
+            // If toggle-deselecting, don't start a drag
+            if (isCtrl && isPrimarySelected) return;
+        }
+
+        // Determine which clips to drag
+        let clipsToDrag = [];
         if (isPrimarySelected) {
             // Drag all selected clips
             selectedClipIds.forEach(id => {
@@ -231,8 +239,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 }
             });
         } else {
-            // Select only this clip and drag it
-            if (onClipSelect) onClipSelect(primaryClip.id, e);
+            // Drag only this clip (even if it was just selected via Ctrl/Single-click)
             clipsToDrag = [{ ...primaryClip, originalStartTime: primaryClip.startTime, originalDuration: primaryClip.duration, layerId: primaryLayerId }];
         }
 

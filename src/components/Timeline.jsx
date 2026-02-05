@@ -692,11 +692,11 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                             }}
                                             title={`${clip.effectType || 'Clip'} | Start: ${(displayClip.startTime / 1000).toFixed(2)}s | Duration: ${(clip.duration / 1000).toFixed(2)}s`}
                                         >
-                                            <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', overflow: 'hidden' }}>
-                                                {clip.type === 'effect' && <div className="resize-handle left" />}
+                                            <div className="resize-handle left" />
+                                            <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
                                                 {/* <span className="clip-label" style={{ zIndex: 2 }}>{clip.effectType || 'Clip'}</span> */}
-                                                {clip.type === 'effect' && <div className="resize-handle right" />}
                                             </div>
+                                            <div className="resize-handle right" />
                                         </div>
                                     );
                                 })}
@@ -904,14 +904,20 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     top: 0;
                     bottom: 0;
                     width: 8px;
-                    background: rgba(255, 255, 255, 0.2);
-                    cursor: ew-resize;
+                    background: rgba(34, 197, 94, 0.4);
+                    cursor: ew-resize !important;
                     display: none;
+                    z-index: 20;
+                    transition: all 0.1s;
                 }
                 .clip:hover .resize-handle { display: block; }
-                .resize-handle:hover { background: rgba(255, 255, 255, 0.5); }
-                .resize-handle.left { left: 0; }
-                .resize-handle.right { right: 0; }
+                .resize-handle:hover { 
+                    background: #22c55e !important;
+                    width: 10px;
+                    box-shadow: 0 0 8px rgba(34, 197, 94, 1);
+                }
+                .resize-handle.left { left: 0; border-radius: 4px 0 0 4px; border-right: 1px solid rgba(0,0,0,0.2); }
+                .resize-handle.right { right: 0; border-radius: 0 4px 4px 0; border-left: 1px solid rgba(0,0,0,0.2); }
                 .clip-label { padding: 0 5px; pointer-events: none; flex: 1; text-align: center; }
                 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e82020; z-index: 10; pointer-events: none; }
                 .bookmark-marker-ruler { 

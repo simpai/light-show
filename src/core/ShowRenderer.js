@@ -328,15 +328,10 @@ export class ShowRenderer {
         }
 
         if (clip.effectType === 'flash') {
-            // Simple ON
             this.applyToChannels(targetChannels, val, frame);
-        } else if (clip.effectType === 'pulse') {
-            // Sine wave pulse
-            const freq = clip.speed || 1; // Hz
-            const sine = (Math.sin(clipTime / 1000 * Math.PI * 2 * freq) + 1) / 2;
-            const pulseVal = Math.floor(val * sine);
-            this.applyToChannels(targetChannels, pulseVal, frame);
-        } else if (clip.effectType === 'strobe') {
+        } else if (clip.effectType === 'strobe' || clip.effectType === 'pulse') {
+            // Pulse legacy handling: Hardware doesn't support intermediate values except via ramping.
+            // Treat as strobe.
             const freq = clip.speed || 5;
             const isOn = Math.floor(clipTime / 1000 * 2 * freq) % 2 === 0;
             const strobeVal = isOn ? val : 0;

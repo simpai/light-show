@@ -259,12 +259,11 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                                 onChange={e => handleChange('effectType', e.target.value)}
                             >
                                 <option value="flash">Flash (Hold)</option>
-                                <option value="pulse">Pulse (Sine)</option>
                                 <option value="strobe">Strobe</option>
                             </select>
                         </div>
 
-                        {(clip.effectType === 'pulse' || clip.effectType === 'strobe') && (
+                        {clip.effectType === 'strobe' && (
                             <div className="form-group">
                                 <label className="compact-label" style={{ minWidth: '80px' }}>Speed</label>
                                 <div className="slider-with-val" style={{ flex: 1 }}>

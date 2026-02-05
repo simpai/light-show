@@ -106,6 +106,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [showGroundLight, setShowGroundLight] = useState(true);
     const [activeModal, setActiveModal] = useState(null); // 'lightGroups', 'trackProperties', 'carGroups'
     const [selectedCars, setSelectedCars] = useState(new Set());
+    const [fitTrigger2D, setFitTrigger2D] = useState(0);
 
     const audioRef = useRef(null);
     const rendererRef = useRef(new ShowRenderer());
@@ -309,6 +310,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 const defaultLayout = LayoutParser.createDefaultLayout(matrixConfig.cols, matrixConfig.rows);
                 setLayoutData(defaultLayout);
             }
+
+            setFitTrigger2D(Date.now());
         };
 
         init();
@@ -706,6 +709,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
         setCurrentTime(0);
         setIsPlaying(false);
+        setFitTrigger2D(Date.now());
     };
 
     const handleAddTrack = () => {
@@ -1124,6 +1128,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             }
 
             console.log('Project bundle loaded');
+            setFitTrigger2D(Date.now());
             alert('Project bundle loaded successfully!');
 
         } catch (err) {
@@ -1390,6 +1395,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             lightGroups={project.lightGroups}
                             selectedCars={selectedCars}
                             onSelectionChange={setSelectedCars}
+                            fitTrigger={fitTrigger2D}
                         />
                     )}
                 </div>

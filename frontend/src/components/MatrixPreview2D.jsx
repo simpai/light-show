@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Maximize2 } from 'lucide-react';
 
 /**
  * 2D Matrix Preview component using Canvas for high-performance rendering.
@@ -15,42 +16,49 @@ const cellH = 10; // carH + gap
 // Relative coordinates (x: 0-4, y: 0-8) for each of the 48 channels.
 // x=0 is left, x=4 is right. y=0 is back, y=8 is front.
 const LIGHT_COORDINATES = {
-    0: [{ x: 4, y: 8 }], // Left Outer Main Beam
-    1: [{ x: 0, y: 8 }], // Right Outer Main Beam
-    2: [{ x: 3, y: 8 }], // Left Inner Main Beam
-    3: [{ x: 1, y: 8 }], // Right Inner Main Beam
-    4: [{ x: 4, y: 7 }], // Left Signature
-    5: [{ x: 0, y: 7 }], // Right Signature
-    6: [{ x: 3, y: 9 }], // Left channel 4
-    7: [{ x: 1, y: 9 }], // right channel 4
-    8: [{ x: 3, y: 9 }], // Left channel 5
-    9: [{ x: 1, y: 9 }], // right channel 5
-    10: [{ x: 3, y: 9 }], // Left channel 6
-    11: [{ x: 1, y: 9 }], // right channel 6
-    12: [{ x: 4, y: 7 }], // Left Front Turn
-    13: [{ x: 0, y: 7 }], // Right Front Turn
-    14: [{ x: 4, y: 9 }], // Left fog
-    15: [{ x: 0, y: 9 }], // right fog
-    16: [{ x: 3, y: 9 }], // Left aux park
-    17: [{ x: 1, y: 9 }], // right aux park
-    18: [{ x: 4, y: 9 }], // Left side marker
-    19: [{ x: 0, y: 9 }], // right side marker
-    20: [{ x: 4, y: 6 }], // Left side repeater
-    21: [{ x: 0, y: 6 }], // Right side repeater
-    22: [{ x: 4, y: 1 }], // Left Rear Turn
-    23: [{ x: 0, y: 1 }], // Right Rear Turn
-    24: [{ x: 2, y: 0 }, { x: 0, y: 0 }, { x: 4, y: 0 }], // break
-    25: [{ x: 3, y: 0 }], // Left Tail
-    26: [{ x: 1, y: 0 }], // Right Tail
+    0: [{ x: 4, y: 8, color: '#fff9' }], // Left Outer Main Beam
+    1: [{ x: 0, y: 8, color: '#fff9' }], // Right Outer Main Beam
+    2: [{ x: 3, y: 8, color: '#fff9' }], // Left Inner Main Beam
+    3: [{ x: 1, y: 8, color: '#fff9' }], // Right Inner Main Beam
+    4: [{ x: 4, y: 7, color: '#fff5' }], // Left Signature
+    5: [{ x: 0, y: 7, color: '#fff5' }], // Right Signature
+    6: [{ x: 3, y: 9, color: '#fff7' }], // Left channel 4
+    7: [{ x: 1, y: 9, color: '#fff7' }], // right channel 4
+    8: [{ x: 3, y: 9, color: '#fff7' }], // Left channel 5
+    9: [{ x: 1, y: 9, color: '#fff7' }], // right channel 5
+    10: [{ x: 3, y: 9, color: '#fff7' }], // Left channel 6
+    11: [{ x: 1, y: 9, color: '#fff7' }], // right channel 6
+    12: [{ x: 4, y: 7, color: '#fa0f' }], // Left Front Turn
+    13: [{ x: 0, y: 7, color: '#fa0f' }], // Right Front Turn
+    14: [{ x: 4, y: 9, color: '#fff' }], // Left fog
+    15: [{ x: 0, y: 9, color: '#fff' }], // right fog
+    16: [{ x: 3, y: 9, color: '#fff' }], // Left aux park
+    17: [{ x: 1, y: 9, color: '#fff' }], // right aux park
+    18: [{ x: 4, y: 9, color: '#fff' }], // Left side marker
+    19: [{ x: 0, y: 9, color: '#fff' }], // right side marker
+    20: [{ x: 4, y: 6, color: '#fa0f' }], // Left side repeater
+    21: [{ x: 0, y: 6, color: '#fa0f' }], // Right side repeater
+    22: [{ x: 4, y: 1, color: '#fa0f' }], // Left Rear Turn
+    23: [{ x: 0, y: 1, color: '#fa0f' }], // Right Rear Turn
+    24: [{ x: 2, y: 0, color: '#f00' }, { x: 0, y: 0, color: '#f00' }, { x: 4, y: 0, color: '#f00' }], // brake
+    25: [{ x: 3, y: 0, color: '#f00' }], // Left Tail
+    26: [{ x: 1, y: 0, color: '#f00' }], // Right Tail
 
-    27: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // reverse
-    28: [{ x: 0, y: -1 }, { x: 4, y: -1 }], // rear fog
-    29: [{ x: 2, y: 0 }], // license plate
+    27: [{ x: 0, y: -1, color: '#fffa' }, { x: 4, y: -1, color: '#fffa' }], // reverse
+    28: [{ x: 0, y: -1, color: '#f008' }, { x: 4, y: -1, color: '#f008' }], // rear fog
+    29: [{ x: 2, y: 0, color: '#fff5' }], // license plate
 };
 
 // Fill missing coordinates with defaults so the loop doesn't break
 for (let i = 0; i < 48; i++) {
-    if (!LIGHT_COORDINATES[i]) LIGHT_COORDINATES[i] = [{ x: 2, y: 4 }]; // Center default
+    if (!LIGHT_COORDINATES[i]) {
+        LIGHT_COORDINATES[i] = [{ x: 2, y: 4, color: '#fff' }]; // Center default
+    } else {
+        // Ensure all points have a color
+        LIGHT_COORDINATES[i].forEach(p => {
+            if (!p.color) p.color = '#fff';
+        });
+    }
 }
 
 export default function MatrixPreview2D({
@@ -61,7 +69,8 @@ export default function MatrixPreview2D({
     showGroundLight = true,
     lightGroups = {},
     selectedCars = new Set(), // Set of "r,c" strings
-    onSelectionChange
+    onSelectionChange,
+    fitTrigger = 0
 }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
@@ -75,36 +84,35 @@ export default function MatrixPreview2D({
     const [isPanning, setIsPanning] = useState(false);
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
-    // Initial Fit logic
-    useEffect(() => {
+    const performFit = useCallback(() => {
         const container = containerRef.current;
-        const canvas = canvasRef.current;
         if (!container) return;
 
-        const updateFit = () => {
-            const rect = container.getBoundingClientRect();
-            // Expected canvas internal size
-            const iWidth = cols * cellW + 2;
-            const iHeight = rows * cellH + 2;
+        const rect = container.getBoundingClientRect();
+        // Expected canvas internal size
+        const iWidth = cols * cellW + 2;
+        const iHeight = rows * cellH + 2;
 
-            const padding = 20;
-            const availableW = rect.width - padding * 2;
-            const availableH = rect.height - padding * 2;
+        const padding = 20;
+        const availableW = rect.width - padding * 2;
+        const availableH = rect.height - padding * 2;
 
-            const zoomW = availableW / iWidth;
-            const zoomH = availableH / iHeight;
-            const fitZoom = Math.min(zoomW, zoomH, 1.0); // Fit but don't over-scale initially
+        const zoomW = availableW / iWidth;
+        const zoomH = availableH / iHeight;
+        const fitZoom = Math.min(zoomW, zoomH); // Fit matrix to available space (removed 1.0 cap)
 
-            const panX = (rect.width - iWidth * fitZoom) / 2;
-            const panY = (rect.height - iHeight * fitZoom) / 2;
+        const panX = (rect.width - iWidth * fitZoom) / 2;
+        const panY = (rect.height - iHeight * fitZoom) / 2;
 
-            setViewState({ zoom: fitZoom, pan: { x: panX, y: panY } });
-        };
-
-        // Delay slightly to ensure layout is ready
-        const timer = setTimeout(updateFit, 50);
-        return () => clearTimeout(timer);
+        setViewState({ zoom: fitZoom, pan: { x: panX, y: panY } });
     }, [cols, rows]);
+
+    // Initial Fit logic & Trigger Fit
+    useEffect(() => {
+        // Delay slightly to ensure layout is ready
+        const timer = setTimeout(performFit, 50);
+        return () => clearTimeout(timer);
+    }, [performFit, fitTrigger]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -152,16 +160,6 @@ export default function MatrixPreview2D({
         // Clear background
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Pre-calculate channel colors based on lightGroups
-        const channelColors = new Array(48).fill('#ffffff');
-        Object.entries(lightGroups).forEach(([name, group]) => {
-            const channels = Array.isArray(group) ? group : group.channels || [];
-            const color = (group && !Array.isArray(group) && group.color) ? group.color : '#ffffff';
-            channels.forEach(ch => {
-                if (ch >= 0 && ch < 48) channelColors[ch] = color;
-            });
-        });
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
@@ -257,8 +255,6 @@ export default function MatrixPreview2D({
                             const coords = LIGHT_COORDINATES[ch];
                             const points = Array.isArray(coords) ? coords : [coords];
 
-                            ctx.fillStyle = hexToRgba(channelColors[ch], val / 300);
-
                             points.forEach(coord => {
                                 let dx = coord.x;
                                 let dy = coord.y;
@@ -268,6 +264,7 @@ export default function MatrixPreview2D({
                                     dy = (carH - 1) - dy;
                                 }
 
+                                ctx.fillStyle = hexToRgba(coord.color, val / 255);
                                 ctx.fillRect(carX + dx, carY + dy, 1, 1);
                             });
                         }
@@ -445,20 +442,7 @@ export default function MatrixPreview2D({
     };
 
     const handleDoubleClick = () => {
-        // Reset to auto-fit
-        const rect = containerRef.current.getBoundingClientRect();
-        const iWidth = cols * cellW + 2;
-        const iHeight = rows * cellH + 2;
-        const zoomW = (rect.width - 40) / iWidth;
-        const zoomH = (rect.height - 40) / iHeight;
-        const fitZoom = Math.min(zoomW, zoomH, 1.0);
-        setViewState({
-            zoom: fitZoom,
-            pan: {
-                x: (rect.width - iWidth * fitZoom) / 2,
-                y: (rect.height - iHeight * fitZoom) / 2
-            }
-        });
+        performFit();
     };
 
     return (
@@ -492,6 +476,17 @@ export default function MatrixPreview2D({
                     }}
                 />
             </div>
+
+            <button
+                className="btn-zoom-fit"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    performFit();
+                }}
+                title="Zoom Fit"
+            >
+                <Maximize2 size={16} />
+            </button>
             <style>{`
                 .matrix-2d-container {
                     width: 100%;
@@ -508,24 +503,55 @@ export default function MatrixPreview2D({
                    transition: transform 0.05s ease-out;
                    will-change: transform;
                 }
+                .btn-zoom-fit {
+                    position: absolute;
+                    bottom: 10px;
+                    right: 10px;
+                    background: rgba(40, 40, 40, 0.8);
+                    border: 1px solid #444;
+                    color: white;
+                    border-radius: 4px;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    z-index: 10;
+                    transition: all 0.2s;
+                }
+                .btn-zoom-fit:hover {
+                    background: #e82020;
+                    border-color: #e82020;
+                }
             `}</style>
         </div>
     );
 }
 
-function hexToRgba(hex, alpha) {
-    let r = 255, g = 255, b = 255;
+function hexToRgba(hex, alpha = 1.0) {
+    let r = 255, g = 255, b = 255, a = 1.0;
     if (hex.startsWith('#')) {
         const hexVal = hex.substring(1);
         if (hexVal.length === 3) {
             r = parseInt(hexVal[0] + hexVal[0], 16);
             g = parseInt(hexVal[1] + hexVal[1], 16);
             b = parseInt(hexVal[2] + hexVal[2], 16);
+        } else if (hexVal.length === 4) {
+            r = parseInt(hexVal[0] + hexVal[0], 16);
+            g = parseInt(hexVal[1] + hexVal[1], 16);
+            b = parseInt(hexVal[2] + hexVal[2], 16);
+            a = parseInt(hexVal[3] + hexVal[3], 16) / 255;
         } else if (hexVal.length === 6) {
             r = parseInt(hexVal.substring(0, 2), 16);
             g = parseInt(hexVal.substring(2, 4), 16);
             b = parseInt(hexVal.substring(4, 6), 16);
+        } else if (hexVal.length === 8) {
+            r = parseInt(hexVal.substring(0, 2), 16);
+            g = parseInt(hexVal.substring(2, 4), 16);
+            b = parseInt(hexVal.substring(4, 6), 16);
+            a = parseInt(hexVal.substring(6, 8), 16) / 255;
         }
     }
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    return `rgba(${r}, ${g}, ${b}, ${a * alpha})`;
 }

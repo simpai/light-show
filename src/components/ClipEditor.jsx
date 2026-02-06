@@ -414,47 +414,31 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 {clip.rampingEnabled && (
                     <div className="ramping-controls-horizontal">
                         <div className="ramping-row">
-                            <label className="ramp-label-inline">
-                                <input
-                                    type="checkbox"
-                                    checked={clip.rampOnEnabled !== false}
-                                    onChange={e => handleChange('rampOnEnabled', e.target.checked)}
-                                />
-                                ON
-                            </label>
-                            <input
-                                type="range"
-                                min="0"
-                                max="3000"
-                                step="100"
-                                value={clip.rampOnDuration || 500}
+                            <label className="ramp-label-inline">ON</label>
+                            <select
+                                className="ramp-select"
+                                value={clip.rampOnDuration || 0}
                                 onChange={e => handleChange('rampOnDuration', parseInt(e.target.value))}
-                                disabled={clip.rampOnEnabled === false}
-                                className="ramp-slider"
-                            />
-                            <span className="ramp-val-hint">{(clip.rampOnDuration || 500).toFixed(0)}ms</span>
+                            >
+                                <option value="0">Instant (0ms)</option>
+                                <option value="500">500 ms</option>
+                                <option value="1000">1000 ms</option>
+                                <option value="2000">2000 ms</option>
+                            </select>
                         </div>
 
                         <div className="ramping-row">
-                            <label className="ramp-label-inline">
-                                <input
-                                    type="checkbox"
-                                    checked={clip.rampOffEnabled !== false}
-                                    onChange={e => handleChange('rampOffEnabled', e.target.checked)}
-                                />
-                                OFF
-                            </label>
-                            <input
-                                type="range"
-                                min="0"
-                                max="3000"
-                                step="100"
-                                value={clip.rampOffDuration || 500}
+                            <label className="ramp-label-inline">OFF</label>
+                            <select
+                                className="ramp-select"
+                                value={clip.rampOffDuration || 0}
                                 onChange={e => handleChange('rampOffDuration', parseInt(e.target.value))}
-                                disabled={clip.rampOffEnabled === false}
-                                className="ramp-slider"
-                            />
-                            <span className="ramp-val-hint">{(clip.rampOffDuration || 500).toFixed(0)}ms</span>
+                            >
+                                <option value="0">Instant (0ms)</option>
+                                <option value="500">500 ms</option>
+                                <option value="1000">1000 ms</option>
+                                <option value="2000">2000 ms</option>
+                            </select>
                         </div>
                     </div>
                 )}
@@ -710,16 +694,19 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     min-width: 50px;
                 }
 
-                .ramp-slider {
+                .ramp-select {
                     flex: 1;
+                    background: #2a2a2a;
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    color: white;
+                    font-size: 12px;
+                    outline: none;
                 }
 
-                .ramp-val-hint {
-                    font-size: 11px;
-                    font-weight: 600;
-                    color: #e82020;
-                    min-width: 45px;
-                    text-align: right;
+                .ramp-select:focus {
+                    border-color: #e82020;
                 }
 
                 .toggle-checkbox {

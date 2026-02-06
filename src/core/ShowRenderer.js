@@ -267,49 +267,64 @@ export class ShowRenderer {
     }
 
     renderClip(clip, clipTime, frame, row = null, col = null, gridSize = null, layer = null) {
-        // Calculate intensity based on ramping or fade
+        // Tesla Ramping Magic Values (0-255)
+        const RAMP_ON_VALUES = { 0: 255, 500: 178, 1000: 204, 2000: 229 };
+        const RAMP_OFF_VALUES = { 0: 0, 500: 25, 1000: 51, 2000: 76 };
+
         let intensity = 1.0;
+        let isDuringRamping = false;
+        let rampingValue = 255;
 
-        if (clip.rampingEnabled) {
-            const rampOnDur = (clip.rampOnEnabled !== false) ? (clip.rampOnDuration || 0) : 0;
-            const rampOffDur = (clip.rampOffEnabled !== false) ? (clip.rampOffDuration || 0) : 0;
+        const freq = clip.speed || 5;
+        const pulseDur = clip.effectType === 'strobe' ? (1000 / (2 * freq)) : clip.duration;
 
+        const rampOnDur = clip.rampingEnabled ? (clip.rampOnDuration || 0) : 0;
+        const rampOffDur = clip.rampingEnabled ? (clip.rampOffDuration || 0) : 0;
+
+        // Safety: Disable ramping if pulse is too short
+        const canRamp = clip.rampingEnabled && (pulseDur >= (rampOnDur + rampOffDur));
+
+        if (canRamp) {
             if (rampOnDur > 0 && clipTime < rampOnDur) {
-                intensity = clipTime / rampOnDur;
+                isDuringRamping = true;
+                rampingValue = RAMP_ON_VALUES[rampOnDur] || 255;
             } else if (rampOffDur > 0 && clipTime > (clip.duration - rampOffDur)) {
-                intensity = Math.max(0, (clip.duration - clipTime) / rampOffDur);
+                isDuringRamping = true;
+                rampingValue = RAMP_OFF_VALUES[rampOffDur] || 0;
+            } else {
+                rampingValue = 255; // Steady state
             }
         } else {
+            // Standard linear fade (legacy/fallback)
             if (clipTime < clip.fadeIn) {
                 intensity = clipTime / clip.fadeIn;
             } else if (clipTime > (clip.duration - clip.fadeOut)) {
-                intensity = (clip.duration - clipTime) / clip.fadeOut;
+                intensity = Math.max(0, (clip.duration - clipTime) / clip.fadeOut);
             }
+            rampingValue = Math.floor(255 * intensity);
         }
 
         if (clip.type === 'effect') {
-            this.renderEffect(clip, clipTime, intensity, frame);
+            this.renderEffect(clip, clipTime, rampingValue, frame);
         } else if (clip.type === 'gif') {
-            // Support single-car mode by defaulting to center of grid if row/col are missing
             const r = row !== null ? row : 0;
             const c = col !== null ? col : 0;
             const gs = gridSize !== null ? gridSize : { rows: 1, cols: 1 };
-            this.renderPatternForPosition(clip, clipTime, intensity, frame, r, c, gs, layer);
+            this.renderPatternForPosition(clip, clipTime, rampingValue / 255, frame, r, c, gs, layer);
         }
     }
 
-    renderEffect(clip, clipTime, intensity, frame) {
-        const val = Math.floor(255 * intensity);
+    renderEffect(clip, clipTime, value, frame) {
         const targetChannels = this.resolveTargetChannels(clip);
 
         if (targetChannels.length === 0) return;
 
         if (clip.effectType === 'flash') {
-            this.applyToChannels(targetChannels, val, frame);
+            this.applyToChannels(targetChannels, value, frame);
         } else if (clip.effectType === 'strobe' || clip.effectType === 'pulse') {
             const freq = clip.speed || 5;
             const isOn = Math.floor(clipTime / 1000 * 2 * freq) % 2 === 0;
-            this.applyToChannels(targetChannels, isOn ? val : 0, frame);
+            this.applyToChannels(targetChannels, isOn ? value : 0, frame);
         }
     }
 

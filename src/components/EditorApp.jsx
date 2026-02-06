@@ -64,7 +64,7 @@ const CHANNEL_NAMES = {
 
 
 
-export default function EditorApp({ audioFile: initialAudioFile, analysis: initialAnalysis, bundledData, onExit }) {
+export default function EditorApp({ audioFile: initialAudioFile, analysis: initialAnalysis, bundledData, onExit, onChangeMode }) {
     const [project, setProject] = useState(new ProjectState());
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -1030,8 +1030,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 audioFileName,
                 layoutFileName,
                 layoutData,
-                colSpacing,
-                rowSpacing,
                 bookmarks
             };
 
@@ -1081,8 +1079,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             if (data.matrixConfig) setMatrixConfig(data.matrixConfig);
             if (data.layoutData) setLayoutData(data.layoutData);
             setLayoutFileName(data.layoutFileName || '');
-            if (data.colSpacing !== undefined) setColSpacing(data.colSpacing);
-            if (data.rowSpacing !== undefined) setRowSpacing(data.rowSpacing);
             if (data.bookmarks) setBookmarks(data.bookmarks);
 
             // 3. Load Audio from bundle
@@ -1119,7 +1115,22 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         <div className="editor-container">
             <header className="editor-header">
                 <h2 style={{ margin: 0, fontSize: '18px' }}>🎵 Light Show Editor</h2>
-                <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative', zIndex: 100 }}>
+                    <div className="nav-links" style={{ display: 'flex', gap: '5px', marginRight: '15px', borderRight: '1px solid #444', paddingRight: '10px' }}>
+                        <button
+                            className="btn-link-small"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const url = window.location.origin + '/fseq-viewer';
+                                window.open(url, '_blank');
+                            }}
+                            style={{ fontSize: '12px', color: '#aaa', padding: '4px 8px', cursor: 'pointer' }}
+                        >
+                            FSEQ Viewer
+                        </button>
+                    </div>
+
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -1436,130 +1447,138 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             </div>
 
             {/* Modals */}
-            {activeModal === 'lightGroups' && (
-                <Modal title="Light Group Editor" onClose={() => setActiveModal(null)}>
-                    <LightGroupEditor
-                        lightGroups={project.lightGroups}
-                        onUpdate={(updatedGroups) => {
-                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
-                            newProject.lightGroups = updatedGroups;
-                            saveToHistory(newProject);
-                        }}
-                    />
-                </Modal>
-            )}
+            {
+                activeModal === 'lightGroups' && (
+                    <Modal title="Light Group Editor" onClose={() => setActiveModal(null)}>
+                        <LightGroupEditor
+                            lightGroups={project.lightGroups}
+                            onUpdate={(updatedGroups) => {
+                                const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                                newProject.lightGroups = updatedGroups;
+                                saveToHistory(newProject);
+                            }}
+                        />
+                    </Modal>
+                )
+            }
 
-            {activeModal === 'trackProperties' && selectedLayerId && (
-                <Modal title="Track Properties" onClose={() => setActiveModal(null)}>
-                    <TrackProperties
-                        layer={project.layers.find(l => l.id === selectedLayerId)}
-                        lightGroups={project.lightGroups}
-                        onUpdate={(updatedLayer) => {
-                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
-                            newProject.layers = newProject.layers.map(l => l.id === updatedLayer.id ? updatedLayer : l);
-                            saveToHistory(newProject);
-                        }}
-                    />
-                </Modal>
-            )}
+            {
+                activeModal === 'trackProperties' && selectedLayerId && (
+                    <Modal title="Track Properties" onClose={() => setActiveModal(null)}>
+                        <TrackProperties
+                            layer={project.layers.find(l => l.id === selectedLayerId)}
+                            lightGroups={project.lightGroups}
+                            onUpdate={(updatedLayer) => {
+                                const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                                newProject.layers = newProject.layers.map(l => l.id === updatedLayer.id ? updatedLayer : l);
+                                saveToHistory(newProject);
+                            }}
+                        />
+                    </Modal>
+                )
+            }
 
-            {activeModal === 'carGroups' && (
-                <Modal title="Car Group Manager" onClose={() => setActiveModal(null)}>
-                    <CarGroupManager
-                        carGroups={project.carGroups}
-                        onUpdate={(updatedGroups) => {
-                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
-                            newProject.carGroups = updatedGroups;
-                            saveToHistory(newProject);
-                        }}
-                        onSelect={(selection) => {
-                            setSelectedCars(new Set(selection));
-                            setActiveModal(null);
-                        }}
-                    />
-                </Modal>
-            )}
+            {
+                activeModal === 'carGroups' && (
+                    <Modal title="Car Group Manager" onClose={() => setActiveModal(null)}>
+                        <CarGroupManager
+                            carGroups={project.carGroups}
+                            onUpdate={(updatedGroups) => {
+                                const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                                newProject.carGroups = updatedGroups;
+                                saveToHistory(newProject);
+                            }}
+                            onSelect={(selection) => {
+                                setSelectedCars(new Set(selection));
+                                setActiveModal(null);
+                            }}
+                        />
+                    </Modal>
+                )
+            }
 
-            {showHelpModal && (
-                <Modal title="Help & Shortcuts" onClose={() => setShowHelpModal(false)}>
-                    <div className="help-content">
-                        <table className="help-table">
-                            <thead>
-                                <tr>
-                                    <th>Category</th>
-                                    <th>Shortcut</th>
-                                    <th>Function</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td rowSpan="2" className="cat-cell">Playback</td>
-                                    <td><kbd>Space</kbd></td>
-                                    <td>Play / Pause</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Enter</kbd></td>
-                                    <td>Play from Bookmark</td>
-                                </tr>
-                                <tr>
-                                    <td rowSpan="4" className="cat-cell">Editing</td>
-                                    <td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td>
-                                    <td>Undo / Redo</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Ctrl+C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></td>
-                                    <td>Copy / Paste / Cut</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Ctrl+D</kbd></td>
-                                    <td>Duplicate Clip</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Del</kbd> / <kbd>Backspace</kbd></td>
-                                    <td>Delete Clip</td>
-                                </tr>
-                                <tr>
-                                    <td rowSpan="2" className="cat-cell">Add Clip</td>
-                                    <td><kbd>E</kbd></td>
-                                    <td>Add Effect at Cursor</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>G</kbd></td>
-                                    <td>Add GIF/Image at Cursor</td>
-                                </tr>
-                                <tr>
-                                    <td rowSpan="6" className="cat-cell">Timeline</td>
-                                    <td><kbd>Ctrl + Wheel</kbd></td>
-                                    <td>Zoom In/Out</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Shift + Drag</kbd></td>
-                                    <td>Marquee Selection</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Ctrl + Click</kbd></td>
-                                    <td>Multi-select Clips</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Alt + Drag</kbd></td>
-                                    <td>Duplicate selection while moving</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Shift + Wheel</kbd></td>
-                                    <td>Horizontal Scroll</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Ctrl + Click</kbd></td>
-                                    <td>Toggle Bookmark (in Ruler)</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div className="help-extras">
-                            <p><strong>Pro Tip:</strong> Click and drag bookmarks in the ruler to move them. Double-click a track header to open track-specific settings.</p>
+            {
+                showHelpModal && (
+                    <Modal title="Help & Shortcuts" onClose={() => setShowHelpModal(false)}>
+                        <div className="help-content">
+                            <table className="help-table">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Shortcut</th>
+                                        <th>Function</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td rowSpan="2" className="cat-cell">Playback</td>
+                                        <td><kbd>Space</kbd></td>
+                                        <td>Play / Pause</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Enter</kbd></td>
+                                        <td>Play from Bookmark</td>
+                                    </tr>
+                                    <tr>
+                                        <td rowSpan="4" className="cat-cell">Editing</td>
+                                        <td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td>
+                                        <td>Undo / Redo</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Ctrl+C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></td>
+                                        <td>Copy / Paste / Cut</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Ctrl+D</kbd></td>
+                                        <td>Duplicate Clip</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Del</kbd> / <kbd>Backspace</kbd></td>
+                                        <td>Delete Clip</td>
+                                    </tr>
+                                    <tr>
+                                        <td rowSpan="2" className="cat-cell">Add Clip</td>
+                                        <td><kbd>E</kbd></td>
+                                        <td>Add Effect at Cursor</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>G</kbd></td>
+                                        <td>Add GIF/Image at Cursor</td>
+                                    </tr>
+                                    <tr>
+                                        <td rowSpan="6" className="cat-cell">Timeline</td>
+                                        <td><kbd>Ctrl + Wheel</kbd></td>
+                                        <td>Zoom In/Out</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Shift + Drag</kbd></td>
+                                        <td>Marquee Selection</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Ctrl + Click</kbd></td>
+                                        <td>Multi-select Clips</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Alt + Drag</kbd></td>
+                                        <td>Duplicate selection while moving</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Shift + Wheel</kbd></td>
+                                        <td>Horizontal Scroll</td>
+                                    </tr>
+                                    <tr>
+                                        <td><kbd>Ctrl + Click</kbd></td>
+                                        <td>Toggle Bookmark (in Ruler)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div className="help-extras">
+                                <p><strong>Pro Tip:</strong> Click and drag bookmarks in the ruler to move them. Double-click a track header to open track-specific settings.</p>
+                            </div>
                         </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )
+            }
 
             <audio
                 ref={audioRef}
@@ -1580,6 +1599,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .timeline-controls { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }
         .timeline-tracks-container { flex: 1; overflow-y: auto; position: relative; }
         .btn-tesla-sm { background: #e82020; color: white; border: none; padding: 5px 15px; border-radius: 4px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .btn-link-small { background: transparent; border: 1px solid #444; color: #aaa; cursor: pointer; border-radius: 4px; transition: all 0.2s; }
+        .btn-link-small:hover { color: white; border-color: #e82020; background: rgba(232, 32, 32, 0.1); }
         .btn-icon { background: transparent; border: none; color: white; cursor: pointer; padding: 5px; }
         .btn-icon:hover { color: #e82020; }
         .btn-icon.active { color: #e82020; }
@@ -1594,7 +1615,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .help-extras { background: rgba(232, 32, 32, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #e82020; font-size: 13px; color: #ccc; }
         .time-display { font-family: monospace; min-width: 80px; display: inline-block; font-size: 14px; color: #ef4444; margin-left: 10px; }
       `}</style>
-        </div>
+        </div >
     );
 }
 

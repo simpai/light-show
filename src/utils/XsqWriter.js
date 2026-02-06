@@ -69,6 +69,35 @@ export class XsqWriter {
         const frameCount = frames.length;
         const duration = (frameCount * this.stepTimeMs) / 1000;
 
+        // 1. Collect all unique intensity values (0-255) to build EffectDB
+        const usedIntensities = new Set();
+        for (let f = 0; f < frameCount; f++) {
+            for (let ch = 0; ch < this.channelNames.length; ch++) {
+                if (frames[f][ch] > 0) {
+                    usedIntensities.add(frames[f][ch]);
+                }
+            }
+        }
+
+        // 2. Map intensities to DB indices
+        // Order them if possible, or just as they come. 
+        // We'll map (val/255)*100 to the E_TEXTCTRL_Eff_On_End/Start values.
+        const intensities = Array.from(usedIntensities).sort((a, b) => a - b);
+        const valToRef = {};
+
+        let effectDbXml = '  <EffectDB>\n';
+        intensities.forEach((val, idx) => {
+            valToRef[val] = idx;
+            const pct = Math.round((val / 255) * 100);
+            if (pct === 100) {
+                effectDbXml += `    <Effect></Effect>\n`;
+            } else {
+                effectDbXml += `    <Effect>E_TEXTCTRL_Eff_On_End=${pct},E_TEXTCTRL_Eff_On_Start=${pct}</Effect>\n`;
+            }
+        });
+        effectDbXml += '  </EffectDB>\n';
+
+        // 3. Generate XML
         let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
         xml += '<xsequence BaseChannel="0" ChanCtrlBasic="0" ChanCtrlColor="0" FixedPointTiming="1" ModelBlending="true">\n';
 
@@ -89,10 +118,7 @@ export class XsqWriter {
         xml += '    <ColorPalette>C_BUTTON_Palette1=#FFFFFF,C_BUTTON_Palette2=#FF0000,C_BUTTON_Palette3=#00FF00,C_BUTTON_Palette4=#0000FF,C_BUTTON_Palette5=#FFFF00,C_BUTTON_Palette6=#000000,C_BUTTON_Palette7=#00FFFF,C_BUTTON_Palette8=#FF00FF,C_CHECKBOX_Palette1=1,C_CHECKBOX_Palette2=1</ColorPalette>\n';
         xml += '  </ColorPalettes>\n';
 
-        // EffectDB - Just 'On' effect for simplicity
-        xml += '  <EffectDB>\n';
-        xml += '    <Effect></Effect>\n'; // Index 0
-        xml += '  </EffectDB>\n';
+        xml += effectDbXml;
 
         // DisplayElements
         xml += '  <DisplayElements>\n';
@@ -113,25 +139,17 @@ export class XsqWriter {
             xml += `    <Element type="model" name="${name}">\n`;
             xml += '      <EffectLayer>\n';
 
-            // Generate effects for this channel
-            // We group consecutive frames with same value to save space
             let currentVal = 0;
             let startTime = 0;
-            let effectId = 1;
 
             for (let f = 0; f <= frameCount; f++) {
                 const val = (f < frameCount) ? frames[f][ch] : 0;
 
                 if (val !== currentVal) {
                     if (currentVal > 0) {
-                        // Close previous effect
                         const endTime = f * this.stepTimeMs;
-                        // Intensity in xLights is handled differently, 
-                        // but for 'On' effect it's often 0-100 or defined in EffectDB.
-                        // Here we use palette 0 (White) and assume intensity is max.
-                        // For more complex conversion, we'd need more EffectDB entries.
-                        xml += `        <Effect ref="0" name="On" startTime="${startTime}" endTime="${endTime}" palette="0"/>\n`;
-                        effectId++;
+                        const refId = valToRef[currentVal];
+                        xml += `        <Effect ref="${refId}" name="On" startTime="${startTime}" endTime="${endTime}" palette="0"/>\n`;
                     }
 
                     currentVal = val;

@@ -4,7 +4,6 @@ import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
 import { Timeline } from './Timeline';
-import Scene3D from './Scene3D';
 import ClipEditor from './ClipEditor';
 import { LayoutParser } from '../utils/LayoutParser';
 import { FseqWriter } from '../utils/FseqWriter';
@@ -100,9 +99,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     // Layout system state
     const [layoutData, setLayoutData] = useState(null);
     const [layoutFileName, setLayoutFileName] = useState('');
-    const [colSpacing, setColSpacing] = useState(2.5);
-    const [rowSpacing, setRowSpacing] = useState(6);
-    const [viewMode, setViewMode] = useState('2d'); // '2d' or '3d'
     const [showGroundLight, setShowGroundLight] = useState(true);
     const [activeModal, setActiveModal] = useState(null); // 'lightGroups', 'trackProperties', 'carGroups'
     const [selectedCars, setSelectedCars] = useState(new Set());
@@ -263,8 +259,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 if (bundledData.matrixConfig) setMatrixConfig(bundledData.matrixConfig);
                 if (bundledData.layoutData) setLayoutData(bundledData.layoutData);
                 setLayoutFileName(bundledData.layoutFileName || '');
-                if (bundledData.colSpacing !== undefined) setColSpacing(bundledData.colSpacing);
-                if (bundledData.rowSpacing !== undefined) setRowSpacing(bundledData.rowSpacing);
                 if (bundledData.bookmarks) setBookmarks(bundledData.bookmarks);
 
                 // 2. Load Audio if provided via bundle (already set in setAudioFile in App.jsx but we need local state)
@@ -625,7 +619,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         const file = e.target.files[0];
         if (file) {
             try {
-                const parsed = await LayoutParser.parseLayoutImage(file, colSpacing, rowSpacing);
+                const parsed = await LayoutParser.parseLayoutImage(file);
                 setLayoutData(parsed);
                 setLayoutFileName(file.name);
 
@@ -642,24 +636,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 console.error('Failed to load layout:', err);
                 alert('Failed to load layout image: ' + err.message);
             }
-        }
-    };
-
-    const handleSpacingChange = async () => {
-        if (layoutData && layoutFileName) {
-            // Re-parse with new spacing values
-            // We need to reload the file, but we don't have it anymore
-            // So just update the layout data offsets
-            const updatedLayout = { ...layoutData };
-            for (let r = 0; r < updatedLayout.height; r++) {
-                for (let c = 0; c < updatedLayout.width; c++) {
-                    const cell = updatedLayout.layout[r][c];
-                    const raw = cell.raw;
-                    cell.offsetX = ((raw.r - 127) / 127) * colSpacing;
-                    cell.offsetY = ((raw.g - 127) / 127) * rowSpacing;
-                }
-            }
-            setLayoutData(updatedLayout);
         }
     };
 
@@ -831,7 +807,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     type: type, // 'effect' or 'gif'
                     effectType: type === 'effect' ? 'flash' : 'image',
                     channels: [],
-                    targetLightGroups: [],
+                    targetLightGroups: (type === 'gif' && layer?.lightMapping)
+                        ? Object.values(layer.lightMapping).filter(Boolean)
+                        : [],
                     fadeIn: 0,
                     fadeOut: 0,
                     pattern: 'uniform',
@@ -1280,35 +1258,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         />
                     </div>
 
-                    {/* Spacing Controls */}
-                    <div className="spacing-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
-                        <span style={{ fontSize: '12px', color: '#666' }}>Spacing:</span>
-                        <input
-                            type="number"
-                            value={colSpacing}
-                            onChange={e => setColSpacing(parseFloat(e.target.value) || 2.5)}
-                            onBlur={handleSpacingChange}
-                            style={{ width: '50px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
-                            min="1"
-                            max="50"
-                            step="0.5"
-                            title="Column Spacing (X)"
-                        />
-                        <span style={{ color: '#666' }}>×</span>
-                        <input
-                            type="number"
-                            value={rowSpacing}
-                            onChange={e => setRowSpacing(parseFloat(e.target.value) || 6)}
-                            onBlur={handleSpacingChange}
-                            style={{ width: '50px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
-                            min="1"
-                            max="50"
-                            step="0.5"
-                            title="Row Spacing (Y)"
-                        />
-                    </div>
-
-                    <div className="ground-light-toggle" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
+                    <div className="ground-light-toggle" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px', marginLeft: '10px' }}>
                         <input
                             type="checkbox"
                             id="showGroundLight"
@@ -1321,44 +1271,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </label>
                     </div>
 
-                    <div className="view-mode-toggle" style={{ display: 'flex', background: '#333', borderRadius: '4px', padding: '2px', marginLeft: '10px' }}>
-                        <button
-                            className={`toggle-btn ${viewMode === '2d' ? 'active' : ''}`}
-                            tabIndex={-1}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={(e) => {
-                                e.currentTarget.blur();
-                                setViewMode('2d');
-                            }}
-                            style={{
-                                padding: '4px 8px',
-                                border: 'none',
-                                background: viewMode === '2d' ? '#e82020' : 'transparent',
-                                color: 'white',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                cursor: 'pointer'
-                            }}
-                        >2D</button>
-                        <button
-                            className={`toggle-btn ${viewMode === '3d' ? 'active' : ''}`}
-                            tabIndex={-1}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={(e) => {
-                                e.currentTarget.blur();
-                                setViewMode('3d');
-                            }}
-                            style={{
-                                padding: '4px 8px',
-                                border: 'none',
-                                background: viewMode === '3d' ? '#e82020' : 'transparent',
-                                color: 'white',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                cursor: 'pointer'
-                            }}
-                        >3D</button>
-                    </div>
                     <div className="toolbar-group" style={{ display: 'flex', gap: '10px', borderLeft: '1px solid #444', paddingLeft: '12px', marginLeft: '12px' }}>
                         <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.currentTarget.blur(); handleExportXsq(); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
                             <Save size={18} />
@@ -1374,30 +1286,17 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             <div className="editor-main">
                 <div className="preview-panel">
-                    {viewMode === '3d' ? (
-                        <Scene3D
-                            key={`${matrixConfig.rows}-${matrixConfig.cols}`}
-                            matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
-                            rows={matrixConfig.rows}
-                            cols={matrixConfig.cols}
-                            layoutData={layoutData}
-                            colSpacing={colSpacing}
-                            rowSpacing={rowSpacing}
-                            lightGroups={project.lightGroups}
-                        />
-                    ) : (
-                        <MatrixPreview2D
-                            matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
-                            rows={matrixConfig.rows}
-                            cols={matrixConfig.cols}
-                            layoutData={layoutData}
-                            showGroundLight={showGroundLight}
-                            lightGroups={project.lightGroups}
-                            selectedCars={selectedCars}
-                            onSelectionChange={setSelectedCars}
-                            fitTrigger={fitTrigger2D}
-                        />
-                    )}
+                    <MatrixPreview2D
+                        matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
+                        rows={matrixConfig.rows}
+                        cols={matrixConfig.cols}
+                        layoutData={layoutData}
+                        showGroundLight={showGroundLight}
+                        lightGroups={project.lightGroups}
+                        selectedCars={selectedCars}
+                        onSelectionChange={setSelectedCars}
+                        fitTrigger={fitTrigger2D}
+                    />
                 </div>
 
                 <div className="properties-panel">

@@ -123,6 +123,18 @@ export class ProjectState {
     static fromJSONSync(data) {
         const project = new ProjectState();
         project.layers = JSON.parse(JSON.stringify(data.layers)); // Deep copy layers/clips
+
+        // Migration: Ensure all layers have default light mapping
+        project.layers.forEach(layer => {
+            if (!layer.lightMapping) {
+                layer.lightMapping = {
+                    R: 'Red',
+                    G: 'MainWhite',
+                    B: 'Yellow'
+                };
+            }
+        });
+
         project.duration = data.duration;
         project.analysis = data.analysis;
 

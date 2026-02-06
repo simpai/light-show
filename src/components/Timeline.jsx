@@ -658,7 +658,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                                     }
 
                                                     // 2. Handle Ramping (horizontal shading overlay)
-                                                    if (clip.type === 'effect' && clip.rampingEnabled) {
+                                                    if (clip.rampingEnabled) {
                                                         const rampOnPct = (clip.rampOnEnabled !== false) ? ((clip.rampOnDuration || 500) / clip.duration) * 100 : 0;
                                                         const rampOffPct = (clip.rampOffEnabled !== false) ? ((clip.rampOffDuration || 500) / clip.duration) * 100 : 0;
 
@@ -747,7 +747,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                                         baseStyle = `linear-gradient(to bottom, ${segments.join(', ')})`;
                                                     }
 
-                                                    if (dragging.type === 'effect' && dragging.rampingEnabled) {
+                                                    if (dragging.rampingEnabled) {
                                                         const rampOnPct = (dragging.rampOnEnabled !== false) ? ((dragging.rampOnDuration || 500) / dragging.duration) * 100 : 0;
                                                         const rampOffPct = (dragging.rampOffEnabled !== false) ? ((dragging.rampOffDuration || 500) / dragging.duration) * 100 : 0;
 

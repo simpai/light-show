@@ -267,25 +267,19 @@ export class ShowRenderer {
     }
 
     renderClip(clip, clipTime, frame, row = null, col = null, gridSize = null, layer = null) {
-        // Linear fade in/out calc (deprecated/legacy logic if used in other ways)
+        // Calculate intensity based on ramping or fade
         let intensity = 1.0;
 
-        // Ramping logic for EffectClips
-        if (clip.type === 'effect' && clip.rampingEnabled) {
+        if (clip.rampingEnabled) {
             const rampOnDur = (clip.rampOnEnabled !== false) ? (clip.rampOnDuration || 0) : 0;
             const rampOffDur = (clip.rampOffEnabled !== false) ? (clip.rampOffDuration || 0) : 0;
 
             if (rampOnDur > 0 && clipTime < rampOnDur) {
                 intensity = clipTime / rampOnDur;
             } else if (rampOffDur > 0 && clipTime > (clip.duration - rampOffDur)) {
-                // If turn off ramping is requested, it should finish at the end of the clip
-                // So at clip.duration, intensity should be 0.
                 intensity = Math.max(0, (clip.duration - clipTime) / rampOffDur);
-            } else {
-                intensity = 1.0;
             }
         } else {
-            // Standard fadeIn/fadeOut logic
             if (clipTime < clip.fadeIn) {
                 intensity = clipTime / clip.fadeIn;
             } else if (clipTime > (clip.duration - clip.fadeOut)) {
@@ -296,143 +290,124 @@ export class ShowRenderer {
         if (clip.type === 'effect') {
             this.renderEffect(clip, clipTime, intensity, frame);
         } else if (clip.type === 'gif') {
-            if (row !== null && col !== null && gridSize !== null) {
-                this.renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize, layer);
-            }
+            // Support single-car mode by defaulting to center of grid if row/col are missing
+            const r = row !== null ? row : 0;
+            const c = col !== null ? col : 0;
+            const gs = gridSize !== null ? gridSize : { rows: 1, cols: 1 };
+            this.renderPatternForPosition(clip, clipTime, intensity, frame, r, c, gs, layer);
         }
     }
 
     renderEffect(clip, clipTime, intensity, frame) {
         const val = Math.floor(255 * intensity);
+        const targetChannels = this.resolveTargetChannels(clip);
 
-        // Resolve channels from symbolic names if present
-        let targetChannels = [];
-        const isSymbolic = Array.isArray(clip.targetLightGroups);
-
-        if (isSymbolic) {
-            if (clip.targetLightGroups.length > 0 && this.project?.lightGroups) {
-                const resolved = new Set();
-                clip.targetLightGroups.forEach(groupName => {
-                    const group = this.project.lightGroups[groupName];
-                    if (group) {
-                        const groupChs = Array.isArray(group) ? group : (group.channels || []);
-                        groupChs.forEach(ch => resolved.add(ch));
-                    }
-                });
-                targetChannels = Array.from(resolved);
-            }
-            // else targetChannels remains empty, which is correct for an empty selection
-        } else {
-            // Fallback for legacy clips
-            targetChannels = clip.channels || [];
-        }
+        if (targetChannels.length === 0) return;
 
         if (clip.effectType === 'flash') {
             this.applyToChannels(targetChannels, val, frame);
         } else if (clip.effectType === 'strobe' || clip.effectType === 'pulse') {
-            // Pulse legacy handling: Hardware doesn't support intermediate values except via ramping.
-            // Treat as strobe.
             const freq = clip.speed || 5;
             const isOn = Math.floor(clipTime / 1000 * 2 * freq) % 2 === 0;
-            const strobeVal = isOn ? val : 0;
-            this.applyToChannels(targetChannels, strobeVal, frame);
+            this.applyToChannels(targetChannels, isOn ? val : 0, frame);
         }
+    }
+
+    /**
+     * Resolve target channel indices for a clip based on its group selection or legacy channels
+     */
+    resolveTargetChannels(clip) {
+        const groups = this.project?.lightGroups || {};
+        const activeGroups = clip.targetLightGroups;
+
+        if (Array.isArray(activeGroups)) {
+            if (activeGroups.length === 0) return [];
+
+            const resolved = new Set();
+            activeGroups.forEach(name => {
+                const group = groups[name];
+                if (group) {
+                    const chs = Array.isArray(group) ? group : (group.channels || []);
+                    chs.forEach(ch => resolved.add(ch));
+                }
+            });
+            return Array.from(resolved);
+        }
+
+        // Fallback to legacy channels if no symbolic groups are selected
+        return clip.channels || [];
     }
 
     /**
      * Render pattern for a specific grid position
      */
     renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize, layer) {
-        if (!clip.assetId || !this.project.assets[clip.assetId]) {
-            return;
-        }
+        if (!clip.assetId || !this.project?.assets[clip.assetId]) return;
 
         const asset = this.project.assets[clip.assetId];
+        const frameDuration = clip.timingMode === 'beat'
+            ? (60000 / (clip.bpm || 120)) * (clip.beatsPerFrame || 1)
+            : (clip.frameDuration || 100);
 
-        // Calculate frame duration based on timing mode
-        const timingMode = clip.timingMode || 'frame';
-        let frameDuration;
-
-        if (timingMode === 'beat') {
-            const bpm = clip.bpm || 120;
-            const beatsPerFrame = clip.beatsPerFrame || 1;
-            const msPerBeat = 60000 / bpm;
-            frameDuration = msPerBeat * beatsPerFrame;
-        } else {
-            frameDuration = clip.frameDuration || 100;
-        }
-
-        const repetitions = clip.repetitions || 1;
         const assetFrameCount = asset.frames.length;
-        const totalFrames = assetFrameCount * repetitions;
         const rawFrameIndex = Math.floor(clipTime / frameDuration);
-
-        // Clamp to total frames
-        const clampedFrameIndex = Math.min(rawFrameIndex, totalFrames - 1);
-        const frameIndex = clampedFrameIndex % assetFrameCount;
+        const frameIndex = (rawFrameIndex < 0) ? 0 : (rawFrameIndex % assetFrameCount);
         const imageData = asset.frames[frameIndex];
 
-        // Check if grid position is within image bounds
-        if (row >= imageData.height || col >= imageData.width) {
-            return; // Out of bounds
+        // Map grid position to image coordinates (Scale pattern to fit grid if needed)
+        // If single car, GS is 1x1, so we take the center of the image
+        let imgRow, imgCol;
+        if (gridSize.rows > 1 || gridSize.cols > 1) {
+            imgRow = Math.floor((row / gridSize.rows) * imageData.height);
+            imgCol = Math.floor((col / gridSize.cols) * imageData.width);
+        } else {
+            imgRow = Math.floor(imageData.height / 2);
+            imgCol = Math.floor(imageData.width / 2);
         }
 
-        const pixelIndex = (row * imageData.width + col) * 4; // RGBA
-        const r = imageData.data[pixelIndex];
-        const g = imageData.data[pixelIndex + 1];
-        const b = imageData.data[pixelIndex + 2];
-        const a = imageData.data[pixelIndex + 3];
+        // Clamp to image bounds
+        imgRow = Math.max(0, Math.min(imgRow, imageData.height - 1));
+        imgCol = Math.max(0, Math.min(imgCol, imageData.width - 1));
 
-        // Use track mapping if available
+        const pixIdx = (imgRow * imageData.width + imgCol) * 4;
+        const r = imageData.data[pixIdx];
+        const g = imageData.data[pixIdx + 1];
+        const b = imageData.data[pixIdx + 2];
+        const a = imageData.data[pixIdx + 3];
+
         if (layer && layer.lightMapping && this.project.lightGroups) {
             const mapping = layer.lightMapping;
             const groups = this.project.lightGroups;
+            const activeGroups = clip.targetLightGroups || [];
 
-            const channelsR = groups[mapping.R]?.channels || [];
-            const channelsG = groups[mapping.G]?.channels || [];
-            const channelsB = groups[mapping.B]?.channels || [];
+            const getGroupChs = (mappingKey) => {
+                const groupName = mapping[mappingKey];
+                if (!groupName) return [];
 
-            const valR = Math.floor(r * (a / 255) * intensity);
-            const valG = Math.floor(g * (a / 255) * intensity);
-            const valB = Math.floor(b * (a / 255) * intensity);
-
-            this.applyToChannels(channelsR, valR, frame);
-            this.applyToChannels(channelsG, valG, frame);
-            this.applyToChannels(channelsB, valB, frame);
-        } else {
-            // Fallback to legacy channel-based logic
-            const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-            let brightness = Math.floor(luminance * (a / 255));
-
-            const mode = clip.brightnessMode || 'gradient';
-            if (mode === 'binary') {
-                const threshold = clip.brightnessThreshold || 128;
-                brightness = brightness > threshold ? 255 : 0;
-            }
-
-            const value = Math.floor(brightness * intensity);
-
-            // Resolve target channels
-            let targetChannels = [];
-            const isSymbolic = Array.isArray(clip.targetLightGroups);
-
-            if (isSymbolic) {
-                if (clip.targetLightGroups.length > 0 && this.project?.lightGroups) {
-                    const resolved = new Set();
-                    clip.targetLightGroups.forEach(groupName => {
-                        const group = this.project.lightGroups[groupName];
-                        if (group) {
-                            const groupChs = Array.isArray(group) ? group : (group.channels || []);
-                            groupChs.forEach(ch => resolved.add(ch));
-                        }
-                    });
-                    targetChannels = Array.from(resolved);
+                // MASKING: If this group isn't selected, don't render to it
+                if (!activeGroups.includes(groupName)) {
+                    return [];
                 }
-            } else {
-                targetChannels = clip.channels || [];
-            }
 
-            this.applyToChannels(targetChannels, value, frame);
+                const group = groups[groupName];
+                if (!group) return [];
+                return Array.isArray(group) ? group : (group.channels || []);
+            };
+
+            const chsR = getGroupChs('R');
+            const chsG = getGroupChs('G');
+            const chsB = getGroupChs('B');
+
+            const mult = (a / 255) * intensity;
+            this.applyToChannels(chsR, Math.floor(r * mult), frame);
+            this.applyToChannels(chsG, Math.floor(g * mult), frame);
+            this.applyToChannels(chsB, Math.floor(b * mult), frame);
+        } else {
+            // Legacy fallthrough
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) * (a / 255);
+            const val = Math.floor(luminance * intensity);
+            const targets = this.resolveTargetChannels(clip);
+            this.applyToChannels(targets, val, frame);
         }
     }
 

@@ -69,9 +69,15 @@ const FseqViewer = ({ onExit }) => {
 
                 const y = offsetY + ch * zoomY;
 
-                // Color mapping: Tesla Red for high values
+                // Color mapping: 255=Green, <=127=Blue, 128-254=Red
                 const opacity = val / 255;
-                ctx.fillStyle = `rgba(232, 32, 32, ${opacity})`;
+                if (val === 255) {
+                    ctx.fillStyle = `rgba(32, 232, 32, ${opacity})`; // Green
+                } else if (val <= 127) {
+                    ctx.fillStyle = `rgba(32, 32, 232, ${opacity})`; // Blue
+                } else {
+                    ctx.fillStyle = `rgba(232, 32, 32, ${opacity})`; // Red
+                }
 
                 // Draw as small rects/dots
                 ctx.fillRect(x, y, Math.max(1, zoomX - 1), Math.max(1, zoomY - 1));

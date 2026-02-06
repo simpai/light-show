@@ -54,8 +54,9 @@ export class XsqWriter {
             "Left Rear Door Handle",     // 42
             "Right Front Door Handle",   // 43
             "Right Rear Window",         // 44
-            "Charge Port"                // 45
-            // 46, 47 are often unused or assigned to other things like trunk/frunk in some variants
+            "Charge Port",               // 45
+            "Wiper",                     // 46
+            "Cabin Light"                // 47
         ];
     }
 

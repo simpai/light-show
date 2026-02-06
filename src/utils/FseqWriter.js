@@ -6,7 +6,7 @@ export class FseqWriter {
      * @param {number} channelCount - Number of channels (usually 48 for Tesla)
      * @param {number} stepTimeMs - Time per frame in milliseconds (usually 20ms)
      */
-    constructor(channelCount = 48, stepTimeMs = 20) {
+    constructor(channelCount = 200, stepTimeMs = 20) {
         this.channelCount = channelCount;
         this.stepTimeMs = stepTimeMs;
     }

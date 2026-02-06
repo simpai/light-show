@@ -50,9 +50,16 @@ const LIGHT_COORDINATES = {
 };
 
 // Fill missing coordinates with defaults so the loop doesn't break
-for (let i = 0; i < 48; i++) {
+for (let i = 0; i < 200; i++) {
     if (!LIGHT_COORDINATES[i]) {
-        LIGHT_COORDINATES[i] = [{ x: 2, y: 4, color: '#fff' }]; // Center default
+        // Default to a visible front position for lightbars if within range
+        if (i >= 46 && i <= 75) {
+            LIGHT_COORDINATES[i] = [{ x: 4, y: 9, color: '#fff' }]; // Left Front (stacked)
+        } else if (i >= 76 && i <= 105) {
+            LIGHT_COORDINATES[i] = [{ x: 0, y: 9, color: '#fff' }]; // Right Front (stacked)
+        } else {
+            LIGHT_COORDINATES[i] = [{ x: 2, y: 4, color: '#fff' }]; // Center default
+        }
     } else {
         // Ensure all points have a color
         LIGHT_COORDINATES[i].forEach(p => {

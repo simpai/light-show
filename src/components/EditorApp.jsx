@@ -58,9 +58,20 @@ const CHANNEL_NAMES = {
     43: "Left Rear Door Handle",
     44: "Right Rear Door Handle",
     45: "Charge Port",
-    46: "Wiper",
-    47: "Cabin Light",
 };
+
+// Add Left Front Lightbar (46-75)
+for (let i = 0; i < 30; i++) {
+    CHANNEL_NAMES[46 + i] = `Left Front Lightbar ${i + 1}`;
+}
+// Add Right Front Lightbar (76-105)
+for (let i = 0; i < 30; i++) {
+    CHANNEL_NAMES[76 + i] = `Right Front Lightbar ${i + 1}`;
+}
+// Fill up to 199
+for (let i = 106; i < 200; i++) {
+    if (!CHANNEL_NAMES[i]) CHANNEL_NAMES[i] = `Extended Channel ${i}`;
+}
 
 
 
@@ -957,7 +968,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
     const handleExportMatrix = async () => {
         try {
-            const writer = new FseqWriter(48, 20); // 48 channels, 20ms step
+            const writer = new FseqWriter(200, 20); // 200 channels, 20ms step
             const durationMs = project.duration || 10000;
             const frameCount = Math.ceil(durationMs / 20);
             const gridSize = matrixConfig;
@@ -1719,6 +1730,38 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
         });
     };
 
+    const toggleChannelRange = (groupName, start, end) => {
+        const group = lightGroups[groupName];
+        const channels = new Set(group.channels || []);
+
+        // Determine if we should select all or deselect all
+        // Strategy: if any channel in the range is missing, select all. if all are present, deselect all.
+        let allPresent = true;
+        for (let i = start; i <= end; i++) {
+            if (!channels.has(i)) {
+                allPresent = false;
+                break;
+            }
+        }
+
+        if (allPresent) {
+            // Deselect all in range
+            for (let i = start; i <= end; i++) {
+                channels.delete(i);
+            }
+        } else {
+            // Select all in range
+            for (let i = start; i <= end; i++) {
+                channels.add(i);
+            }
+        }
+
+        onUpdate({
+            ...lightGroups,
+            [groupName]: { ...group, channels: Array.from(channels).sort((a, b) => a - b) }
+        });
+    };
+
     const updateGroupColor = (name, color) => {
         onUpdate({
             ...lightGroups,
@@ -1800,7 +1843,25 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
                                     </div>
                                     <span className="channel-count">{channels.length} channels</span>
                                 </div>
-                                <div className="group-actions">
+                                <div className="group-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    {editingGroup === name && (
+                                        <>
+                                            <button
+                                                className="btn-tesla-outline-sm"
+                                                onClick={() => toggleChannelRange(name, 46, 75)}
+                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                            >
+                                                Left Lightbar
+                                            </button>
+                                            <button
+                                                className="btn-tesla-outline-sm"
+                                                onClick={() => toggleChannelRange(name, 76, 105)}
+                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                            >
+                                                Right Lightbar
+                                            </button>
+                                        </>
+                                    )}
                                     <button
                                         className={`btn-secondary ${editingGroup === name ? 'active' : ''}`}
                                         onClick={() => setEditingGroup(editingGroup === name ? null : name)}
@@ -1816,7 +1877,7 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
                             {editingGroup === name && (
                                 <div className="channels-grid-container">
                                     <div className="channels-grid">
-                                        {Array.from({ length: 48 }).map((_, i) => (
+                                        {Array.from({ length: 200 }).map((_, i) => (
                                             <button
                                                 key={i}
                                                 onClick={() => toggleChannel(name, i)}
@@ -1850,6 +1911,22 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
                     transition: background 0.2s;
                 }
                 .btn-tesla-sm:hover { background: #c01818; }
+                .btn-tesla-outline-sm {
+                    background: transparent;
+                    color: #e82020;
+                    border: 1px solid #e82020;
+                    border-radius: 4px;
+                    padding: 4px 10px;
+                    font-size: 13px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-weight: 500;
+                }
+                .btn-tesla-outline-sm:hover {
+                    background: rgba(232, 32, 32, 0.1);
+                    border-color: #ff2a2a;
+                    color: #ff2a2a;
+                }
                 .light-group-editor .editor-header {
                     display: flex;
                     justify-content: space-between;

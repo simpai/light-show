@@ -24,11 +24,13 @@ export const CHANNELS = {
     "Outer Main Beam R": 19,
     "Tail Light Inner L": 20,
     "Tail Light Inner R": 21,
-    // Add more indices to fill 48
+    // Add more indices to fill up to the limit
 };
 
+const CHANNEL_COUNT = 200;
+
 // Fill remaining channels if not explicitly named
-for (let i = 0; i < 48; i++) {
+for (let i = 0; i < CHANNEL_COUNT; i++) {
     const name = Object.keys(CHANNELS).find(key => CHANNELS[key] === i);
     if (!name) {
         CHANNELS[`Channel ${i}`] = i;
@@ -57,10 +59,10 @@ export class ShowRenderer {
      * @returns {Uint8Array} Array of channel values (0-255)
      */
     getFrame(timeMs) {
-        if (!this.project) return new Uint8Array(48).fill(0);
+        if (!this.project) return new Uint8Array(CHANNEL_COUNT).fill(0);
 
         // Initialize frame with zeros
-        const frameData = new Uint8Array(48).fill(0);
+        const frameData = new Uint8Array(CHANNEL_COUNT).fill(0);
 
         // Iterate over layers (bottom to top)
         for (const layer of this.project.layers) {
@@ -69,7 +71,7 @@ export class ShowRenderer {
             const layerFrame = this.renderLayer(layer, timeMs);
 
             // Mix layer into main frame (Simple Max blending for now)
-            for (let i = 0; i < 48; i++) {
+            for (let i = 0; i < CHANNEL_COUNT; i++) {
                 frameData[i] = Math.max(frameData[i], layerFrame[i]);
             }
         }
@@ -92,7 +94,7 @@ export class ShowRenderer {
             for (let r = 0; r < rows; r++) {
                 grid[r] = [];
                 for (let c = 0; c < cols; c++) {
-                    grid[r][c] = new Uint8Array(48).fill(0);
+                    grid[r][c] = new Uint8Array(CHANNEL_COUNT).fill(0);
                 }
             }
             return grid;
@@ -136,9 +138,9 @@ export class ShowRenderer {
      * Get frame data for a specific position in the grid
      */
     getFrameForPosition(timeMs, row, col, gridSize) {
-        if (!this.project) return new Uint8Array(48).fill(0);
+        if (!this.project) return new Uint8Array(CHANNEL_COUNT).fill(0);
 
-        const frameData = new Uint8Array(48).fill(0);
+        const frameData = new Uint8Array(CHANNEL_COUNT).fill(0);
 
         for (const layer of this.project.layers) {
             if (layer.muted) continue;
@@ -181,11 +183,11 @@ export class ShowRenderer {
 
                 // Only render if within clip duration
                 if (clipTime >= 0 && clipTime < clip.duration) {
-                    const cellFrame = new Uint8Array(48).fill(0);
+                    const cellFrame = new Uint8Array(CHANNEL_COUNT).fill(0);
                     this.renderClip(clip, clipTime, cellFrame, row, col, gridSize, layer);
 
                     // Mix into frame
-                    for (let i = 0; i < 48; i++) {
+                    for (let i = 0; i < CHANNEL_COUNT; i++) {
                         frameData[i] = Math.max(frameData[i], cellFrame[i]);
                     }
                 }
@@ -250,7 +252,7 @@ export class ShowRenderer {
     }
 
     renderLayer(layer, timeMs) {
-        const frame = new Uint8Array(48).fill(0);
+        const frame = new Uint8Array(CHANNEL_COUNT).fill(0);
 
         // Find active clip at this time
         const clip = layer.clips.find(c =>

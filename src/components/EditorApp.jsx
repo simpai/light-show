@@ -583,6 +583,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             setIsPlaying(false);
             setCurrentTime(0);
 
+            // Reset input value to allow re-uploading same file
+            e.target.value = '';
+
             // Get duration from audio file
             const audio = new Audio(audioUrlRef.current);
             audio.addEventListener('loadedmetadata', () => {
@@ -625,6 +628,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 const parsed = await LayoutParser.parseLayoutImage(file);
                 setLayoutData(parsed);
                 setLayoutFileName(file.name);
+
+                // Reset input value
+                e.target.value = '';
 
                 // Update matrix config based on image dimensions
                 const newConfig = {
@@ -839,6 +845,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                                 detail: { clipId: newClip.id, file }
                             }));
                         }
+                        e.target.value = ''; // Reset
                     };
                     input.click();
                 }
@@ -1115,6 +1122,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         } catch (err) {
             console.error('Failed to load project bundle:', err);
             alert('Failed to load project bundle: ' + err.message);
+        } finally {
+            // Optional: if handleLoadProject was called from an input, we might need a way to reset it
+            // However, the caller should handle it. Let's look at the caller in JSX.
         }
     };
 
@@ -1174,7 +1184,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <input
                             type="file"
                             accept=".ls,.json,.zip"
-                            onChange={(e) => e.target.files[0] && handleLoadProject(e.target.files[0])}
+                            onChange={(e) => {
+                                if (e.target.files[0]) {
+                                    handleLoadProject(e.target.files[0]);
+                                }
+                                e.target.value = ''; // Reset to allow reloading same file
+                            }}
                             style={{ display: 'none' }}
                         />
                     </label>
@@ -1791,6 +1806,7 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
                     alert('Invalid JSON file');
                 }
             };
+            e.target.value = ''; // Reset
         };
         input.click();
     };
@@ -2200,7 +2216,10 @@ function CarGroupManager({ carGroups = [], onUpdate, onSelect }) {
                     type="file"
                     accept=".json"
                     style={{ display: 'none' }}
-                    onChange={handleImport}
+                    onChange={(e) => {
+                        handleImport(e);
+                        e.target.value = ''; // Reset
+                    }}
                 />
             </div>
 

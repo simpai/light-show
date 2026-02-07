@@ -30,6 +30,9 @@ const FseqViewer = ({ onExit }) => {
             setFseqData({ parser, header, buffer });
             // Reset view
             setViewState({ offsetX: 0, offsetY: 0, zoomX: 2.0, zoomY: 10.0 });
+
+            // Reset input to allow reloading same file
+            e.target.value = '';
         } catch (err) {
             alert("Failed to parse FSEQ: " + err.message);
         }

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -84,6 +84,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
     const [bookmarks, setBookmarks] = useState([]);
+    const [snapshot, setSnapshot] = useState(null);
     const [showHelpModal, setShowHelpModal] = useState(false);
 
     // Sync UI settings to localStorage
@@ -684,6 +685,27 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         ProjectState.fromJSON(next).then(loaded => {
             setProject(loaded);
             rendererRef.current.setProject(loaded);
+        });
+    };
+
+    const handleTakeSnapshot = () => {
+        const currentData = project.toJSON();
+        setSnapshot(currentData);
+        console.log('Snapshot taken');
+    };
+
+    const handleRestoreSnapshot = () => {
+        if (!snapshot) return;
+
+        // Make the restore undoable
+        const currentData = project.toJSON();
+        setHistory(prev => [...prev.slice(-19), currentData]);
+        setRedoStack([]);
+
+        ProjectState.fromJSON(snapshot).then(loaded => {
+            setProject(loaded);
+            rendererRef.current.setProject(loaded);
+            console.log('Snapshot restored');
         });
     };
 
@@ -1374,12 +1396,18 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     <button onClick={handleReset} className="btn-icon" title="Reset to Start">
                         <SkipBack size={24} />
                     </button>
-                    <div className="history-controls" style={{ display: 'flex', gap: '5px', marginLeft: '10px' }}>
+                    <div className="history-controls" style={{ display: 'flex', gap: '5px', marginLeft: '10px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
                         <button onClick={handleUndo} disabled={history.length === 0} className="btn-icon" title="Undo (Ctrl+Z)">
                             <Undo size={18} />
                         </button>
                         <button onClick={handleRedo} disabled={redoStack.length === 0} className="btn-icon" title="Redo (Ctrl+Y)">
                             <Redo size={18} />
+                        </button>
+                        <button onClick={handleTakeSnapshot} className="btn-icon" title="Take Snapshot" style={{ marginLeft: '5px', color: '#4a90e2' }}>
+                            <Camera size={18} />
+                        </button>
+                        <button onClick={handleRestoreSnapshot} disabled={!snapshot} className={`btn-icon ${!snapshot ? 'disabled' : ''}`} title="Restore Snapshot" style={{ color: '#e82020' }}>
+                            <RotateCcw size={18} />
                         </button>
                     </div>
                     <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>
@@ -1551,9 +1579,18 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                                         <td>Play from Bookmark</td>
                                     </tr>
                                     <tr>
-                                        <td rowSpan="4" className="cat-cell">Editing</td>
+                                        <td rowSpan="5" className="cat-cell">Editing</td>
                                         <td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td>
                                         <td>Undo / Redo</td>
+                                    </tr>
+                                    <tr>
+                                        <td className="cat-cell" style={{ borderTop: 'none', borderLeft: 'none' }}>Snapshot</td>
+                                        <td colSpan="2">
+                                            <div style={{ display: 'flex', gap: '15px' }}>
+                                                <span><Camera size={14} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#4a90e2' }} /> Take Snapshot</span>
+                                                <span><RotateCcw size={14} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#e82020' }} /> Restore Snapshot</span>
+                                            </div>
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td><kbd>Ctrl+C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></td>

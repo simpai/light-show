@@ -24,6 +24,7 @@ export class ProjectState {
             'Yellow': { channels: [12, 13, 20, 21, 22, 23], color: '#ffbb00' } // Front Turn and Side Repeaters
         };
         this.carGroups = []; // Array of { id, name, selection: string[], thumbnail: string }
+        this.jitter = 0; // ms
     }
 
     addLayer(name = 'New Layer') {
@@ -90,7 +91,8 @@ export class ProjectState {
             duration: this.duration,
             analysis: this.analysis,
             lightGroups: this.lightGroups,
-            carGroups: this.carGroups
+            carGroups: this.carGroups,
+            jitter: this.jitter
         };
     }
 
@@ -176,6 +178,7 @@ export class ProjectState {
         }
 
         project.carGroups = data.carGroups || [];
+        project.jitter = data.jitter || 0;
         return project;
     }
 

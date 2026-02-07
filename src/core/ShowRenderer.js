@@ -42,6 +42,11 @@ export class ShowRenderer {
         this.project = null;
         this.matrixMode = false;
         this.matrixConfig = { rows: 10, cols: 10 };
+        this.jitterSeed = Math.random();
+    }
+
+    setJitterSeed(seed) {
+        this.jitterSeed = seed;
     }
 
     setProject(project) {
@@ -162,6 +167,17 @@ export class ShowRenderer {
                     }
                 }
 
+                // Apply Jitter if enabled
+                let jitterOffset = 0;
+                if (this.project.jitter > 0) {
+                    // Stable per-car random offset using position and seed
+                    // A simple hash-like function for predictable randomness
+                    const carIndex = (row * gridSize.cols) + col;
+                    const val = Math.sin(carIndex * 12.9898 + this.jitterSeed * 78.233) * 43758.5453;
+                    const normalized = val - Math.floor(val); // 0 to 1
+                    jitterOffset = (normalized * 2 - 1) * this.project.jitter; // -jitter to +jitter
+                }
+
                 // Calculate position-based time offset
                 let timeOffset = 0;
                 if (clip.pattern && clip.pattern !== 'uniform') {
@@ -178,7 +194,7 @@ export class ShowRenderer {
                     }
                 }
 
-                const adjustedTime = timeMs + timeOffset;
+                const adjustedTime = timeMs + timeOffset + jitterOffset;
                 const clipTime = adjustedTime - clip.startTime;
 
                 // Only render if within clip duration

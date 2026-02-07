@@ -553,6 +553,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     audioRef.current.play()
                         .then(() => {
                             console.log('Audio playing successfully');
+                            // Randomize jitter seed for this session (with fallback for stale instances)
+                            if (typeof rendererRef.current.setJitterSeed === 'function') {
+                                rendererRef.current.setJitterSeed(Math.random());
+                            } else {
+                                rendererRef.current.jitterSeed = Math.random();
+                            }
                             setIsPlaying(true);
                         })
                         .catch(err => {
@@ -563,6 +569,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             } else {
                 // Manual playback start
                 lastTickRef.current = performance.now();
+
+                // Randomize jitter seed for this session (with fallback for stale instances)
+                if (typeof rendererRef.current.setJitterSeed === 'function') {
+                    rendererRef.current.setJitterSeed(Math.random());
+                } else {
+                    rendererRef.current.jitterSeed = Math.random();
+                }
+
                 setIsPlaying(true);
             }
         }
@@ -1465,6 +1479,33 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                                 fontSize: '12px'
                             }}
                         />
+                    </div>
+
+                    <div className="jitter-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '20px' }}>
+                        <span style={{ fontSize: '12px', color: '#666' }}>Jitter:</span>
+                        <input
+                            type="number"
+                            value={project.jitter || 0}
+                            onChange={e => {
+                                const val = parseInt(e.target.value) || 0;
+                                const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                                newProject.jitter = val;
+                                setProject(newProject);
+                                rendererRef.current.setProject(newProject);
+                            }}
+                            style={{
+                                width: '50px',
+                                background: '#333',
+                                border: '1px solid #444',
+                                color: 'white',
+                                padding: '2px 5px',
+                                borderRadius: '4px',
+                                fontSize: '12px'
+                            }}
+                            min="0"
+                            title="Jitter (ms)"
+                        />
+                        <span style={{ fontSize: '11px', color: '#666' }}>ms</span>
                     </div>
                     <div className="control-group" style={{ marginLeft: '20px', display: 'flex', gap: '5px' }}>
                         <button onClick={handleAddTrack} className="btn-icon" title="Add Track">

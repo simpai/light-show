@@ -60,17 +60,9 @@ const CHANNEL_NAMES = {
     45: "Charge Port",
 };
 
-// Add Left Front Lightbar (46-75)
-for (let i = 0; i < 30; i++) {
-    CHANNEL_NAMES[46 + i] = `Left Front Lightbar ${i + 1}`;
-}
-// Add Right Front Lightbar (76-105)
-for (let i = 0; i < 30; i++) {
-    CHANNEL_NAMES[76 + i] = `Right Front Lightbar ${i + 1}`;
-}
-// Fill up to 199
-for (let i = 106; i < 200; i++) {
-    if (!CHANNEL_NAMES[i]) CHANNEL_NAMES[i] = `Extended Channel ${i}`;
+// Channels up to 47 are standard for Tesla
+for (let i = 46; i < 48; i++) {
+    if (!CHANNEL_NAMES[i]) CHANNEL_NAMES[i] = `Channel ${i}`;
 }
 
 
@@ -936,7 +928,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     return;
                 }
 
-                const content = await zip.generateAsync({ type: 'blob' });
+                const content = await zip.generateAsync({
+                    type: 'blob',
+                    compression: "DEFLATE",
+                    compressionOptions: { level: 9 }
+                });
                 const url = URL.createObjectURL(content);
                 const a = document.createElement('a');
                 a.href = url;
@@ -968,7 +964,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
     const handleExportMatrix = async () => {
         try {
-            const writer = new FseqWriter(200, 20); // 200 channels, 20ms step
+            const writer = new FseqWriter(48, 20); // 48 channels, 20ms step
             const durationMs = project.duration || 10000;
             const frameCount = Math.ceil(durationMs / 20);
             const gridSize = matrixConfig;
@@ -1015,7 +1011,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Export failed:', error);
-            alert('Failed to export light show.');
+            alert('Failed to export light show.', error);
         }
     };
 

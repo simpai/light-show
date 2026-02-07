@@ -6,7 +6,7 @@ export class FseqWriter {
      * @param {number} channelCount - Number of channels (usually 48 for Tesla)
      * @param {number} stepTimeMs - Time per frame in milliseconds (usually 20ms)
      */
-    constructor(channelCount = 200, stepTimeMs = 20) {
+    constructor(channelCount = 48, stepTimeMs = 20) {
         this.channelCount = channelCount;
         this.stepTimeMs = stepTimeMs;
     }
@@ -19,13 +19,14 @@ export class FseqWriter {
     createFseq(frames) {
         const frameCount = frames.length;
         const headerSize = 24;
-        const dataSize = frameCount * this.channelCount;
-        const buffer = new ArrayBuffer(headerSize + dataSize);
-        const view = new DataView(buffer);
-        const dataUint8 = new Uint8Array(buffer);
+
+        // Use a small buffer just for the header
+        const headerBuffer = new ArrayBuffer(headerSize);
+        const view = new DataView(headerBuffer);
+        const headerUint8 = new Uint8Array(headerBuffer);
 
         // 1. Magic: PSEQ
-        dataUint8.set([0x50, 0x53, 0x45, 0x51], 0);
+        headerUint8.set([0x50, 0x53, 0x45, 0x51], 0);
 
         // 2. Data Offset (offset to start of channel data)
         view.setUint16(4, headerSize, true);
@@ -50,7 +51,6 @@ export class FseqWriter {
         view.setUint8(19, 0);
 
         // 9. Compression (0 = none)
-        // High 4 bits: Compression type (0=None), Low 12 bits: Block count (0)
         view.setUint16(20, 0, true);
 
         // 10. Sparse Ranges (0)
@@ -59,13 +59,9 @@ export class FseqWriter {
         // 11. Reserved (0)
         view.setUint8(23, 0);
 
-        // 12. Frame Data
-        for (let i = 0; i < frameCount; i++) {
-            const offset = headerSize + (i * this.channelCount);
-            dataUint8.set(frames[i], offset);
-        }
-
-        return new Blob([buffer], { type: 'application/octet-stream' });
+        // Build the final blob by concatenating the header and all frame arrays.
+        // This avoids allocating one giant continuous ArrayBuffer.
+        return new Blob([headerBuffer, ...frames], { type: 'application/octet-stream' });
     }
 
     /**

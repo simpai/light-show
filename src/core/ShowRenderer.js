@@ -27,7 +27,7 @@ export const CHANNELS = {
     // Add more indices to fill up to the limit
 };
 
-const CHANNEL_COUNT = 200;
+const CHANNEL_COUNT = 48;
 
 // Fill remaining channels if not explicitly named
 for (let i = 0; i < CHANNEL_COUNT; i++) {

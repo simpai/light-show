@@ -997,7 +997,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     const rowLetter = String.fromCharCode(65 + r); // A, B, C...
                     const colId = (c + 1).toString().padStart(2, '0'); // 01, 02...
                     const blob = writer.createFseq(frames);
-                    zip.file(`${rowLetter}${colId}.fseq`, blob);
+                    const arrayBuffer = await blob.arrayBuffer(); // Convert to ArrayBuffer for JSZip
+                    zip.file(`${rowLetter}${colId}.fseq`, arrayBuffer);
                     hasFiles = true;
                 }
             }
@@ -1007,7 +1008,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 return;
             }
 
-            const content = await zip.generateAsync({ type: 'blob' });
+            const content = await zip.generateAsync({
+                type: 'blob',
+                compression: "DEFLATE",
+                compressionOptions: { level: 9 }
+            });
             const url = URL.createObjectURL(content);
             const a = document.createElement('a');
             a.href = url;
@@ -1055,7 +1060,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 zip.file(audioFileName || "audio.mp3", audioFile);
             }
 
-            const content = await zip.generateAsync({ type: 'blob' });
+            const content = await zip.generateAsync({
+                type: 'blob',
+                compression: "DEFLATE",
+                compressionOptions: { level: 9 }
+            });
             const url = URL.createObjectURL(content);
 
             const a = document.createElement('a');

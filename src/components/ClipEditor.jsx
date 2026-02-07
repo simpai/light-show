@@ -213,7 +213,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 </div>
 
                 {clip.type === 'gif' && (
-                    <div className="form-group grid-2" style={{ marginTop: '8px' }}>
+                    <div className="form-group grid-3" style={{ marginTop: '8px' }}>
                         <div className="input-group-compact">
                             <label className="compact-label">BPM</label>
                             <input
@@ -242,6 +242,20 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                                 }}
                                 min="0.125"
                                 step="0.125"
+                            />
+                        </div>
+                        <div className="input-group-compact">
+                            <label className="compact-label">Repetitions</label>
+                            <input
+                                type="number"
+                                value={clip.repetitions || 1}
+                                onChange={e => {
+                                    const repetitions = parseInt(e.target.value);
+                                    const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
+                                    const duration = calculateDuration('beat', updatedClip);
+                                    onChange({ ...updatedClip, duration });
+                                }}
+                                min="1"
                             />
                         </div>
                     </div>
@@ -348,101 +362,105 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 </>
             )}
 
-            <div className="section-container content-box">
-                <label className="section-title">Target Light Groups</label>
-                <div className="channels-list">
-                    {Object.entries(displayGroups).map(([label, groupData]) => {
-                        const isChecked = (clip.targetLightGroups || []).includes(label);
-                        return (
-                            <label key={label} className="channel-item">
-                                <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => toggleLightGroup(label)}
-                                />
-                                <span>{label}</span>
-                            </label>
-                        );
-                    })}
-                </div>
-            </div>
-
-            <div className="section-container content-box">
-                <div className="ramping-header-row">
-                    <div className="toggle-group-inline">
-                        <input
-                            id="ramping-toggle"
-                            type="checkbox"
-                            className="toggle-checkbox"
-                            checked={clip.rampingEnabled || false}
-                            onChange={e => {
-                                const enabled = e.target.checked;
-                                if (enabled) {
-                                    onChange({
-                                        ...clip,
-                                        rampingEnabled: true,
-                                        rampOnDuration: clip.rampOnDuration || 500,
-                                        rampOffDuration: clip.rampOffDuration || 500
-                                    });
-                                } else {
-                                    handleChange('rampingEnabled', false);
-                                }
-                            }}
-                        />
-                        <label htmlFor="ramping-toggle" className="section-title-inline">Ramping</label>
+            {clip.type !== 'gif' && (
+                <div className="section-container content-box">
+                    <label className="section-title">Target Light Groups</label>
+                    <div className="channels-list">
+                        {Object.entries(displayGroups).map(([label, groupData]) => {
+                            const isChecked = (clip.targetLightGroups || []).includes(label);
+                            return (
+                                <label key={label} className="channel-item">
+                                    <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => toggleLightGroup(label)}
+                                    />
+                                    <span>{label}</span>
+                                </label>
+                            );
+                        })}
                     </div>
-                    {clip.rampingEnabled && (
-                        <div className="ramping-info-inline">
-                            {(() => {
-                                const rampOnDur = (clip.rampOnEnabled !== false) ? (clip.rampOnDuration || 0) : 0;
-                                const rampOffDur = (clip.rampOffEnabled !== false) ? (clip.rampOffDuration || 0) : 0;
-                                const maxDur = clip.duration - rampOnDur - rampOffDur;
+                </div>
+            )}
 
-                                if (maxDur < 0) {
-                                    return <span className="error-text">⚠️ Overlap: {Math.abs(maxDur).toFixed(0)}ms</span>;
-                                }
-                                return (
-                                    <span className="info-text">
-                                        FULL: <span className="highlight">{(maxDur / 1000).toFixed(2)}s</span>
-                                    </span>
-                                );
-                            })()}
+            {clip.type !== 'gif' && (
+                <div className="section-container content-box">
+                    <div className="ramping-header-row">
+                        <div className="toggle-group-inline">
+                            <input
+                                id="ramping-toggle"
+                                type="checkbox"
+                                className="toggle-checkbox"
+                                checked={clip.rampingEnabled || false}
+                                onChange={e => {
+                                    const enabled = e.target.checked;
+                                    if (enabled) {
+                                        onChange({
+                                            ...clip,
+                                            rampingEnabled: true,
+                                            rampOnDuration: clip.rampOnDuration || 500,
+                                            rampOffDuration: clip.rampOffDuration || 500
+                                        });
+                                    } else {
+                                        handleChange('rampingEnabled', false);
+                                    }
+                                }}
+                            />
+                            <label htmlFor="ramping-toggle" className="section-title-inline">Ramping</label>
+                        </div>
+                        {clip.rampingEnabled && (
+                            <div className="ramping-info-inline">
+                                {(() => {
+                                    const rampOnDur = (clip.rampOnEnabled !== false) ? (clip.rampOnDuration || 0) : 0;
+                                    const rampOffDur = (clip.rampOffEnabled !== false) ? (clip.rampOffDuration || 0) : 0;
+                                    const maxDur = clip.duration - rampOnDur - rampOffDur;
+
+                                    if (maxDur < 0) {
+                                        return <span className="error-text">⚠️ Overlap: {Math.abs(maxDur).toFixed(0)}ms</span>;
+                                    }
+                                    return (
+                                        <span className="info-text">
+                                            FULL: <span className="highlight">{(maxDur / 1000).toFixed(2)}s</span>
+                                        </span>
+                                    );
+                                })()}
+                            </div>
+                        )}
+                    </div>
+
+                    {clip.rampingEnabled && (
+                        <div className="ramping-controls-horizontal">
+                            <div className="ramping-row">
+                                <label className="ramp-label-inline">ON</label>
+                                <select
+                                    className="ramp-select"
+                                    value={clip.rampOnDuration || 0}
+                                    onChange={e => handleChange('rampOnDuration', parseInt(e.target.value))}
+                                >
+                                    <option value="0">Instant (0ms)</option>
+                                    <option value="500">500 ms</option>
+                                    <option value="1000">1000 ms</option>
+                                    <option value="2000">2000 ms</option>
+                                </select>
+                            </div>
+
+                            <div className="ramping-row">
+                                <label className="ramp-label-inline">OFF</label>
+                                <select
+                                    className="ramp-select"
+                                    value={clip.rampOffDuration || 0}
+                                    onChange={e => handleChange('rampOffDuration', parseInt(e.target.value))}
+                                >
+                                    <option value="0">Instant (0ms)</option>
+                                    <option value="500">500 ms</option>
+                                    <option value="1000">1000 ms</option>
+                                    <option value="2000">2000 ms</option>
+                                </select>
+                            </div>
                         </div>
                     )}
                 </div>
-
-                {clip.rampingEnabled && (
-                    <div className="ramping-controls-horizontal">
-                        <div className="ramping-row">
-                            <label className="ramp-label-inline">ON</label>
-                            <select
-                                className="ramp-select"
-                                value={clip.rampOnDuration || 0}
-                                onChange={e => handleChange('rampOnDuration', parseInt(e.target.value))}
-                            >
-                                <option value="0">Instant (0ms)</option>
-                                <option value="500">500 ms</option>
-                                <option value="1000">1000 ms</option>
-                                <option value="2000">2000 ms</option>
-                            </select>
-                        </div>
-
-                        <div className="ramping-row">
-                            <label className="ramp-label-inline">OFF</label>
-                            <select
-                                className="ramp-select"
-                                value={clip.rampOffDuration || 0}
-                                onChange={e => handleChange('rampOffDuration', parseInt(e.target.value))}
-                            >
-                                <option value="0">Instant (0ms)</option>
-                                <option value="500">500 ms</option>
-                                <option value="1000">1000 ms</option>
-                                <option value="2000">2000 ms</option>
-                            </select>
-                        </div>
-                    </div>
-                )}
-            </div>
+            )}
 
             {clip.type === 'gif' && (
                 <div className="section-container content-box">

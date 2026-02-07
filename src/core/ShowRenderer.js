@@ -312,7 +312,8 @@ export class ShowRenderer {
             const r = row !== null ? row : 0;
             const c = col !== null ? col : 0;
             const gs = gridSize !== null ? gridSize : { rows: 1, cols: 1 };
-            this.renderPatternForPosition(clip, clipTime, rampingValue / 255, frame, r, c, gs, layer);
+            // GIFs bypass ramping/fade calculations and use full intensity
+            this.renderPatternForPosition(clip, clipTime, 1.0, frame, r, c, gs, layer);
         }
     }
 
@@ -395,16 +396,10 @@ export class ShowRenderer {
         if (layer && layer.lightMapping && this.project.lightGroups) {
             const mapping = layer.lightMapping;
             const groups = this.project.lightGroups;
-            const activeGroups = clip.targetLightGroups || [];
 
             const getGroupChs = (mappingKey) => {
                 const groupName = mapping[mappingKey];
                 if (!groupName) return [];
-
-                // MASKING: If this group isn't selected, don't render to it
-                if (!activeGroups.includes(groupName)) {
-                    return [];
-                }
 
                 const group = groups[groupName];
                 if (!group) return [];

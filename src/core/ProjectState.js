@@ -25,6 +25,7 @@ export class ProjectState {
         };
         this.carGroups = []; // Array of { id, name, selection: string[], thumbnail: string }
         this.jitter = 0; // ms
+        this.waveform = null; // { peaks: number[], pointsPerSecond: number }
     }
 
     addLayer(name = 'New Layer') {
@@ -92,7 +93,8 @@ export class ProjectState {
             analysis: this.analysis,
             lightGroups: this.lightGroups,
             carGroups: this.carGroups,
-            jitter: this.jitter
+            jitter: this.jitter,
+            waveform: this.waveform
         };
     }
 
@@ -179,6 +181,7 @@ export class ProjectState {
 
         project.carGroups = data.carGroups || [];
         project.jitter = data.jitter || 0;
+        project.waveform = data.waveform || null;
         return project;
     }
 

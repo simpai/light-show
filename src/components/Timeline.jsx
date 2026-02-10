@@ -2,6 +2,42 @@ import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
 import { Settings, Eye, EyeOff } from 'lucide-react';
 
+const WaveformCanvas = ({ waveform, pixelsPerSecond, totalWidth, height = 40 }) => {
+    const canvasRef = useRef(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || !waveform) return;
+
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        canvas.width = totalWidth * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = `${totalWidth}px`;
+        canvas.style.height = `${height}px`;
+        ctx.scale(dpr, dpr);
+
+        ctx.clearRect(0, 0, totalWidth, height);
+
+        // Brighter and more vivid color: Neon Cyan
+        ctx.fillStyle = '#00f2ff';
+        ctx.globalAlpha = 0.6;
+
+        const { peaks, pointsPerSecond } = waveform;
+        const widthPerPoint = pixelsPerSecond / pointsPerSecond;
+
+        peaks.forEach((peak, i) => {
+            const x = i * widthPerPoint;
+            const h = peak * height * 0.95;
+            // Draw symmetric waveform for better look in ruler
+            ctx.fillRect(x, (height - h) / 2, Math.max(1, widthPerPoint - 0.5), h);
+        });
+    }, [waveform, pixelsPerSecond, totalWidth, height]);
+
+    return <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 1 }} />;
+};
+
 export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipIds = [], selectedLayerId, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
     const pixelsPerSecond = zoom || 50;
     const totalWidth = (duration / 1000) * pixelsPerSecond;
@@ -512,6 +548,16 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             />
                         ))}
 
+                        {/* Audio Waveform in Ruler */}
+                        {project.waveform && (
+                            <WaveformCanvas
+                                waveform={project.waveform}
+                                pixelsPerSecond={pixelsPerSecond}
+                                totalWidth={totalWidth}
+                                height={40}
+                            />
+                        )}
+
                         {/* Playhead in Ruler */}
                         <div className="playhead ruler-playhead" style={{ left: (currentTime / 1000) * pixelsPerSecond }} />
                     </div>
@@ -814,7 +860,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .timeline-ruler-container { flex: 1; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
                 .timeline-ruler-container::-webkit-scrollbar { display: none; }
                 .ruler { height: 40px; position: relative; background: #1a1a1a; }
-                .ruler-mark { position: absolute; top: 0; font-size: 10px; color: #666; border-left: 1px solid #333; padding-left: 2px; height: 100%; }
+                .ruler-mark { position: absolute; top: 0; font-size: 10px; color: #eee; border-left: 1px solid #444; padding-left: 2px; height: 100%; z-index: 2; text-shadow: 1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black; font-weight: bold; }
                 .beat-marker { position: absolute; bottom: 0; width: 2px; height: 15px; background: #4a90e2; opacity: 0.6; }
                 .onset-marker { position: absolute; bottom: 0; width: 2px; height: 10px; background: #fbbf24; opacity: 0.7; }
                 .timeline-tracks-row { display: flex; flex: 1; overflow: auto; position: relative; }
@@ -915,6 +961,9 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     background: #22c55e !important;
                     width: 10px;
                     box-shadow: 0 0 8px rgba(34, 197, 94, 1);
+                }
+                .track-lanes canvas {
+                    display: none;
                 }
                 .resize-handle.left { left: 0; border-radius: 4px 0 0 4px; border-right: 1px solid rgba(0,0,0,0.2); }
                 .resize-handle.right { right: 0; border-radius: 0 4px 4px 0; border-left: 1px solid rgba(0,0,0,0.2); }

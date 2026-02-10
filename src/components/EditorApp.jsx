@@ -8,6 +8,7 @@ import ClipEditor from './ClipEditor';
 import { LayoutParser } from '../utils/LayoutParser';
 import { FseqWriter } from '../utils/FseqWriter';
 import { XsqWriter } from '../utils/XsqWriter';
+import { AudioWaveformManager } from '../utils/AudioWaveformManager';
 import JSZip from 'jszip';
 import MatrixPreview2D from './MatrixPreview2D';
 
@@ -603,9 +604,21 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             // Get duration from audio file
             const audio = new Audio(audioUrlRef.current);
-            audio.addEventListener('loadedmetadata', () => {
+            audio.addEventListener('loadedmetadata', async () => {
                 const duration = audio.duration * 1000;
                 project.duration = duration;
+
+                // Generate waveform
+                try {
+                    const waveformData = await AudioWaveformManager.generateWaveform(file, 20);
+                    project.waveform = {
+                        peaks: waveformData.peaks,
+                        pointsPerSecond: 20
+                    };
+                } catch (err) {
+                    console.error('Failed to generate waveform:', err);
+                }
+
                 setProject(Object.assign(Object.create(Object.getPrototypeOf(project)), project));
             });
         }

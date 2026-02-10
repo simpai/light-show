@@ -77,7 +77,8 @@ export default function MatrixPreview2D({
     lightGroups = {},
     selectedCars = new Set(), // Set of "r,c" strings
     onSelectionChange,
-    fitTrigger = 0
+    fitTrigger = 0,
+    updateTrigger = 0
 }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
@@ -321,7 +322,7 @@ export default function MatrixPreview2D({
             ctx.fillRect(x, y, w, h);
             ctx.strokeRect(x, y, w, h);
         }
-    }, [matrixData, rows, cols, layoutData, showGroundLight, lightGroups, selectedCars, dragStart, dragEnd, tempSelection, selectionMode]);
+    }, [matrixData, rows, cols, layoutData, showGroundLight, lightGroups, selectedCars, dragStart, dragEnd, tempSelection, selectionMode, updateTrigger]);
 
     const getCoord = (e) => {
         const canvas = canvasRef.current;

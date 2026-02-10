@@ -43,6 +43,8 @@ export class ShowRenderer {
         this.matrixMode = false;
         this.matrixConfig = { rows: 10, cols: 10 };
         this.jitterSeed = Math.random();
+        this.matrixBuffer = []; // Cache for matrix frames
+        this.initMatrixBuffer();
     }
 
     setJitterSeed(seed) {
@@ -56,6 +58,21 @@ export class ShowRenderer {
     setMatrixMode(enabled, config = { rows: 10, cols: 10 }) {
         this.matrixMode = enabled;
         this.matrixConfig = config;
+        this.initMatrixBuffer();
+    }
+
+    initMatrixBuffer() {
+        const { rows, cols } = this.matrixConfig;
+        // Only reallocate if dimensions changed
+        if (this.matrixBuffer.length !== rows || (this.matrixBuffer[0] && this.matrixBuffer[0].length !== cols)) {
+            this.matrixBuffer = [];
+            for (let r = 0; r < rows; r++) {
+                this.matrixBuffer[r] = [];
+                for (let c = 0; c < cols; c++) {
+                    this.matrixBuffer[r][c] = new Uint8Array(CHANNEL_COUNT).fill(0);
+                }
+            }
+        }
     }
 
     /**
@@ -73,6 +90,8 @@ export class ShowRenderer {
         for (const layer of this.project.layers) {
             if (layer.muted) continue;
 
+            // Render layer directly into frameData (simplified for now, blending is Max)
+            // TODO: Optimize renderLayer to write to outFrame to avoid this allocation too
             const layerFrame = this.renderLayer(layer, timeMs);
 
             // Mix layer into main frame (Simple Max blending for now)
@@ -91,27 +110,70 @@ export class ShowRenderer {
      * @returns {Array<Array<Uint8Array>>} 2D array of frame data [row][col]
      */
     getMatrixFrame(timeMs, config = null) {
-        const { rows, cols } = config || this.matrixConfig;
-        const grid = [];
+        // If config is provided and different, we might need a temp buffer or just re-init
+        // For performance, we assume standard usage uses the set matrixConfig
+        let rows, cols;
+        let useCachedBuffer = false;
 
-        if (!this.project) {
-            // Return empty grid
+        if (config) {
+            rows = config.rows;
+            cols = config.cols;
+            // potential optimization: check if config matches this.matrixConfig
+            if (rows === this.matrixConfig.rows && cols === this.matrixConfig.cols) {
+                useCachedBuffer = true;
+            }
+        } else {
+            rows = this.matrixConfig.rows;
+            cols = this.matrixConfig.cols;
+            useCachedBuffer = true;
+        }
+
+        // If we can't use cache (rare custom config), fall back to old alloc method
+        if (!useCachedBuffer) {
+            const grid = [];
+            if (!this.project) {
+                for (let r = 0; r < rows; r++) {
+                    grid[r] = [];
+                    for (let c = 0; c < cols; c++) {
+                        grid[r][c] = new Uint8Array(CHANNEL_COUNT).fill(0);
+                    }
+                }
+                return grid;
+            }
+            // ... (rest of fallback logic omitted for brevity, but could just call new implementation with new grid)
+            // Re-implementing simplified fallback for custom config to avoid complexity:
             for (let r = 0; r < rows; r++) {
                 grid[r] = [];
                 for (let c = 0; c < cols; c++) {
-                    grid[r][c] = new Uint8Array(CHANNEL_COUNT).fill(0);
+                    grid[r][c] = this.getFrameForPosition(timeMs, r, c, { rows, cols });
                 }
             }
             return grid;
         }
 
+
+        // Use Cached Buffer
+        const grid = this.matrixBuffer;
+
+        // 1. Clear Buffer
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                grid[r][c].fill(0);
+            }
+        }
+
+        if (!this.project) return grid;
+
         // Check if any clip uses position-based patterns or is a gif type
         let hasPositionPattern = false;
         for (const layer of this.project.layers) {
+            if (layer.muted) continue;
             for (const clip of layer.clips) {
-                if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif') {
-                    hasPositionPattern = true;
-                    break;
+                if (timeMs >= clip.startTime && timeMs < (clip.startTime + clip.duration)) {
+                    if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif') {
+                        hasPositionPattern = true;
+                        break;
+                    }
                 }
             }
             if (hasPositionPattern) break;
@@ -119,19 +181,20 @@ export class ShowRenderer {
 
         if (!hasPositionPattern) {
             // Use optimized uniform rendering
+            // We calculate ONE frame, then copy it to all cells
+            // Still faster than calculating per cell, but we need to copy to buffer
             const baseFrame = this.getFrame(timeMs);
             for (let r = 0; r < rows; r++) {
-                grid[r] = [];
                 for (let c = 0; c < cols; c++) {
-                    grid[r][c] = new Uint8Array(baseFrame);
+                    grid[r][c].set(baseFrame);
                 }
             }
         } else {
             // Position-based rendering
             for (let r = 0; r < rows; r++) {
-                grid[r] = [];
                 for (let c = 0; c < cols; c++) {
-                    grid[r][c] = this.getFrameForPosition(timeMs, r, c, { rows, cols });
+                    // Pass the buffer cell to be written to
+                    this.getFrameForPosition(timeMs, r, c, { rows, cols }, grid[r][c]);
                 }
             }
         }
@@ -141,11 +204,15 @@ export class ShowRenderer {
 
     /**
      * Get frame data for a specific position in the grid
+     * @param {Uint8Array} outFrame Optional buffer to write to. If null, a new one is allocated.
      */
-    getFrameForPosition(timeMs, row, col, gridSize) {
-        if (!this.project) return new Uint8Array(CHANNEL_COUNT).fill(0);
+    getFrameForPosition(timeMs, row, col, gridSize, outFrame = null) {
+        if (!this.project) return outFrame || new Uint8Array(CHANNEL_COUNT).fill(0);
 
-        const frameData = new Uint8Array(CHANNEL_COUNT).fill(0);
+        const frameData = outFrame || new Uint8Array(CHANNEL_COUNT).fill(0);
+        // If outFrame was passed, it should already be clear (or we expect caller to handle it)
+        // logic in getMatrixFrame clears it first.
+        // If called individually without clear, we might want frameData.fill(0) here, usually safe.
 
         for (const layer of this.project.layers) {
             if (layer.muted) continue;
@@ -199,13 +266,8 @@ export class ShowRenderer {
 
                 // Only render if within clip duration
                 if (clipTime >= 0 && clipTime < clip.duration) {
-                    const cellFrame = new Uint8Array(CHANNEL_COUNT).fill(0);
-                    this.renderClip(clip, clipTime, cellFrame, row, col, gridSize, layer);
-
-                    // Mix into frame
-                    for (let i = 0; i < CHANNEL_COUNT; i++) {
-                        frameData[i] = Math.max(frameData[i], cellFrame[i]);
-                    }
+                    // Write directly to frameData, no intermediate alloc
+                    this.renderClip(clip, clipTime, frameData, row, col, gridSize, layer);
                 }
             }
         }

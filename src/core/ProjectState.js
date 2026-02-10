@@ -17,7 +17,7 @@ export class ProjectState {
         ];
         this.assets = {}; // Store blob URLs or Image objects for GIFs
         this.duration = 0;
-        this.analysis = null;
+        this.analysis = { beat_times: [], onset_times: [], reference_beats: [], bpm: 120, offset: 0 };
         this.lightGroups = {
             'Red': { channels: [24, 25, 26], color: '#ff0000' }, // Brake, Tail, Tail
             'MainWhite': { channels: [0, 1, 2, 3], color: '#ffffff' }, // Front Outer/Inner Main Beam
@@ -26,6 +26,17 @@ export class ProjectState {
         this.carGroups = []; // Array of { id, name, selection: string[], thumbnail: string }
         this.jitter = 0; // ms
         this.waveform = null; // { peaks: number[], pointsPerSecond: number }
+        this.palette = this.createDefaultPalette();
+    }
+
+    createDefaultPalette() {
+        const shortcuts = ['1', '2', '3', '4', '5', 'q', 'w', 'e', 'r', 't'];
+        return shortcuts.map((key, i) => ({
+            id: uuidv4(),
+            shortcut: key,
+            note: "",
+            clips: []
+        }));
     }
 
     addLayer(name = 'New Layer') {
@@ -85,16 +96,17 @@ export class ProjectState {
     /**
      * Serialize project to JSON-compatible object
      */
-    toJSON() {
+    toJSON(includeAssets = true) {
         return {
             layers: this.layers,
-            assets: this.serializeAssets(),
+            assets: includeAssets ? this.serializeAssets() : {},
             duration: this.duration,
             analysis: this.analysis,
             lightGroups: this.lightGroups,
             carGroups: this.carGroups,
             jitter: this.jitter,
-            waveform: this.waveform
+            waveform: this.waveform,
+            palette: this.palette
         };
     }
 
@@ -182,6 +194,11 @@ export class ProjectState {
         project.carGroups = data.carGroups || [];
         project.jitter = data.jitter || 0;
         project.waveform = data.waveform || null;
+        project.palette = data.palette || project.createDefaultPalette();
+        // Migration: Ensure all palette slots have a note property
+        project.palette.forEach(slot => {
+            if (slot.note === undefined) slot.note = "";
+        });
         return project;
     }
 

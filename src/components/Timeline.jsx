@@ -71,7 +71,11 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
     // Get audio analysis markers
     const analysis = project.analysis;
-    const beatMarkers = analysis?.beat_times || [];
+    // measureMarkers: calculated based on BPM + Offset for visual grid
+    // We prioritize the calculated grid. If BPM is missing (old project), default to 120.
+
+
+    const beatMarkers = analysis?.beat_times || []; // Still useful for snapping if needed, but not drawing red bars
     const onsetMarkers = analysis?.onset_times || [];
 
     useEffect(() => {
@@ -519,25 +523,9 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             </div>
                         ))}
 
-                        {/* Beat Markers in Ruler */}
-                        {beatMarkers.map((time, i) => (
-                            <div
-                                key={`beat-${time}-${i}`}
-                                className="beat-marker"
-                                style={{ left: time * pixelsPerSecond }}
-                                title={`Beat at ${time.toFixed(2)}s`}
-                            />
-                        ))}
 
-                        {/* Reference Beats in Ruler */}
-                        {(analysis?.reference_beats || []).map((time, i) => (
-                            <div
-                                key={`ref-beat-${time}-${i}`}
-                                className="reference-beat-marker"
-                                style={{ left: time * pixelsPerSecond }}
-                                title={`Reference Beat at ${time.toFixed(2)}s`}
-                            />
-                        ))}
+
+
 
                         {/* Onset markers (yellow) */}
                         {onsetMarkers.map((time, idx) => (
@@ -643,14 +631,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             );
                         })}
 
-                        {/* Reference Beats in Tracks */}
-                        {(analysis?.reference_beats || []).map((time, i) => (
-                            <div
-                                key={`ref-beat-track-${time}-${i}`}
-                                className="reference-beat-track"
-                                style={{ left: time * pixelsPerSecond }}
-                            />
-                        ))}
+
 
                         {/* Bookmarks in Tracks */}
                         {bookmarks.map((time, i) => (

@@ -5,6 +5,7 @@ import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
 import { Timeline } from './Timeline';
 import ClipEditor from './ClipEditor';
+import ClipPalette from './ClipPalette';
 import { LayoutParser } from '../utils/LayoutParser';
 import { FseqWriter } from '../utils/FseqWriter';
 import { XsqWriter } from '../utils/XsqWriter';
@@ -87,6 +88,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [bookmarks, setBookmarks] = useState([]);
     const [snapshot, setSnapshot] = useState(null);
     const [showHelpModal, setShowHelpModal] = useState(false);
+    const [selectedPaletteClipId, setSelectedPaletteClipId] = useState(null);
 
     // Sync UI settings to localStorage
     useEffect(() => {
@@ -149,18 +151,21 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         });
     };
 
+
     const handlePlayFromBookmark = () => {
         if (bookmarks.length === 0) return;
 
         // Find the latest bookmark before or at current time, or just the first one
         let targetTime = bookmarks[0];
-        const pastBookmarks = bookmarks.filter(b => b <= currentTime + 50); // small buffer
+        const currentMs = currentTimeRef.current; // Use ref for live time
+
+        const pastBookmarks = bookmarks.filter(b => b <= currentMs + 50); // small buffer
         if (pastBookmarks.length > 0) {
             targetTime = pastBookmarks[pastBookmarks.length - 1];
         }
 
         handleSeek(targetTime);
-        if (!isPlaying) togglePlay();
+        if (!isPlayingRef.current) togglePlay();
     };
 
     const allCarsThumbnail = useMemo(() => {
@@ -189,6 +194,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     }, [matrixConfig, layoutData]);
 
     const handleClipSelect = (idOrIds, e) => {
+        setSelectedPaletteClipId(null); // Clear palette selection when timeline clip is selected
         if (!idOrIds || (Array.isArray(idOrIds) && idOrIds.length === 0)) {
             setSelectedClipIds([]);
             return;
@@ -216,7 +222,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
     const handleDelete = (clipIds) => {
         const idsToDelete = Array.isArray(clipIds) ? clipIds : [clipIds];
-        const json = project.toJSON();
+        const json = project.toJSON(false);
         const newProject = ProjectState.fromJSONSync(json);
         newProject.assets = project.assets;
         let foundCount = 0;
@@ -243,7 +249,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         if (isNaN(val) || val <= 0) return;
 
         setBpm(val);
-        const json = project.toJSON();
+        const json = project.toJSON(false);
         const newProject = ProjectState.fromJSONSync(json);
         // Preserve assets (fromJSONSync skips them for performance)
         newProject.assets = project.assets;
@@ -457,13 +463,13 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     case 'v':
                         // Paste logic
                         if (clipboard && Array.isArray(clipboard) && clipboard.length > 0) {
-                            const json = project.toJSON();
+                            const json = project.toJSON(false);
                             const newProject = ProjectState.fromJSONSync(json);
                             newProject.assets = project.assets;
 
                             // Calculate global offset relative to earliest clip
                             const earliestStart = Math.min(...clipboard.map(c => c.startTime));
-                            const offset = currentTime - earliestStart;
+                            const offset = currentTimeRef.current - earliestStart;
 
                             const newPastedIds = [];
                             clipboard.forEach(clip => {
@@ -488,13 +494,18 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 }
             } else {
                 // Non-ctrl shortcuts
-                switch (e.key.toLowerCase()) {
-                    case 'e':
-                        handleAddClip('effect');
-                        break;
-                    case 'g':
-                        handleAddClip('image');
-                        break;
+                const key = e.key.toLowerCase();
+
+                // Palette shortcuts: 1-5, q-t
+                const paletteKeys = ['1', '2', '3', '4', '5', 'q', 'w', 'e', 'r', 't'];
+                const slotIndex = paletteKeys.indexOf(key);
+                if (slotIndex !== -1) {
+                    e.preventDefault();
+                    handlePasteFromPalette(slotIndex);
+                    return;
+                }
+
+                switch (key) {
                     case ' ':
                         e.preventDefault();
                         togglePlay();
@@ -507,6 +518,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     case 'backspace':
                         if (selectedClipIds.length > 0) {
                             handleDelete(selectedClipIds);
+                        } else if (selectedPaletteClipId) {
+                            handleClipDelete([selectedPaletteClipId]);
                         }
                         break;
                 }
@@ -515,7 +528,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [project, history, redoStack, selectedClipIds, selectedLayerId, clipboard, currentTime, isPlaying, audioFile]);
+    }, [project, history, redoStack, selectedClipIds, selectedLayerId, clipboard, isPlaying, audioFile, bookmarks]);
 
     useEffect(() => {
         const loop = () => {
@@ -543,14 +556,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             // to prevent huge deltas if the logic switches branches.
             lastTickRef.current = performance.now();
 
-            if (currentTime >= project.duration) {
+            if (currentTimeRef.current >= projectRef.current.duration) {
                 handleSeek(0);
             }
 
             if (audioFile) {
                 if (audioRef.current) {
                     // Force audio to match UI time precisely before playing
-                    audioRef.current.currentTime = currentTime / 1000;
+                    audioRef.current.currentTime = currentTimeRef.current / 1000;
                     audioRef.current.play()
                         .then(() => {
                             console.log('Audio playing successfully');
@@ -610,7 +623,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                 // Generate waveform
                 try {
-                    const pointsPerSecond = 20;
+                    const pointsPerSecond = 100; // Increased resolution (10ms)
                     const waveformData = await AudioWaveformManager.generateWaveform(file, pointsPerSecond);
                     project.waveform = {
                         peaks: waveformData.peaks,
@@ -620,12 +633,15 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     // Detect beats and reference bars
                     const beatData = AudioWaveformManager.detectBeats(waveformData.peaks, pointsPerSecond);
                     project.analysis = {
-                        ...project.analysis,
                         beat_times: beatData.beatTimes,
-                        reference_beats: beatData.referenceBeats
+                        reference_beats: beatData.referenceBeats,
+                        onset_times: [], // Assuming detectBeats doesn't return this separate list yet
+                        bpm: beatData.bpm,
+                        offset: beatData.offset
                     };
-                    if (beatData.bpm) {
-                        project.analysis.bpm = beatData.bpm;
+
+                    if (beatData.bpm && beatData.bpm > 0) {
+                        setBpm(beatData.bpm);
                     }
                 } catch (err) {
                     console.error('Failed to generate waveform or beats:', err);
@@ -693,6 +709,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             audioRef.current.currentTime = timeMs / 1000;
         }
         setCurrentTime(timeMs);
+        currentTimeRef.current = timeMs;
     };
 
     const saveToHistory = (newState) => {
@@ -737,7 +754,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         if (!snapshot) return;
 
         // Make the restore undoable
-        const currentData = project.toJSON();
+        const currentData = project.toJSON(false);
         setHistory(prev => [...prev.slice(-19), currentData]);
         setRedoStack([]);
 
@@ -754,6 +771,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             audioRef.current.currentTime = 0;
         }
         setCurrentTime(0);
+        currentTimeRef.current = 0;
         setIsPlaying(false);
         setFitTrigger2D(Date.now());
     };
@@ -766,22 +784,104 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     };
 
     const handleClipUpdate = (updatedClip) => {
-        const json = project.toJSON();
+        const json = project.toJSON(false);
         const newProject = ProjectState.fromJSONSync(json);
-        // Preserve assets (fromJSONSync skips them for performance)
         newProject.assets = project.assets;
+
+        let found = false;
         newProject.layers.forEach(layer => {
             const idx = layer.clips.findIndex(c => c.id === updatedClip.id);
             if (idx !== -1) {
                 layer.clips[idx] = updatedClip;
+                found = true;
             }
         });
-        saveToHistory(newProject);
-        // Maintain selection
+
+        if (!found) {
+            newProject.palette.forEach(slot => {
+                const idx = slot.clips.findIndex(c => c.id === updatedClip.id);
+                if (idx !== -1) {
+                    slot.clips[idx] = updatedClip;
+                    found = true;
+                }
+            });
+        }
+
+        if (found) {
+            saveToHistory(newProject);
+        }
     };
 
-    const handleClipDelete = (clipId) => {
-        handleDelete(clipId);
+    const handleClipDelete = (clipIdOrIds) => {
+        const clipIds = Array.isArray(clipIdOrIds) ? clipIdOrIds : [clipIdOrIds];
+        const clipIdSet = new Set(clipIds);
+
+        const json = project.toJSON(false);
+        const newProject = ProjectState.fromJSONSync(json);
+        newProject.assets = project.assets;
+
+        let changed = false;
+        // Delete from layers
+        newProject.layers.forEach(layer => {
+            const initialLen = layer.clips.length;
+            layer.clips = layer.clips.filter(c => !clipIdSet.has(c.id));
+            if (layer.clips.length !== initialLen) changed = true;
+        });
+
+        // Delete from palette
+        newProject.palette.forEach(slot => {
+            const initialLen = slot.clips.length;
+            slot.clips = slot.clips.filter(c => !clipIdSet.has(c.id));
+            if (slot.clips.length !== initialLen) changed = true;
+        });
+
+        if (changed) {
+            saveToHistory(newProject);
+            if (clipIdSet.has(selectedPaletteClipId)) {
+                setSelectedPaletteClipId(null);
+            }
+            setSelectedClipIds(prev => prev.filter(id => !clipIdSet.has(id)));
+        }
+    };
+
+    const handlePaletteClipSelect = (clipId) => {
+        setSelectedPaletteClipId(clipId);
+        setSelectedClipIds([]); // Clear timeline selection
+    };
+
+    const handlePasteFromPalette = (slotIndex) => {
+        const slot = project.palette[slotIndex];
+        if (!slot || slot.clips.length === 0) return;
+
+        const json = project.toJSON(false);
+        const newProject = ProjectState.fromJSONSync(json);
+        newProject.assets = project.assets;
+
+        const targetLayerId = selectedLayerId || newProject.layers[0].id;
+        const layer = newProject.layers.find(l => l.id === targetLayerId);
+
+        if (layer) {
+            // Find earliest clip in slot to calculate relative offsets
+            const earliestClip = slot.clips.reduce((earliest, current) =>
+                current.startTime < earliest.startTime ? current : earliest, slot.clips[0]
+            );
+
+            const newPastedIds = [];
+            slot.clips.forEach(clip => {
+                const relativeOffset = clip.startTime - earliestClip.startTime;
+                const newClip = {
+                    ...clip,
+                    id: crypto.randomUUID(),
+                    startTime: currentTime + relativeOffset
+                };
+                layer.clips.push(newClip);
+                newPastedIds.push(newClip.id);
+            });
+
+            saveToHistory(newProject);
+            setSelectedClipIds(newPastedIds);
+            setSelectedPaletteClipId(null);
+        }
     };
 
     const handleAddCarGroup = () => {
@@ -834,7 +934,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
     const handleAddClip = (type = 'effect') => {
         if (project.layers.length > 0) {
-            const json = project.toJSON();
+            const json = project.toJSON(false);
             const newProject = ProjectState.fromJSONSync(json);
             // Preserve assets (fromJSONSync skips them for performance)
             newProject.assets = project.assets;
@@ -921,7 +1021,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const handleDuplicateClip = () => {
         if (selectedClipIds.length === 0) return;
 
-        const json = project.toJSON();
+        const json = project.toJSON(false);
         const newProject = ProjectState.fromJSONSync(json);
         newProject.assets = project.assets;
 
@@ -1099,6 +1199,17 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
     }
 
+    let selectedPaletteClip = null;
+    if (selectedPaletteClipId) {
+        for (const slot of project.palette) {
+            const found = slot.clips.find(c => c.id === selectedPaletteClipId);
+            if (found) {
+                selectedPaletteClip = found;
+                break;
+            }
+        }
+    }
+
     const handleSaveProject = async () => {
         try {
             const zip = new JSZip();
@@ -1198,11 +1309,19 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             loadedProject.analysis = {
                                 ...(loadedProject.analysis || {}),
                                 beat_times: beatData.beatTimes,
-                                reference_beats: beatData.referenceBeats
+                                reference_beats: beatData.referenceBeats,
+                                bpm: beatData.bpm,
+                                offset: beatData.offset
                             };
+
+                            // Update global BPM if detected
+                            if (beatData.bpm && beatData.bpm > 0) {
+                                setBpm(beatData.bpm);
+                            }
+
                             // Update project state after analysis
                             setProject(Object.assign(Object.create(Object.getPrototypeOf(loadedProject)), loadedProject));
-                            console.log('Automatic re-analysis completed');
+                            console.log('Automatic re-analysis completed', beatData);
                         } catch (reErr) {
                             console.error('Auto re-analysis failed:', reErr);
                         }
@@ -1424,13 +1543,29 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         selectedCars={selectedCars}
                         onSelectionChange={setSelectedCars}
                         fitTrigger={fitTrigger2D}
+                        updateTrigger={currentTime}
+                    />
+                </div>
+
+                <div className="palette-panel">
+                    <ClipPalette
+                        palette={project.palette}
+                        clipboard={clipboard}
+                        assets={project.assets}
+                        selectedClipId={selectedPaletteClipId}
+                        onClipSelect={handlePaletteClipSelect}
+                        onPaletteChange={(newPalette) => {
+                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                            newProject.palette = newPalette;
+                            setProject(newProject);
+                        }}
                     />
                 </div>
 
                 <div className="properties-panel">
-                    {selectedClipIds.length === 1 && selectedClip ? (
+                    {(selectedClipIds.length === 1 && selectedClip) || (selectedPaletteClipId && selectedPaletteClip) ? (
                         <ClipEditor
-                            clip={selectedClip}
+                            clip={selectedPaletteClip || selectedClip}
                             onChange={handleClipUpdate}
                             onDelete={handleClipDelete}
                             assets={project.assets}
@@ -1561,10 +1696,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <button onClick={handleAddTrack} className="btn-icon" title="Add Track">
                             <Layers size={20} /> <Plus size={10} style={{ marginLeft: -8, marginBottom: 8 }} />
                         </button>
-                        <button onClick={() => handleAddClip('effect')} className="btn-icon" title="Add Effect at Cursor (E)" style={{ color: '#e82020' }}>
+                        <button onClick={() => handleAddClip('effect')} className="btn-icon" title="Add Effect at Cursor" style={{ color: '#e82020' }}>
                             <Zap size={20} /> Effect
                         </button>
-                        <button onClick={() => handleAddClip('gif')} className="btn-icon" title="Add GIF at Cursor (G)" style={{ color: '#4a90e2' }}>
+                        <button onClick={() => handleAddClip('gif')} className="btn-icon" title="Add GIF at Cursor" style={{ color: '#4a90e2' }}>
                             <ImageIcon size={20} /> GIF
                         </button>
                         <button onClick={() => setShowHelpModal(true)} className="btn-icon" title="Help / Shortcuts" style={{ marginLeft: '10px', color: '#888' }}>
@@ -1696,13 +1831,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                                         <td>Delete Clip</td>
                                     </tr>
                                     <tr>
-                                        <td rowSpan="2" className="cat-cell">Add Clip</td>
-                                        <td><kbd>E</kbd></td>
-                                        <td>Add Effect at Cursor</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>G</kbd></td>
-                                        <td>Add GIF/Image at Cursor</td>
+                                        <td><kbd>1-5</kbd>, <kbd>Q-T</kbd></td>
+                                        <td>Paste from Palette Slot 1-10</td>
                                     </tr>
                                     <tr>
                                         <td rowSpan="6" className="cat-cell">Timeline</td>
@@ -1753,6 +1883,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .editor-header h2 { line-height: 1; margin: 0; }
         .editor-main { flex: 1; display: flex; overflow: hidden; margin: 0; padding: 0; }
         .preview-panel { flex: 1 1 auto; min-width: 400px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; padding: 0; margin: 0; }
+        .palette-panel { flex: 0 0 250px; min-width: 200px; max-width: 300px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
         .properties-panel { flex: 0 0 350px; min-width: 280px; max-width: 400px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
         .timeline-panel { height: 350px; background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; margin: 0; padding: 0; }
         .timeline-controls { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }

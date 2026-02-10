@@ -47,4 +47,52 @@ export class AudioWaveformManager {
             reader.readAsArrayBuffer(file);
         });
     }
+
+    /**
+     * Detect onsets and infer beats from peaks.
+     * @param {number[]} peaks 
+     * @param {number} pointsPerSecond 
+     * @returns {{beatTimes: number[], referenceBeats: number[], bpm: number}}
+     */
+    static detectBeats(peaks, pointsPerSecond) {
+        const onsets = [];
+        const minThreshold = 0.15;
+        const debounceInterval = Math.floor(pointsPerSecond * 0.15); // 150ms debounce
+
+        for (let i = 2; i < peaks.length; i++) {
+            // Basic peak detection: higher than threshold and previous values
+            if (peaks[i] > minThreshold && peaks[i] > peaks[i - 1] && peaks[i] > peaks[i - 2]) {
+                // Check local neighborhood
+                let isLocalMax = true;
+                const window = Math.floor(pointsPerSecond * 0.1);
+                for (let j = Math.max(0, i - window); j < Math.min(peaks.length, i + window); j++) {
+                    if (peaks[j] > peaks[i]) {
+                        isLocalMax = false;
+                        break;
+                    }
+                }
+
+                if (isLocalMax) {
+                    onsets.push(i / pointsPerSecond);
+                    i += debounceInterval;
+                }
+            }
+        }
+
+        // Identify "Reference Beats" (Strong onsets)
+        // We consider an onset a reference beat if it's significantly louder than the local average
+        const referenceBeats = [];
+        onsets.forEach(time => {
+            const idx = Math.floor(time * pointsPerSecond);
+            if (peaks[idx] > 0.4) { // Absolute threshold for "strong"
+                referenceBeats.push(time);
+            }
+        });
+
+        return {
+            beatTimes: onsets,
+            referenceBeats: referenceBeats,
+            bpm: 120 // Fallback
+        };
+    }
 }

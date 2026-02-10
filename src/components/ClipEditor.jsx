@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Plus, Minus } from 'lucide-react';
 
 const CHANNELS = {
     "Main Beams": [0, 1],
@@ -112,6 +112,45 @@ const GifPreview = ({ asset, fps = 15 }) => {
     );
 };
 
+const CustomNumberInput = ({ value, onChange, label, step = 1, min = null, max = null, className = "" }) => {
+    const handleAdjust = (delta) => {
+        let val = (parseFloat(value) || 0) + delta;
+        if (min !== null) val = Math.max(min, val);
+        if (max !== null) val = Math.min(max, val);
+        // Fix floating point issues for steps like 0.01 or 0.125
+        const decimalPlaces = step.toString().split('.')[1]?.length || 0;
+        val = parseFloat(val.toFixed(decimalPlaces));
+        onChange(val);
+    };
+
+    return (
+        <div className={`custom-number-input-container ${className}`}>
+            {label && <label className="compact-label">{label}</label>}
+            <div className="custom-number-input-group">
+                <button className="adjust-btn minus" onClick={() => handleAdjust(-step)}>
+                    <Minus size={14} strokeWidth={3} />
+                </button>
+                <input
+                    type="number"
+                    value={value}
+                    step={step}
+                    onChange={(e) => {
+                        let val = parseFloat(e.target.value);
+                        if (!isNaN(val)) {
+                            if (min !== null) val = Math.max(min, val);
+                            if (max !== null) val = Math.min(max, val);
+                            onChange(val);
+                        }
+                    }}
+                />
+                <button className="adjust-btn plus" onClick={() => handleAdjust(step)}>
+                    <Plus size={14} strokeWidth={3} />
+                </button>
+            </div>
+        </div>
+    );
+};
+
 export default function ClipEditor({ clip, onChange, onDelete, assets = {}, lightGroups = {}, carGroups = [], allCarsThumbnail = null }) {
     if (!clip) return <div className="p-4 text-gray-500">No clip selected</div>;
 
@@ -185,82 +224,88 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
             <div className="section-container">
                 <label className="section-title">Timing</label>
                 <div className="form-group grid-2">
-                    <div className="input-group-compact">
-                        <label className="compact-label">Start Time</label>
-                        <div className="input-with-hint">
-                            <input
-                                type="number"
-                                value={Number((clip.startTime || 0).toFixed(2))}
-                                step="0.01"
-                                onChange={e => handleChange('startTime', parseFloat(parseFloat(e.target.value).toFixed(2)) || 0)}
-                            />
-                            <span className="unit-hint">{(clip.startTime / 1000).toFixed(2)}s</span>
-                        </div>
+                    <div className="timing-unit-wrapper">
+                        <CustomNumberInput
+                            label="Start Time"
+                            value={Number((clip.startTime || 0).toFixed(2))}
+                            step={10}
+                            min={0}
+                            onChange={val => handleChange('startTime', parseFloat(val.toFixed(2)) || 0)}
+                            className="timing-input"
+                        />
+                        <span className="unit-hint-sub">{(clip.startTime / 1000).toFixed(2)}s</span>
                     </div>
-
-                    <div className="input-group-compact">
-                        <label className="compact-label">Duration</label>
-                        <div className="input-with-hint">
-                            <input
-                                type="number"
-                                value={Number((clip.duration || 0).toFixed(2))}
-                                step="0.01"
-                                onChange={e => handleChange('duration', parseFloat(parseFloat(e.target.value).toFixed(2)) || 0)}
-                            />
-                            <span className="unit-hint">{(clip.duration / 1000).toFixed(2)}s</span>
-                        </div>
+                    <div className="timing-unit-wrapper">
+                        <CustomNumberInput
+                            label="Duration"
+                            value={Number((clip.duration || 0).toFixed(2))}
+                            step={10}
+                            min={0}
+                            onChange={val => handleChange('duration', parseFloat(val.toFixed(2)) || 0)}
+                            className="timing-input"
+                        />
+                        <span className="unit-hint-sub">{(clip.duration / 1000).toFixed(2)}s</span>
                     </div>
                 </div>
 
                 {clip.type === 'gif' && (
-                    <div className="form-group grid-3" style={{ marginTop: '8px' }}>
-                        <div className="input-group-compact">
-                            <label className="compact-label">BPM</label>
-                            <input
-                                type="number"
-                                value={clip.bpm || 120}
-                                onChange={e => {
-                                    const bpm = parseFloat(e.target.value);
-                                    const updatedClip = { ...clip, bpm, timingMode: 'beat' };
-                                    const duration = calculateDuration('beat', updatedClip);
-                                    onChange({ ...updatedClip, duration });
-                                }}
-                                min="1"
-                                step="0.1"
-                            />
-                        </div>
-                        <div className="input-group-compact">
-                            <label className="compact-label">Beats/Frame</label>
-                            <input
-                                type="number"
-                                value={clip.beatsPerFrame || 1}
-                                onChange={e => {
-                                    const beatsPerFrame = parseFloat(e.target.value);
-                                    const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
-                                    const duration = calculateDuration('beat', updatedClip);
-                                    onChange({ ...updatedClip, duration });
-                                }}
-                                min="0.125"
-                                step="0.125"
-                            />
-                        </div>
-                        <div className="input-group-compact">
-                            <label className="compact-label">Repetitions</label>
-                            <input
-                                type="number"
-                                value={clip.repetitions || 1}
-                                onChange={e => {
-                                    const repetitions = parseInt(e.target.value);
-                                    const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
-                                    const duration = calculateDuration('beat', updatedClip);
-                                    onChange({ ...updatedClip, duration });
-                                }}
-                                min="1"
-                            />
-                        </div>
+                    <div className="form-group grid-3" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #222' }}>
+                        <CustomNumberInput
+                            label="BPM"
+                            value={clip.bpm || 120}
+                            step={1}
+                            min={1}
+                            onChange={bpm => {
+                                const updatedClip = { ...clip, bpm, timingMode: 'beat' };
+                                const duration = calculateDuration('beat', updatedClip);
+                                onChange({ ...updatedClip, duration });
+                            }}
+                        />
+                        <CustomNumberInput
+                            label="Beats/Frm"
+                            value={clip.beatsPerFrame || 1}
+                            step={0.125}
+                            min={0.125}
+                            onChange={beatsPerFrame => {
+                                const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
+                                const duration = calculateDuration('beat', updatedClip);
+                                onChange({ ...updatedClip, duration });
+                            }}
+                        />
+                        <CustomNumberInput
+                            label="Repeat"
+                            value={clip.repetitions || 1}
+                            step={1}
+                            min={1}
+                            onChange={repetitions => {
+                                const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
+                                const duration = calculateDuration('beat', updatedClip);
+                                onChange({ ...updatedClip, duration });
+                            }}
+                        />
                     </div>
                 )}
             </div>
+
+            {clip.type === 'gif' && (
+                <div className="section-container">
+                    <label className="section-title">Placement</label>
+                    <div className="form-group grid-3">
+                        <CustomNumberInput
+                            label="Offset X"
+                            value={clip.offsetX || 0}
+                            step={1}
+                            onChange={val => handleChange('offsetX', val)}
+                        />
+                        <CustomNumberInput
+                            label="Offset Y"
+                            value={clip.offsetY || 0}
+                            step={1}
+                            onChange={val => handleChange('offsetY', val)}
+                        />
+                    </div>
+                </div>
+            )}
 
             {clip.type === 'effect' && (
                 <>
@@ -574,6 +619,84 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     border-color: #e82020;
                 }
 
+                .form-group input[type="number"].small-input,
+                .form-group input[type="text"].small-input {
+                    padding: 4px 8px;
+                    font-size: 12px;
+                    max-width: 60px;
+                }
+
+                .custom-number-input-container {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
+                }
+
+                .custom-number-input-group {
+                    display: flex;
+                    align-items: stretch;
+                    background: #2a2a2a;
+                    border: 1px solid #444;
+                    border-radius: 6px;
+                    overflow: hidden;
+                    height: 28px;
+                }
+
+                .custom-number-input-group input {
+                    flex: 1;
+                    min-width: 0;
+                    width: 100% !important;
+                    background: transparent !important;
+                    border: none !important;
+                    text-align: center;
+                    padding: 0 4px !important;
+                    font-size: 12px !important;
+                    -moz-appearance: textfield;
+                }
+
+                .custom-number-input-group input::-webkit-outer-spin-button,
+                .custom-number-input-group input::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+
+                .adjust-btn {
+                    background: #333;
+                    border: none;
+                    color: #aaa;
+                    width: 28px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .adjust-btn:hover {
+                    background: #444;
+                    color: white;
+                }
+
+                .adjust-btn.plus:active { background: #059669; }
+                .adjust-btn.minus:active { background: #dc2626; }
+
+                .timing-input {
+                    max-width: 110px;
+                }
+
+                .timing-unit-wrapper {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 4px;
+                }
+
+                .unit-hint-sub {
+                    font-size: 10px;
+                    color: #888;
+                    font-family: monospace;
+                }
+
                 .section-container {
                     margin-bottom: 12px;
                 }
@@ -626,8 +749,14 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 }
 
                 .grid-2 {
-                    display: grid;
+                    display: grid !important;
                     grid-template-columns: 1fr 1fr;
+                    gap: 12px;
+                }
+
+                .grid-3 {
+                    display: grid !important;
+                    grid-template-columns: repeat(3, 1fr);
                     gap: 12px;
                 }
 

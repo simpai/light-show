@@ -610,13 +610,25 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                 // Generate waveform
                 try {
-                    const waveformData = await AudioWaveformManager.generateWaveform(file, 20);
+                    const pointsPerSecond = 20;
+                    const waveformData = await AudioWaveformManager.generateWaveform(file, pointsPerSecond);
                     project.waveform = {
                         peaks: waveformData.peaks,
-                        pointsPerSecond: 20
+                        pointsPerSecond: pointsPerSecond
                     };
+
+                    // Detect beats and reference bars
+                    const beatData = AudioWaveformManager.detectBeats(waveformData.peaks, pointsPerSecond);
+                    project.analysis = {
+                        ...project.analysis,
+                        beat_times: beatData.beatTimes,
+                        reference_beats: beatData.referenceBeats
+                    };
+                    if (beatData.bpm) {
+                        project.analysis.bpm = beatData.bpm;
+                    }
                 } catch (err) {
-                    console.error('Failed to generate waveform:', err);
+                    console.error('Failed to generate waveform or beats:', err);
                 }
 
                 setProject(Object.assign(Object.create(Object.getPrototypeOf(project)), project));
@@ -1169,6 +1181,31 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     if (audioRef.current) {
                         audioRef.current.src = url;
                         audioRef.current.load();
+                    }
+
+                    // 4. Automatic Re-analysis if missing
+                    if (!loadedProject.waveform || !loadedProject.analysis?.beat_times) {
+                        console.log('Missing waveform or beat data, starting automatic re-analysis...');
+                        try {
+                            const pointsPerSecond = 20;
+                            const waveformData = await AudioWaveformManager.generateWaveform(audioFileObj, pointsPerSecond);
+                            loadedProject.waveform = {
+                                peaks: waveformData.peaks,
+                                pointsPerSecond: pointsPerSecond
+                            };
+
+                            const beatData = AudioWaveformManager.detectBeats(waveformData.peaks, pointsPerSecond);
+                            loadedProject.analysis = {
+                                ...(loadedProject.analysis || {}),
+                                beat_times: beatData.beatTimes,
+                                reference_beats: beatData.referenceBeats
+                            };
+                            // Update project state after analysis
+                            setProject(Object.assign(Object.create(Object.getPrototypeOf(loadedProject)), loadedProject));
+                            console.log('Automatic re-analysis completed');
+                        } catch (reErr) {
+                            console.error('Auto re-analysis failed:', reErr);
+                        }
                     }
                 }
             }

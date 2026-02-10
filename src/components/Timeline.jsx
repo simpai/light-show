@@ -519,13 +519,23 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                             </div>
                         ))}
 
-                        {/* Beat markers (blue) */}
-                        {beatMarkers.map((time, idx) => (
+                        {/* Beat Markers in Ruler */}
+                        {beatMarkers.map((time, i) => (
                             <div
-                                key={`beat-${idx}`}
+                                key={`beat-${time}-${i}`}
                                 className="beat-marker"
                                 style={{ left: time * pixelsPerSecond }}
                                 title={`Beat at ${time.toFixed(2)}s`}
+                            />
+                        ))}
+
+                        {/* Reference Beats in Ruler */}
+                        {(analysis?.reference_beats || []).map((time, i) => (
+                            <div
+                                key={`ref-beat-${time}-${i}`}
+                                className="reference-beat-marker"
+                                style={{ left: time * pixelsPerSecond }}
+                                title={`Reference Beat at ${time.toFixed(2)}s`}
                             />
                         ))}
 
@@ -632,6 +642,15 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                 />
                             );
                         })}
+
+                        {/* Reference Beats in Tracks */}
+                        {(analysis?.reference_beats || []).map((time, i) => (
+                            <div
+                                key={`ref-beat-track-${time}-${i}`}
+                                className="reference-beat-track"
+                                style={{ left: time * pixelsPerSecond }}
+                            />
+                        ))}
 
                         {/* Bookmarks in Tracks */}
                         {bookmarks.map((time, i) => (
@@ -862,6 +881,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .ruler { height: 40px; position: relative; background: #1a1a1a; }
                 .ruler-mark { position: absolute; top: 0; font-size: 10px; color: #eee; border-left: 1px solid #444; padding-left: 2px; height: 100%; z-index: 2; text-shadow: 1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black; font-weight: bold; }
                 .beat-marker { position: absolute; bottom: 0; width: 2px; height: 15px; background: #4a90e2; opacity: 0.6; }
+                .reference-beat-marker { position: absolute; bottom: 0; width: 3px; height: 25px; background: #ff0000; opacity: 1; z-index: 10; transform: translateX(-50%); }
                 .onset-marker { position: absolute; bottom: 0; width: 2px; height: 10px; background: #fbbf24; opacity: 0.7; }
                 .timeline-tracks-row { display: flex; flex: 1; overflow: auto; position: relative; }
                 .track-headers-fixed { flex-shrink: 0; border-right: 1px solid #333; position: sticky; left: 0; z-index: 15; background: #151515; }
@@ -982,6 +1002,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 }
                 .bookmark-marker-ruler:hover { background: #4ade80; }
                 .bookmark-marker-track { position: absolute; top: 0; bottom: 0; width: 1px; background: #22c55e; opacity: 0.3; z-index: 5; pointer-events: none; }
+                .reference-beat-track { position: absolute; top: 0; bottom: 0; width: 1px; background: #ff0000; opacity: 0.25; z-index: 5; pointer-events: none; }
             `}</style>
         </div>
     );

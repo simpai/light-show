@@ -389,11 +389,21 @@ export class ShowRenderer {
         const imageData = asset.frames[frameIndex];
 
         // Map grid position to image coordinates (Scale pattern to fit grid if needed)
+        // Adjust for offsets: shift the grid position we are sampling for
+        const adjustedRow = row - (clip.offsetY || 0);
+        const adjustedCol = col - (clip.offsetX || 0);
+
+        // Check if the adjusted position is within the original grid bounds
+        // If not, this car should be transparent for this clip
+        if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
+            return;
+        }
+
         // If single car, GS is 1x1, so we take the center of the image
         let imgRow, imgCol;
         if (gridSize.rows > 1 || gridSize.cols > 1) {
-            imgRow = Math.floor((row / gridSize.rows) * imageData.height);
-            imgCol = Math.floor((col / gridSize.cols) * imageData.width);
+            imgRow = Math.floor((adjustedRow / gridSize.rows) * imageData.height);
+            imgCol = Math.floor((adjustedCol / gridSize.cols) * imageData.width);
         } else {
             imgRow = Math.floor(imageData.height / 2);
             imgCol = Math.floor(imageData.width / 2);

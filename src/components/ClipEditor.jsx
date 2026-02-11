@@ -151,11 +151,53 @@ const CustomNumberInput = ({ value, onChange, label, step = 1, min = null, max =
     );
 };
 
-export default function ClipEditor({ clip, onChange, onDelete, assets = {}, lightGroups = {}, carGroups = [], allCarsThumbnail = null }) {
-    if (!clip) return <div className="p-4 text-gray-500">No clip selected</div>;
+export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}, lightGroups = {}, carGroups = [], allCarsThumbnail = null }) {
+    if (clips.length === 0) return <div className="p-4 text-gray-500">No clips selected</div>;
+
+    const isMulti = clips.length > 1;
+    const firstClip = clips[0];
+    const allSameType = clips.every(c => c.type === firstClip.type);
+
+    // Derived clip that represents the shared state
+    const mergedClip = React.useMemo(() => {
+        if (!isMulti) return firstClip;
+
+        const merged = { ...firstClip };
+        const fields = Object.keys(firstClip);
+
+        fields.forEach(field => {
+            const values = clips.map(c => c[field]);
+            const allSame = values.every(v => JSON.stringify(v) === JSON.stringify(values[0]));
+            if (!allSame) {
+                merged[field] = '__mixed__';
+            }
+        });
+        return merged;
+    }, [clips]);
+
+    if (!allSameType) {
+        return (
+            <div className="clip-editor">
+                <div className="header">
+                    <h3>Multiple Clips</h3>
+                    <button onClick={() => onDelete(clips.map(c => c.id))} className="delete-btn">
+                        <Trash2 size={18} />
+                    </button>
+                </div>
+                <div className="p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-md text-yellow-200 text-sm">
+                    Multiple types selected. Please select clips of the same type to edit shared properties.
+                </div>
+            </div>
+        );
+    }
 
     const handleChange = (field, value) => {
-        onChange({ ...clip, [field]: value });
+        if (isMulti) {
+            // Send partial update with field hint
+            onChange({ [field]: value }, field);
+        } else {
+            onChange({ ...firstClip, [field]: value });
+        }
     };
 
     const calculateDuration = (mode, updatedClip) => {
@@ -180,25 +222,18 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
     };
 
     const toggleLightGroup = (groupName) => {
-        const current = new Set(clip.targetLightGroups || []);
+        const current = new Set(Array.isArray(mergedClip.targetLightGroups) ? mergedClip.targetLightGroups : []);
+        const exists = current.has(groupName);
 
-        // Migration/Compatibility: If we're starting to use targetLightGroups, 
-        // we might want to preserve the old 'channels' for the first time, 
-        // but the goal is to shift entirely to symbolic names for UI state.
-        if (current.has(groupName)) {
+        if (exists) {
             current.delete(groupName);
         } else {
             current.add(groupName);
         }
 
-        const nextGroups = Array.from(current);
-
-        // Update both to maintain partial backward compatibility during the transition,
-        // but the renderer will prioritize targetLightGroups if present.
-        handleChange('targetLightGroups', nextGroups);
+        handleChange('targetLightGroups', Array.from(current));
     };
 
-    // Use provided lightGroups or fall back to default grouping
     const displayGroups = Object.keys(lightGroups).length > 0
         ? lightGroups
         : {
@@ -212,11 +247,13 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
             "Reverse": { channels: [22, 23] }
         };
 
+    const clip = mergedClip;
+
     return (
         <div className="clip-editor">
             <div className="header">
-                <h3>Edit Clip</h3>
-                <button onClick={() => onDelete(clip.id)} className="delete-btn">
+                <h3>{isMulti ? `Edit ${clips.length} Clips` : 'Edit Clip'}</h3>
+                <button onClick={() => onDelete(isMulti ? clips.map(c => c.id) : clip.id)} className="delete-btn">
                     <Trash2 size={18} />
                 </button>
             </div>
@@ -227,24 +264,24 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     <div className="timing-unit-wrapper">
                         <CustomNumberInput
                             label="Start Time"
-                            value={Number((clip.startTime || 0).toFixed(2))}
+                            value={clip.startTime === '__mixed__' ? '' : Number((clip.startTime || 0).toFixed(2))}
                             step={10}
                             min={0}
                             onChange={val => handleChange('startTime', parseFloat(val.toFixed(2)) || 0)}
                             className="timing-input"
                         />
-                        <span className="unit-hint-sub">{(clip.startTime / 1000).toFixed(2)}s</span>
+                        <span className="unit-hint-sub">{clip.startTime === '__mixed__' ? 'Mixed' : (clip.startTime / 1000).toFixed(2) + 's'}</span>
                     </div>
                     <div className="timing-unit-wrapper">
                         <CustomNumberInput
                             label="Duration"
-                            value={Number((clip.duration || 0).toFixed(2))}
+                            value={clip.duration === '__mixed__' ? '' : Number((clip.duration || 0).toFixed(2))}
                             step={10}
                             min={0}
                             onChange={val => handleChange('duration', parseFloat(val.toFixed(2)) || 0)}
                             className="timing-input"
                         />
-                        <span className="unit-hint-sub">{(clip.duration / 1000).toFixed(2)}s</span>
+                        <span className="unit-hint-sub">{clip.duration === '__mixed__' ? 'Mixed' : (clip.duration / 1000).toFixed(2) + 's'}</span>
                     </div>
                 </div>
 
@@ -252,35 +289,38 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     <div className="form-group grid-3" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #222' }}>
                         <CustomNumberInput
                             label="BPM"
-                            value={clip.bpm || 120}
+                            value={clip.bpm === '__mixed__' ? '' : (clip.bpm || 120)}
                             step={1}
                             min={1}
                             onChange={bpm => {
                                 const updatedClip = { ...clip, bpm, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
-                                onChange({ ...updatedClip, duration });
+                                handleChange('bpm', bpm);
+                                handleChange('duration', duration);
                             }}
                         />
                         <CustomNumberInput
                             label="Beats/Frm"
-                            value={clip.beatsPerFrame || 1}
+                            value={clip.beatsPerFrame === '__mixed__' ? '' : (clip.beatsPerFrame || 1)}
                             step={0.125}
                             min={0.125}
                             onChange={beatsPerFrame => {
                                 const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
-                                onChange({ ...updatedClip, duration });
+                                handleChange('beatsPerFrame', beatsPerFrame);
+                                handleChange('duration', duration);
                             }}
                         />
                         <CustomNumberInput
                             label="Repeat"
-                            value={clip.repetitions || 1}
+                            value={clip.repetitions === '__mixed__' ? '' : (clip.repetitions || 1)}
                             step={1}
                             min={1}
                             onChange={repetitions => {
                                 const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
-                                onChange({ ...updatedClip, duration });
+                                handleChange('repetitions', repetitions);
+                                handleChange('duration', duration);
                             }}
                         />
                     </div>
@@ -293,13 +333,13 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     <div className="form-group grid-3">
                         <CustomNumberInput
                             label="Offset X"
-                            value={clip.offsetX || 0}
+                            value={clip.offsetX === '__mixed__' ? '' : (clip.offsetX || 0)}
                             step={1}
                             onChange={val => handleChange('offsetX', val)}
                         />
                         <CustomNumberInput
                             label="Offset Y"
-                            value={clip.offsetY || 0}
+                            value={clip.offsetY === '__mixed__' ? '' : (clip.offsetY || 0)}
                             step={1}
                             onChange={val => handleChange('offsetY', val)}
                         />
@@ -314,15 +354,16 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                         <div className="form-group">
                             <label className="compact-label" style={{ minWidth: '80px' }}>Style</label>
                             <select
-                                value={clip.effectType || 'flash'}
+                                value={clip.effectType === '__mixed__' ? '' : (clip.effectType || 'flash')}
                                 onChange={e => handleChange('effectType', e.target.value)}
                             >
+                                {clip.effectType === '__mixed__' && <option value="">(Mixed)</option>}
                                 <option value="flash">Flash (Hold)</option>
                                 <option value="strobe">Strobe</option>
                             </select>
                         </div>
 
-                        {clip.effectType === 'strobe' && (
+                        {clip.effectType !== '__mixed__' && clip.effectType === 'strobe' && (
                             <div className="form-group">
                                 <label className="compact-label" style={{ minWidth: '80px' }}>Speed</label>
                                 <div className="slider-with-val" style={{ flex: 1 }}>
@@ -331,10 +372,10 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                                         min="0.5"
                                         max="10"
                                         step="0.5"
-                                        value={clip.speed || 1}
+                                        value={clip.speed === '__mixed__' ? 1 : (clip.speed || 1)}
                                         onChange={e => handleChange('speed', parseFloat(e.target.value))}
                                     />
-                                    <span className="val-hint">{(clip.speed || 1).toFixed(1)}Hz</span>
+                                    <span className="val-hint">{clip.speed === '__mixed__' ? 'Mixed' : (clip.speed || 1).toFixed(1) + 'Hz'}</span>
                                 </div>
                             </div>
                         )}
@@ -345,9 +386,10 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                         <div className="form-group">
                             <label className="compact-label" style={{ minWidth: '80px' }}>Type</label>
                             <select
-                                value={clip.pattern || 'uniform'}
+                                value={clip.pattern === '__mixed__' ? '' : (clip.pattern || 'uniform')}
                                 onChange={e => handleChange('pattern', e.target.value)}
                             >
+                                {clip.pattern === '__mixed__' && <option value="">(Mixed)</option>}
                                 <option value="uniform">Uniform</option>
                                 <option value="wave">Wave</option>
                                 <option value="sequential">Sequential</option>
@@ -355,14 +397,15 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                             </select>
                         </div>
 
-                        {clip.pattern && clip.pattern !== 'uniform' && (
+                        {clip.pattern !== '__mixed__' && clip.pattern !== 'uniform' && (
                             <>
                                 <div className="form-group">
                                     <label className="compact-label" style={{ minWidth: '80px' }}>Dir</label>
                                     <select
-                                        value={clip.patternDirection || 'horizontal'}
+                                        value={clip.patternDirection === '__mixed__' ? '' : (clip.patternDirection || 'horizontal')}
                                         onChange={e => handleChange('patternDirection', e.target.value)}
                                     >
+                                        {clip.patternDirection === '__mixed__' && <option value="">(Mixed)</option>}
                                         {clip.pattern === 'wave' && (
                                             <>
                                                 <option value="horizontal">Horizontal</option>
@@ -394,10 +437,10 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                                             min="0.1"
                                             max="5"
                                             step="0.1"
-                                            value={clip.patternSpeed || 1}
+                                            value={clip.patternSpeed === '__mixed__' ? 1 : (clip.patternSpeed || 1)}
                                             onChange={e => handleChange('patternSpeed', parseFloat(e.target.value))}
                                         />
-                                        <span className="val-hint">{(clip.patternSpeed || 1).toFixed(1)}x</span>
+                                        <span className="val-hint">{clip.patternSpeed === '__mixed__' ? 'Mixed' : (clip.patternSpeed || 1).toFixed(1) + 'x'}</span>
                                     </div>
                                 </div>
                             </>
@@ -412,15 +455,19 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                     <label className="section-title">Target Light Groups</label>
                     <div className="channels-list">
                         {Object.entries(displayGroups).map(([label, groupData]) => {
-                            const isChecked = (clip.targetLightGroups || []).includes(label);
+                            const values = clips.map(c => (c.targetLightGroups || []).includes(label));
+                            const allSame = values.every(v => v === values[0]);
+                            const isChecked = allSame ? values[0] : false;
+
                             return (
-                                <label key={label} className="channel-item">
+                                <label key={label} className="channel-item" style={{ opacity: allSame ? 1 : 0.6 }}>
                                     <input
                                         type="checkbox"
                                         checked={isChecked}
+                                        ref={el => el && (el.indeterminate = !allSame)}
                                         onChange={() => toggleLightGroup(label)}
                                     />
-                                    <span>{label}</span>
+                                    <span>{label} {!allSame && '(Mixed)'}</span>
                                 </label>
                             );
                         })}
@@ -436,52 +483,31 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                                 id="ramping-toggle"
                                 type="checkbox"
                                 className="toggle-checkbox"
-                                checked={clip.rampingEnabled || false}
+                                checked={clip.rampingEnabled === '__mixed__' ? false : (clip.rampingEnabled || false)}
+                                ref={el => el && (el.indeterminate = clip.rampingEnabled === '__mixed__')}
                                 onChange={e => {
                                     const enabled = e.target.checked;
+                                    handleChange('rampingEnabled', enabled);
                                     if (enabled) {
-                                        onChange({
-                                            ...clip,
-                                            rampingEnabled: true,
-                                            rampOnDuration: clip.rampOnDuration || 500,
-                                            rampOffDuration: clip.rampOffDuration || 500
-                                        });
-                                    } else {
-                                        handleChange('rampingEnabled', false);
+                                        handleChange('rampOnDuration', clip.rampOnDuration === '__mixed__' ? 500 : (clip.rampOnDuration || 500));
+                                        handleChange('rampOffDuration', clip.rampOffDuration === '__mixed__' ? 500 : (clip.rampOffDuration || 500));
                                     }
                                 }}
                             />
-                            <label htmlFor="ramping-toggle" className="section-title-inline">Ramping</label>
+                            <label htmlFor="ramping-toggle" className="section-title-inline">Ramping {clip.rampingEnabled === '__mixed__' && '(Mixed)'}</label>
                         </div>
-                        {clip.rampingEnabled && (
-                            <div className="ramping-info-inline">
-                                {(() => {
-                                    const rampOnDur = (clip.rampOnEnabled !== false) ? (clip.rampOnDuration || 0) : 0;
-                                    const rampOffDur = (clip.rampOffEnabled !== false) ? (clip.rampOffDuration || 0) : 0;
-                                    const maxDur = clip.duration - rampOnDur - rampOffDur;
-
-                                    if (maxDur < 0) {
-                                        return <span className="error-text">⚠️ Overlap: {Math.abs(maxDur).toFixed(0)}ms</span>;
-                                    }
-                                    return (
-                                        <span className="info-text">
-                                            FULL: <span className="highlight">{(maxDur / 1000).toFixed(2)}s</span>
-                                        </span>
-                                    );
-                                })()}
-                            </div>
-                        )}
                     </div>
 
-                    {clip.rampingEnabled && (
+                    {clip.rampingEnabled !== false && (
                         <div className="ramping-controls-horizontal">
                             <div className="ramping-row">
                                 <label className="ramp-label-inline">ON</label>
                                 <select
                                     className="ramp-select"
-                                    value={clip.rampOnDuration || 0}
+                                    value={clip.rampOnDuration === '__mixed__' ? '' : (clip.rampOnDuration || 0)}
                                     onChange={e => handleChange('rampOnDuration', parseInt(e.target.value))}
                                 >
+                                    {clip.rampOnDuration === '__mixed__' && <option value="">(Mixed)</option>}
                                     <option value="0">Instant (0ms)</option>
                                     <option value="500">500 ms</option>
                                     <option value="1000">1000 ms</option>
@@ -493,9 +519,10 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                                 <label className="ramp-label-inline">OFF</label>
                                 <select
                                     className="ramp-select"
-                                    value={clip.rampOffDuration || 0}
+                                    value={clip.rampOffDuration === '__mixed__' ? '' : (clip.rampOffDuration || 0)}
                                     onChange={e => handleChange('rampOffDuration', parseInt(e.target.value))}
                                 >
+                                    {clip.rampOffDuration === '__mixed__' && <option value="">(Mixed)</option>}
                                     <option value="0">Instant (0ms)</option>
                                     <option value="500">500 ms</option>
                                     <option value="1000">1000 ms</option>
@@ -507,7 +534,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 </div>
             )}
 
-            {clip.type === 'gif' && (
+            {!isMulti && clip.type === 'gif' && (
                 <div className="section-container content-box">
                     <label className="section-title">Preview</label>
                     {clip.assetId && assets[clip.assetId] ? (
@@ -522,7 +549,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                 <label className="section-title">Target Car Group</label>
                 <div className="group-grid">
                     <button
-                        className={`group-grid-item ${!clip.carGroupId ? 'active' : ''}`}
+                        className={`group-grid-item ${clip.carGroupId === '' ? 'active' : ''}`}
                         onClick={() => handleChange('carGroupId', '')}
                     >
                         <img src={allCarsThumbnail} alt="ALL" className="all-cars-icon" />
@@ -535,7 +562,7 @@ export default function ClipEditor({ clip, onChange, onDelete, assets = {}, ligh
                             onClick={() => handleChange('carGroupId', group.id)}
                         >
                             <img src={group.thumbnail} alt={group.name} />
-                            <span>{group.name}</span>
+                            <span>{group.name} {clip.carGroupId === '__mixed__' && '(Mixed)'}</span>
                         </button>
                     ))}
                 </div>

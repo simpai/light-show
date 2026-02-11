@@ -783,27 +783,41 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setSelectedLayerId(newProject.layers[newProject.layers.length - 1].id);
     };
 
-    const handleClipUpdate = (updatedClip) => {
+    const handleClipUpdate = (updatedData, field = null) => {
         const json = project.toJSON(false);
         const newProject = ProjectState.fromJSONSync(json);
         newProject.assets = project.assets;
 
+        // If field is provided, it's a batch/partial update for all selected clips.
+        // Otherwise, it's a full update for a single clip (legacy/palette support).
+        const targetIds = field ? selectedClipIds : [updatedData.id];
         let found = false;
+
         newProject.layers.forEach(layer => {
-            const idx = layer.clips.findIndex(c => c.id === updatedClip.id);
-            if (idx !== -1) {
-                layer.clips[idx] = updatedClip;
-                found = true;
-            }
+            layer.clips = layer.clips.map(c => {
+                if (targetIds.includes(c.id)) {
+                    found = true;
+                    if (field) {
+                        return { ...c, [field]: updatedData[field] };
+                    }
+                    return updatedData;
+                }
+                return c;
+            });
         });
 
         if (!found) {
             newProject.palette.forEach(slot => {
-                const idx = slot.clips.findIndex(c => c.id === updatedClip.id);
-                if (idx !== -1) {
-                    slot.clips[idx] = updatedClip;
-                    found = true;
-                }
+                slot.clips = slot.clips.map(c => {
+                    if (targetIds.includes(c.id) || c.id === updatedData.id) {
+                        found = true;
+                        if (field) {
+                            return { ...c, [field]: updatedData[field] };
+                        }
+                        return updatedData;
+                    }
+                    return c;
+                });
             });
         }
 
@@ -1188,27 +1202,27 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
     };
 
-    let selectedClip = null;
-    if (selectedClipIds.length === 1) {
-        for (const layer of project.layers) {
-            const found = layer.clips.find(c => c.id === selectedClipIds[0]);
-            if (found) {
-                selectedClip = found;
-                break;
-            }
-        }
-    }
+    const selectedClips = useMemo(() => {
+        if (selectedClipIds.length === 0) return [];
+        const found = [];
+        project.layers.forEach(layer => {
+            layer.clips.forEach(clip => {
+                if (selectedClipIds.includes(clip.id)) {
+                    found.push(clip);
+                }
+            });
+        });
+        return found;
+    }, [selectedClipIds, project]);
 
-    let selectedPaletteClip = null;
-    if (selectedPaletteClipId) {
+    const selectedPaletteClip = useMemo(() => {
+        if (!selectedPaletteClipId) return null;
         for (const slot of project.palette) {
             const found = slot.clips.find(c => c.id === selectedPaletteClipId);
-            if (found) {
-                selectedPaletteClip = found;
-                break;
-            }
+            if (found) return found;
         }
-    }
+        return null;
+    }, [selectedPaletteClipId, project.palette]);
 
     const handleSaveProject = async () => {
         try {
@@ -1563,11 +1577,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 </div>
 
                 <div className="properties-panel">
-                    {(selectedClipIds.length === 1 && selectedClip) || (selectedPaletteClipId && selectedPaletteClip) ? (
+                    {(selectedClips.length > 0 || selectedPaletteClip) ? (
                         <ClipEditor
-                            clip={selectedPaletteClip || selectedClip}
+                            clips={selectedPaletteClip ? [selectedPaletteClip] : selectedClips}
                             onChange={handleClipUpdate}
-                            onDelete={handleClipDelete}
+                            onDelete={handleDelete}
                             assets={project.assets}
                             lightGroups={project.lightGroups}
                             carGroups={project.carGroups}

@@ -425,41 +425,49 @@ export class ShowRenderer {
      * 8 cardinal/ordinal directions.  normalizedDistance ∈ [0, 1]
      */
     calculateDurationWaveOffset(row, col, direction, duration, gridSize, invert = false) {
-        const dir = direction || 'right';
+        let dir = direction || 'to-right';
 
-        let effectiveDir = dir;
         if (invert) {
             const opposites = {
-                'right': 'left', 'left': 'right',
-                'up': 'down', 'down': 'up',
-                'down-right': 'up-left', 'up-left': 'down-right',
-                'down-left': 'up-right', 'up-right': 'down-left',
+                'to-right': 'to-left', 'to-left': 'to-right',
+                'to-down': 'to-up', 'to-up': 'to-down',
+                'to-down-right': 'to-up-left', 'to-up-left': 'to-down-right',
+                'to-down-left': 'to-up-right', 'to-up-right': 'to-down-left',
             };
-            effectiveDir = opposites[dir] || dir;
+            dir = opposites[dir] || dir;
         }
 
         let distance, maxDistance;
-        switch (effectiveDir) {
-            case 'right':
-                distance = col; maxDistance = gridSize.cols - 1; break;
-            case 'left':
-                distance = gridSize.cols - col - 1; maxDistance = gridSize.cols - 1; break;
-            case 'down':
-                distance = row; maxDistance = gridSize.rows - 1; break;
-            case 'up':
-                distance = gridSize.rows - row - 1; maxDistance = gridSize.rows - 1; break;
-            case 'down-right':
+        switch (dir) {
+            case 'to-left':
+                distance = col;
+                maxDistance = gridSize.cols - 1; break;
+            case 'to-right':
+                distance = gridSize.cols - col - 1;
+                maxDistance = gridSize.cols - 1; break;
+            case 'to-up':
+                distance = row;
+                maxDistance = gridSize.rows - 1; break;
+            case 'to-down':
+                distance = gridSize.rows - row - 1;
+                maxDistance = gridSize.rows - 1; break;
+            case 'to-up-left':
                 distance = row + col;
                 maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
-            case 'down-left':
-                distance = row + (gridSize.cols - col - 1);
-                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
-            case 'up-right':
-                distance = (gridSize.rows - row - 1) + col;
-                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
-            case 'up-left':
+            case 'to-down-right':
                 distance = (gridSize.rows - row - 1) + (gridSize.cols - col - 1);
                 maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
+            case 'to-down-left':
+                distance = (gridSize.rows - row - 1) + col;
+                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
+            case 'to-up-right':
+                distance = row + (gridSize.cols - col - 1);
+                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
+            // Legacy fallbacks for old clips
+            case 'right': distance = gridSize.cols - col - 1; maxDistance = gridSize.cols - 1; break;
+            case 'left': distance = col; maxDistance = gridSize.cols - 1; break;
+            case 'down': distance = gridSize.rows - row - 1; maxDistance = gridSize.rows - 1; break;
+            case 'up': distance = row; maxDistance = gridSize.rows - 1; break;
             default:
                 distance = 0; maxDistance = 1;
         }

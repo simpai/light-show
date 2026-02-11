@@ -400,7 +400,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                     // Reset direction to valid default for the new pattern type
                                     const dirDefaults = {
                                         'wave': 'horizontal', 'sequential': 'row-by-row', 'radial': 'outward',
-                                        'directional': 'right', 'new-radial': 'close', 'curtain': 'vert-close',
+                                        'directional': 'to-right', 'new-radial': 'close', 'curtain': 'vert-close',
                                     };
                                     const newDir = dirDefaults[newPattern];
                                     const updates = { pattern: newPattern };
@@ -510,14 +510,14 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                             )}
                                             {clip.pattern === 'directional' && (
                                                 <>
-                                                    <option value="right">Right</option>
-                                                    <option value="left">Left</option>
-                                                    <option value="down">Down</option>
-                                                    <option value="up">Up</option>
-                                                    <option value="down-right">Down-Right</option>
-                                                    <option value="down-left">Down-Left</option>
-                                                    <option value="up-right">Up-Right</option>
-                                                    <option value="up-left">Up-Left</option>
+                                                    <option value="to-right">To Right</option>
+                                                    <option value="to-left">To Left</option>
+                                                    <option value="to-down">To Down</option>
+                                                    <option value="to-up">To Up</option>
+                                                    <option value="to-down-right">To Down-Right</option>
+                                                    <option value="to-down-left">To Down-Left</option>
+                                                    <option value="to-up-right">To Up-Right</option>
+                                                    <option value="to-up-left">To Up-Left</option>
                                                 </>
                                             )}
                                             {clip.pattern === 'new-radial' && (

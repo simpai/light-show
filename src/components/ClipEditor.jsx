@@ -417,10 +417,10 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 style={{ flex: 1 }}
                             >
                                 {clip.pattern === '__mixed__' && <option value="">(Mixed)</option>}
-                                <option value="uniform">Uniform</option>
-                                <option value="wave">Wave</option>
-                                <option value="sequential">Sequential</option>
-                                <option value="radial">Radial (Oval)</option>
+                                <option value="uniform">Fill</option>
+                                <option value="wave">Wave (deprecated)</option>
+                                <option value="sequential">Sequential (deprecated)</option>
+                                <option value="radial">Radial (deprecated)</option>
                                 <option disabled>──────────</option>
                                 <option value="directional">Directional</option>
                                 <option value="new-radial">New Radial</option>
@@ -428,7 +428,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 <option value="dissolve">Dissolve</option>
                                 <option value="noise">Noise</option>
                             </select>
-                            {clip.pattern !== '__mixed__' && ['directional', 'new-radial', 'curtain', 'dissolve', 'noise'].includes(clip.pattern) && (
+                            {clip.pattern !== '__mixed__' && (
                                 <div className="invert-toggle-mini">
                                     <input
                                         type="checkbox"

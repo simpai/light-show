@@ -170,7 +170,7 @@ export class ShowRenderer {
             if (layer.muted) continue;
             for (const clip of layer.clips) {
                 if (timeMs >= clip.startTime && timeMs < (clip.startTime + clip.duration)) {
-                    if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif') {
+                    if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif' || clip.carGroupId) {
                         hasPositionPattern = true;
                         break;
                     }

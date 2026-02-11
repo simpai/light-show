@@ -200,6 +200,14 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
         }
     };
 
+    const handleChanges = (updates) => {
+        if (isMulti) {
+            onChange(updates, '__multiple__');
+        } else {
+            onChange({ ...firstClip, ...updates });
+        }
+    };
+
     const calculateDuration = (mode, updatedClip) => {
         const asset = updatedClip.assetId ? assets[updatedClip.assetId] : null;
         const frameCount = asset?.frames?.length || 1;
@@ -384,166 +392,226 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     <div className="section-container">
                         <label className="section-title">Pattern</label>
                         <div className="form-group">
-                            <label className="compact-label" style={{ minWidth: '80px' }}>Type</label>
+                            <label className="compact-label" style={{ minWidth: '55px' }}>Type</label>
                             <select
                                 value={clip.pattern === '__mixed__' ? '' : (clip.pattern || 'uniform')}
-                                onChange={e => handleChange('pattern', e.target.value)}
+                                onChange={e => {
+                                    const newPattern = e.target.value;
+                                    // Reset direction to valid default for the new pattern type
+                                    const dirDefaults = {
+                                        'wave': 'horizontal', 'sequential': 'row-by-row', 'radial': 'outward',
+                                        'new-wave': 'right', 'new-radial': 'outward',
+                                    };
+                                    const newDir = dirDefaults[newPattern];
+                                    const updates = { pattern: newPattern };
+                                    if (newDir) updates.patternDirection = newDir;
+                                    handleChanges(updates);
+                                }}
+                                style={{ flex: 1 }}
                             >
                                 {clip.pattern === '__mixed__' && <option value="">(Mixed)</option>}
                                 <option value="uniform">Uniform</option>
                                 <option value="wave">Wave</option>
                                 <option value="sequential">Sequential</option>
-                                <option value="radial">Radial</option>
+                                <option value="radial">Radial (Oval)</option>
+                                <option disabled>──────────</option>
+                                <option value="new-wave">New Wave</option>
+                                <option value="new-radial">New Radial</option>
+                                <option value="dissolve">Dissolve</option>
                             </select>
+                            {clip.pattern !== '__mixed__' && ['new-wave', 'new-radial', 'dissolve'].includes(clip.pattern) && (
+                                <div className="invert-toggle-mini">
+                                    <input
+                                        type="checkbox"
+                                        id="pattern-invert"
+                                        checked={clip.patternInvert === '__mixed__' ? false : (clip.patternInvert || false)}
+                                        ref={el => el && (el.indeterminate = clip.patternInvert === '__mixed__')}
+                                        onChange={e => handleChange('patternInvert', e.target.checked)}
+                                    />
+                                    <label htmlFor="pattern-invert" className="compact-label" style={{ margin: 0, cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>INVERT</label>
+                                </div>
+                            )}
                         </div>
 
                         {clip.pattern !== '__mixed__' && clip.pattern !== 'uniform' && (
                             <>
-                                <div className="form-group">
-                                    <label className="compact-label" style={{ minWidth: '80px' }}>Dir</label>
-                                    <select
-                                        value={clip.patternDirection === '__mixed__' ? '' : (clip.patternDirection || 'horizontal')}
-                                        onChange={e => handleChange('patternDirection', e.target.value)}
-                                    >
-                                        {clip.patternDirection === '__mixed__' && <option value="">(Mixed)</option>}
-                                        {clip.pattern === 'wave' && (
-                                            <>
-                                                <option value="horizontal">Horizontal</option>
-                                                <option value="vertical">Vertical</option>
-                                                <option value="diagonal-right">↘</option>
-                                                <option value="diagonal-left">↙</option>
-                                            </>
-                                        )}
-                                        {clip.pattern === 'sequential' && (
-                                            <>
-                                                <option value="row-by-row">Row</option>
-                                                <option value="col-by-col">Col</option>
-                                            </>
-                                        )}
-                                        {clip.pattern === 'radial' && (
-                                            <>
-                                                <option value="outward">Outward</option>
-                                                <option value="inward">Inward</option>
-                                            </>
-                                        )}
-                                    </select>
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="compact-label" style={{ minWidth: '80px' }}>Speed</label>
-                                    <div className="slider-with-val" style={{ flex: 1 }}>
-                                        <input
-                                            type="range"
-                                            min="0.1"
-                                            max="5"
-                                            step="0.1"
-                                            value={clip.patternSpeed === '__mixed__' ? 1 : (clip.patternSpeed || 1)}
-                                            onChange={e => handleChange('patternSpeed', parseFloat(e.target.value))}
-                                        />
-                                        <span className="val-hint">{clip.patternSpeed === '__mixed__' ? 'Mixed' : (clip.patternSpeed || 1).toFixed(1) + 'x'}</span>
+                                {/* Direction: show for all except dissolve */}
+                                {clip.pattern !== 'dissolve' && (
+                                    <div className="form-group">
+                                        <label className="compact-label" style={{ minWidth: '80px' }}>Dir</label>
+                                        <select
+                                            value={clip.patternDirection === '__mixed__' ? '' : (clip.patternDirection || 'horizontal')}
+                                            onChange={e => handleChange('patternDirection', e.target.value)}
+                                        >
+                                            {clip.patternDirection === '__mixed__' && <option value="">(Mixed)</option>}
+                                            {clip.pattern === 'wave' && (
+                                                <>
+                                                    <option value="horizontal">Horizontal (Right)</option>
+                                                    <option value="vertical">Vertical (Down)</option>
+                                                    <option value="diagonal-right">↘ (Down-Right)</option>
+                                                    <option value="diagonal-left">↙ (Down-Left)</option>
+                                                </>
+                                            )}
+                                            {clip.pattern === 'sequential' && (
+                                                <>
+                                                    <option value="row-by-row">Row</option>
+                                                    <option value="col-by-col">Col</option>
+                                                </>
+                                            )}
+                                            {clip.pattern === 'radial' && (
+                                                <>
+                                                    <option value="outward">Outward</option>
+                                                    <option value="inward">Inward</option>
+                                                </>
+                                            )}
+                                            {clip.pattern === 'new-wave' && (
+                                                <>
+                                                    <option value="right">Right</option>
+                                                    <option value="left">Left</option>
+                                                    <option value="down">Down</option>
+                                                    <option value="up">Up</option>
+                                                    <option value="down-right">Down-Right</option>
+                                                    <option value="down-left">Down-Left</option>
+                                                    <option value="up-right">Up-Right</option>
+                                                    <option value="up-left">Up-Left</option>
+                                                </>
+                                            )}
+                                            {clip.pattern === 'new-radial' && (
+                                                <>
+                                                    <option value="outward">Outward</option>
+                                                    <option value="inward">Inward</option>
+                                                </>
+                                            )}
+                                        </select>
                                     </div>
-                                </div>
+                                )}
+
+                                {/* Speed: only for legacy patterns */}
+                                {['wave', 'sequential', 'radial'].includes(clip.pattern) && (
+                                    <div className="form-group">
+                                        <label className="compact-label" style={{ minWidth: '80px' }}>Speed</label>
+                                        <div className="slider-with-val" style={{ flex: 1 }}>
+                                            <input
+                                                type="range"
+                                                min="0.1"
+                                                max="5"
+                                                step="0.1"
+                                                value={clip.patternSpeed === '__mixed__' ? 1 : (clip.patternSpeed || 1)}
+                                                onChange={e => handleChange('patternSpeed', parseFloat(e.target.value))}
+                                            />
+                                            <span className="val-hint">{clip.patternSpeed === '__mixed__' ? 'Mixed' : (clip.patternSpeed || 1).toFixed(1) + 'x'}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
 
                 </>
-            )}
+            )
+            }
 
-            {clip.type !== 'gif' && (
-                <div className="section-container content-box">
-                    <label className="section-title">Target Light Groups</label>
-                    <div className="channels-list">
-                        {Object.entries(displayGroups).map(([label, groupData]) => {
-                            const values = clips.map(c => (c.targetLightGroups || []).includes(label));
-                            const allSame = values.every(v => v === values[0]);
-                            const isChecked = allSame ? values[0] : false;
+            {
+                clip.type !== 'gif' && (
+                    <div className="section-container content-box">
+                        <label className="section-title">Target Light Groups</label>
+                        <div className="channels-list">
+                            {Object.entries(displayGroups).map(([label, groupData]) => {
+                                const values = clips.map(c => (c.targetLightGroups || []).includes(label));
+                                const allSame = values.every(v => v === values[0]);
+                                const isChecked = allSame ? values[0] : false;
 
-                            return (
-                                <label key={label} className="channel-item" style={{ opacity: allSame ? 1 : 0.6 }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        ref={el => el && (el.indeterminate = !allSame)}
-                                        onChange={() => toggleLightGroup(label)}
-                                    />
-                                    <span>{label} {!allSame && '(Mixed)'}</span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {clip.type !== 'gif' && (
-                <div className="section-container content-box">
-                    <div className="ramping-header-row">
-                        <div className="toggle-group-inline">
-                            <input
-                                id="ramping-toggle"
-                                type="checkbox"
-                                className="toggle-checkbox"
-                                checked={clip.rampingEnabled === '__mixed__' ? false : (clip.rampingEnabled || false)}
-                                ref={el => el && (el.indeterminate = clip.rampingEnabled === '__mixed__')}
-                                onChange={e => {
-                                    const enabled = e.target.checked;
-                                    handleChange('rampingEnabled', enabled);
-                                    if (enabled) {
-                                        handleChange('rampOnDuration', clip.rampOnDuration === '__mixed__' ? 500 : (clip.rampOnDuration || 500));
-                                        handleChange('rampOffDuration', clip.rampOffDuration === '__mixed__' ? 500 : (clip.rampOffDuration || 500));
-                                    }
-                                }}
-                            />
-                            <label htmlFor="ramping-toggle" className="section-title-inline">Ramping {clip.rampingEnabled === '__mixed__' && '(Mixed)'}</label>
+                                return (
+                                    <label key={label} className="channel-item" style={{ opacity: allSame ? 1 : 0.6 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            ref={el => el && (el.indeterminate = !allSame)}
+                                            onChange={() => toggleLightGroup(label)}
+                                        />
+                                        <span>{label} {!allSame && '(Mixed)'}</span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
+                )
+            }
 
-                    {clip.rampingEnabled !== false && (
-                        <div className="ramping-controls-horizontal">
-                            <div className="ramping-row">
-                                <label className="ramp-label-inline">ON</label>
-                                <select
-                                    className="ramp-select"
-                                    value={clip.rampOnDuration === '__mixed__' ? '' : (clip.rampOnDuration || 0)}
-                                    onChange={e => handleChange('rampOnDuration', parseInt(e.target.value))}
-                                >
-                                    {clip.rampOnDuration === '__mixed__' && <option value="">(Mixed)</option>}
-                                    <option value="0">Instant (0ms)</option>
-                                    <option value="500">500 ms</option>
-                                    <option value="1000">1000 ms</option>
-                                    <option value="2000">2000 ms</option>
-                                </select>
-                            </div>
-
-                            <div className="ramping-row">
-                                <label className="ramp-label-inline">OFF</label>
-                                <select
-                                    className="ramp-select"
-                                    value={clip.rampOffDuration === '__mixed__' ? '' : (clip.rampOffDuration || 0)}
-                                    onChange={e => handleChange('rampOffDuration', parseInt(e.target.value))}
-                                >
-                                    {clip.rampOffDuration === '__mixed__' && <option value="">(Mixed)</option>}
-                                    <option value="0">Instant (0ms)</option>
-                                    <option value="500">500 ms</option>
-                                    <option value="1000">1000 ms</option>
-                                    <option value="2000">2000 ms</option>
-                                </select>
+            {
+                clip.type !== 'gif' && (
+                    <div className="section-container content-box">
+                        <div className="ramping-header-row">
+                            <div className="toggle-group-inline">
+                                <input
+                                    id="ramping-toggle"
+                                    type="checkbox"
+                                    className="toggle-checkbox"
+                                    checked={clip.rampingEnabled === '__mixed__' ? false : (clip.rampingEnabled || false)}
+                                    ref={el => el && (el.indeterminate = clip.rampingEnabled === '__mixed__')}
+                                    onChange={e => {
+                                        const enabled = e.target.checked;
+                                        const updates = { rampingEnabled: enabled };
+                                        if (enabled) {
+                                            updates.rampOnDuration = clip.rampOnDuration === '__mixed__' ? 500 : (clip.rampOnDuration || 500);
+                                            updates.rampOffDuration = clip.rampOffDuration === '__mixed__' ? 500 : (clip.rampOffDuration || 500);
+                                        }
+                                        handleChanges(updates);
+                                    }}
+                                />
+                                <label htmlFor="ramping-toggle" className="section-title-inline">Ramping {clip.rampingEnabled === '__mixed__' && '(Mixed)'}</label>
                             </div>
                         </div>
-                    )}
-                </div>
-            )}
 
-            {!isMulti && clip.type === 'gif' && (
-                <div className="section-container content-box">
-                    <label className="section-title">Preview</label>
-                    {clip.assetId && assets[clip.assetId] ? (
-                        <GifPreview asset={assets[clip.assetId]} fps={clip.fps || 15} />
-                    ) : (
-                        <div className="text-gray-500 text-sm p-2">No asset loaded</div>
-                    )}
-                </div>
-            )}
+                        {clip.rampingEnabled !== false && (
+                            <div className="ramping-controls-horizontal">
+                                <div className="ramping-row">
+                                    <label className="ramp-label-inline">ON</label>
+                                    <select
+                                        className="ramp-select"
+                                        value={clip.rampOnDuration === '__mixed__' ? '' : (clip.rampOnDuration || 0)}
+                                        onChange={e => handleChange('rampOnDuration', parseInt(e.target.value))}
+                                    >
+                                        {clip.rampOnDuration === '__mixed__' && <option value="">(Mixed)</option>}
+                                        <option value="0">Instant (0ms)</option>
+                                        <option value="500">500 ms</option>
+                                        <option value="1000">1000 ms</option>
+                                        <option value="2000">2000 ms</option>
+                                    </select>
+                                </div>
+
+                                <div className="ramping-row">
+                                    <label className="ramp-label-inline">OFF</label>
+                                    <select
+                                        className="ramp-select"
+                                        value={clip.rampOffDuration === '__mixed__' ? '' : (clip.rampOffDuration || 0)}
+                                        onChange={e => handleChange('rampOffDuration', parseInt(e.target.value))}
+                                    >
+                                        {clip.rampOffDuration === '__mixed__' && <option value="">(Mixed)</option>}
+                                        <option value="0">Instant (0ms)</option>
+                                        <option value="500">500 ms</option>
+                                        <option value="1000">1000 ms</option>
+                                        <option value="2000">2000 ms</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )
+            }
+
+            {
+                !isMulti && clip.type === 'gif' && (
+                    <div className="section-container content-box">
+                        <label className="section-title">Preview</label>
+                        {clip.assetId && assets[clip.assetId] ? (
+                            <GifPreview asset={assets[clip.assetId]} fps={clip.fps || 15} />
+                        ) : (
+                            <div className="text-gray-500 text-sm p-2">No asset loaded</div>
+                        )}
+                    </div>
+                )
+            }
 
             <div className="section-container content-box car-selection-box">
                 <label className="section-title">Target Car Group</label>
@@ -591,6 +659,26 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     color: white;
                 }
 
+                .invert-toggle-mini {
+                    display: flex;
+                    align-items: center;
+                    gap: 2px;
+                    background: #222;
+                    padding: 2px 3px;
+                    border-radius: 4px;
+                    border: 1px solid #333;
+                    margin-left: 2px;
+                    height: 24px;
+                    flex-shrink: 0;
+                }
+
+                .invert-toggle-mini input {
+                    margin: 0;
+                    cursor: pointer;
+                    width: 14px;
+                    height: 14px;
+                }
+
                 .delete-btn {
                     background: none;
                     border: none;
@@ -610,7 +698,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     margin-bottom: 8px;
                     display: flex;
                     align-items: center;
-                    gap: 8px;
+                    gap: 4px;
                     width: 100%;
                     box-sizing: border-box;
                 }
@@ -633,7 +721,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     background: #2a2a2a;
                     border: 1px solid #444;
                     border-radius: 6px;
-                    padding: 6px 10px;
+                    padding: 6px 8px;
                     color: white;
                     font-size: 13px;
                     outline: none;

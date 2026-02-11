@@ -798,6 +798,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 if (targetIds.includes(c.id)) {
                     found = true;
                     if (field) {
+                        if (field === '__multiple__') {
+                            return { ...c, ...updatedData };
+                        }
                         return { ...c, [field]: updatedData[field] };
                     }
                     return updatedData;
@@ -812,6 +815,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     if (targetIds.includes(c.id) || c.id === updatedData.id) {
                         found = true;
                         if (field) {
+                            if (field === '__multiple__') {
+                                return { ...c, ...updatedData };
+                            }
                             return { ...c, [field]: updatedData[field] };
                         }
                         return updatedData;

@@ -248,15 +248,27 @@ export class ShowRenderer {
                 // Calculate position-based time offset
                 let timeOffset = 0;
                 if (clip.pattern && clip.pattern !== 'uniform') {
+                    const invert = !!clip.patternInvert;
                     switch (clip.pattern) {
+                        // --- Legacy patterns: speed-based, no invert ---
                         case 'wave':
-                            timeOffset = this.calculateWaveOffset(row, col, clip.patternDirection, clip.patternSpeed || 1, gridSize);
+                            timeOffset = this.calculateWaveOffset(row, col, clip.patternDirection, clip.patternSpeed || 1, gridSize, false);
                             break;
                         case 'sequential':
-                            timeOffset = this.calculateSequentialOffset(row, col, clip.patternDirection, clip.patternSpeed || 1);
+                            timeOffset = this.calculateSequentialOffset(row, col, clip.patternDirection, clip.patternSpeed || 1, gridSize, false);
                             break;
                         case 'radial':
-                            timeOffset = this.calculateRadialOffset(row, col, clip.patternDirection, clip.patternSpeed || 1, gridSize);
+                            timeOffset = this.calculateRadialOffset(row, col, clip.patternDirection, clip.patternSpeed || 1, gridSize, false, false);
+                            break;
+                        // --- New patterns: duration-based, no invert (direction stays same) ---
+                        case 'new-wave':
+                            timeOffset = this.calculateDurationWaveOffset(row, col, clip.patternDirection, clip.duration, gridSize, false);
+                            break;
+                        case 'new-radial':
+                            timeOffset = this.calculateDurationRadialOffset(row, col, clip.patternDirection, clip.duration, gridSize, false);
+                            break;
+                        case 'dissolve':
+                            timeOffset = this.calculateDurationDissolveOffset(row, col, clip.id, clip.duration, timeMs, false);
                             break;
                     }
                 }
@@ -264,8 +276,9 @@ export class ShowRenderer {
                 const adjustedTime = timeMs + timeOffset + jitterOffset;
                 const clipTime = adjustedTime - clip.startTime;
 
-                // Only render if within clip duration
-                if (clipTime >= 0 && clipTime < clip.duration) {
+                // Only render if within clip duration (or if inverted effect, which needs to render "background")
+                const isInRange = clipTime >= 0 && clipTime < clip.duration;
+                if (isInRange || (clip.type === 'effect' && clip.patternInvert)) {
                     // Write directly to frameData, no intermediate alloc
                     this.renderClip(clip, clipTime, frameData, row, col, gridSize, layer);
                 }
@@ -278,20 +291,52 @@ export class ShowRenderer {
     /**
      * Calculate time offset for wave pattern
      */
-    calculateWaveOffset(row, col, direction, speed, gridSize) {
+    calculateWaveOffset(row, col, direction, speed, gridSize, invert = false) {
         let distance;
-        switch (direction) {
-            case 'horizontal':
+        const dir = direction || 'right';
+
+        // Logical "Forward" directions
+        let effectiveDir = dir;
+        if (invert) {
+            const opposites = {
+                'right': 'left', 'left': 'right',
+                'up': 'down', 'down': 'up',
+                'horizontal': 'left', 'vertical': 'up',
+                'down-right': 'up-left', 'up-left': 'down-right',
+                'down-left': 'up-right', 'up-right': 'down-left',
+                'diagonal-right': 'up-left', 'diagonal-left': 'up-right'
+            };
+            effectiveDir = opposites[dir] || dir;
+        }
+
+        switch (effectiveDir) {
+            case 'right':
+            case 'horizontal': // legacy
                 distance = col;
                 break;
-            case 'vertical':
+            case 'left':
+                distance = (gridSize.cols - col - 1);
+                break;
+            case 'down':
+            case 'vertical': // legacy
                 distance = row;
                 break;
-            case 'diagonal-right':
+            case 'up':
+                distance = (gridSize.rows - row - 1);
+                break;
+            case 'down-right':
+            case 'diagonal-right': // legacy
                 distance = row + col;
                 break;
-            case 'diagonal-left':
+            case 'down-left':
+            case 'diagonal-left': // legacy
                 distance = row + (gridSize.cols - col - 1);
+                break;
+            case 'up-right':
+                distance = (gridSize.rows - row - 1) + col;
+                break;
+            case 'up-left':
+                distance = (gridSize.rows - row - 1) + (gridSize.cols - col - 1);
                 break;
             default:
                 distance = 0;
@@ -302,31 +347,159 @@ export class ShowRenderer {
     /**
      * Calculate time offset for sequential pattern
      */
-    calculateSequentialOffset(row, col, direction, speed) {
-        const index = direction === 'row-by-row' ? row : col;
-        return index * (200 / speed); // ms delay between rows/cols
+    calculateSequentialOffset(row, col, direction, speed, gridSize = null, invert = false) {
+        let dir = direction || 'row-by-row';
+        const isRow = dir === 'row-by-row';
+        let index = isRow ? row : col;
+
+        if (invert && gridSize) {
+            const max = isRow ? gridSize.rows : gridSize.cols;
+            index = max - index - 1;
+        }
+        return index * (200 / speed);
     }
 
     /**
      * Calculate time offset for radial pattern
      */
-    calculateRadialOffset(row, col, direction, speed, gridSize) {
+    calculateRadialOffset(row, col, direction, speed, gridSize, corrected = false, invert = false) {
         const centerRow = gridSize.rows / 2;
         const centerCol = gridSize.cols / 2;
-        const distance = Math.sqrt(
-            Math.pow(row - centerRow, 2) +
+
+        // Correct for 1:2 row:col ratio if requested
+        const rowMult = corrected ? 2.0 : 1.0;
+
+        let distance = Math.sqrt(
+            Math.pow((row - centerRow) * rowMult, 2) +
             Math.pow(col - centerCol, 2)
         );
+
         const maxDistance = Math.sqrt(
-            Math.pow(centerRow, 2) +
+            Math.pow(centerRow * rowMult, 2) +
             Math.pow(centerCol, 2)
         );
 
-        if (direction === 'outward') {
+        const dir = direction || 'outward';
+        let type = String(dir).split('-')[0]; // inward, outward
+
+        if (invert) {
+            type = type === 'outward' ? 'inward' : 'outward';
+        }
+
+        if (type === 'outward') {
             return distance * (100 / speed);
         } else { // inward
             return (maxDistance - distance) * (100 / speed);
         }
+    }
+
+    /**
+     * Calculate time offset for dissolve pattern (legacy, speed-based)
+     */
+    calculateDissolveOffset(row, col, clipId, speed, timeMs, invert = false) {
+        // High frequency dissolve: use timeMs to jump the offset frequently
+        const timeFactor = Math.floor(timeMs * (speed || 1) / 50);
+        const seed = (row * 31 + col) * 17 + (parseInt(clipId.substring(0, 8), 16) || 0) + timeFactor;
+        const rand = Math.sin(seed) * 10000;
+        let normalized = rand - Math.floor(rand);
+        if (invert) normalized = 1.0 - normalized;
+        return normalized * 1000;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  NEW PATTERNS — Duration-based (offset fills clip.duration)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * New Wave: direction-based wave that auto-scales to clip duration.
+     * 8 cardinal/ordinal directions.  normalizedDistance ∈ [0, 1]
+     */
+    calculateDurationWaveOffset(row, col, direction, duration, gridSize, invert = false) {
+        const dir = direction || 'right';
+
+        let effectiveDir = dir;
+        if (invert) {
+            const opposites = {
+                'right': 'left', 'left': 'right',
+                'up': 'down', 'down': 'up',
+                'down-right': 'up-left', 'up-left': 'down-right',
+                'down-left': 'up-right', 'up-right': 'down-left',
+            };
+            effectiveDir = opposites[dir] || dir;
+        }
+
+        let distance, maxDistance;
+        switch (effectiveDir) {
+            case 'right':
+                distance = col; maxDistance = gridSize.cols - 1; break;
+            case 'left':
+                distance = gridSize.cols - col - 1; maxDistance = gridSize.cols - 1; break;
+            case 'down':
+                distance = row; maxDistance = gridSize.rows - 1; break;
+            case 'up':
+                distance = gridSize.rows - row - 1; maxDistance = gridSize.rows - 1; break;
+            case 'down-right':
+                distance = row + col;
+                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
+            case 'down-left':
+                distance = row + (gridSize.cols - col - 1);
+                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
+            case 'up-right':
+                distance = (gridSize.rows - row - 1) + col;
+                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
+            case 'up-left':
+                distance = (gridSize.rows - row - 1) + (gridSize.cols - col - 1);
+                maxDistance = (gridSize.rows - 1) + (gridSize.cols - 1); break;
+            default:
+                distance = 0; maxDistance = 1;
+        }
+        const normalized = maxDistance > 0 ? distance / maxDistance : 0;
+        return normalized * duration;
+    }
+
+    /**
+     * New Radial: circle-corrected radial that auto-scales to clip duration.
+     */
+    calculateDurationRadialOffset(row, col, direction, duration, gridSize, invert = false) {
+        const centerRow = gridSize.rows / 2;
+        const centerCol = gridSize.cols / 2;
+        // Always correct for 1:2 aspect ratio
+        const rowMult = 2.0;
+
+        const distance = Math.sqrt(
+            Math.pow((row - centerRow) * rowMult, 2) +
+            Math.pow(col - centerCol, 2)
+        );
+        const maxDistance = Math.sqrt(
+            Math.pow(centerRow * rowMult, 2) +
+            Math.pow(centerCol, 2)
+        );
+
+        const dir = direction || 'outward';
+        let type = String(dir).split('-')[0];
+        if (invert) {
+            type = type === 'outward' ? 'inward' : 'outward';
+        }
+
+        let normalized;
+        if (type === 'outward') {
+            normalized = maxDistance > 0 ? distance / maxDistance : 0;
+        } else {
+            normalized = maxDistance > 0 ? (maxDistance - distance) / maxDistance : 0;
+        }
+        return normalized * duration;
+    }
+
+    /**
+     * Dissolve (duration-based): random flicker that auto-scales to duration.
+     */
+    calculateDurationDissolveOffset(row, col, clipId, duration, timeMs, invert = false) {
+        const timeFactor = Math.floor(timeMs / 50);
+        const seed = (row * 31 + col) * 17 + (parseInt(clipId.substring(0, 8), 16) || 0) + timeFactor;
+        const rand = Math.sin(seed) * 10000;
+        let normalized = rand - Math.floor(rand);
+        if (invert) normalized = 1.0 - normalized;
+        return normalized * duration;
     }
 
     renderLayer(layer, timeMs) {
@@ -400,12 +573,29 @@ export class ShowRenderer {
 
         if (targetChannels.length === 0) return;
 
-        if (clip.effectType === 'flash') {
-            this.applyToChannels(targetChannels, value, frame);
-        } else if (clip.effectType === 'strobe' || clip.effectType === 'pulse') {
-            const freq = clip.speed || 5;
-            const isOn = Math.floor(clipTime / 1000 * 2 * freq) % 2 === 0;
-            this.applyToChannels(targetChannels, isOn ? value : 0, frame);
+        let brightness = 0;
+        const isInRange = clipTime >= 0 && clipTime < clip.duration;
+
+        if (isInRange) {
+            if (clip.effectType === 'flash') {
+                brightness = value;
+            } else if (clip.effectType === 'strobe' || clip.effectType === 'pulse') {
+                const freq = clip.speed || 5;
+                const isOn = Math.floor(clipTime / 1000 * 2 * freq) % 2 === 0;
+                brightness = isOn ? value : 0;
+            }
+        } else {
+            // Out of range (due to pattern offset) means effectively OFF in normal mode
+            brightness = 0;
+        }
+
+        // Apply Inversion: 0 -> 255, 255 -> 0
+        if (clip.patternInvert) {
+            brightness = 255 - brightness;
+        }
+
+        if (brightness > 0) {
+            this.applyToChannels(targetChannels, brightness, frame);
         }
     }
 

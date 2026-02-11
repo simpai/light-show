@@ -80,6 +80,8 @@ export class ProjectState {
                 rampOffEnabled: clipConf.rampOffEnabled !== undefined ? clipConf.rampOffEnabled : true,
                 rampOnDuration: clipConf.rampOnDuration || 500,
                 rampOffDuration: clipConf.rampOffDuration || 500,
+                patternDensity: clipConf.patternDensity !== undefined ? clipConf.patternDensity : 0.5,
+                patternInterval: clipConf.patternInterval !== undefined ? clipConf.patternInterval : 100,
                 ...clipConf
             };
             layer.clips.push(newClip);

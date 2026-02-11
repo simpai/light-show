@@ -261,14 +261,24 @@ export class ShowRenderer {
                             timeOffset = this.calculateRadialOffset(row, col, clip.patternDirection, clip.patternSpeed || 1, gridSize, false, false);
                             break;
                         // --- New patterns: duration-based, no invert (direction stays same) ---
-                        case 'new-wave':
+                        case 'directional':
                             timeOffset = this.calculateDurationWaveOffset(row, col, clip.patternDirection, clip.duration, gridSize, false);
                             break;
                         case 'new-radial':
                             timeOffset = this.calculateDurationRadialOffset(row, col, clip.patternDirection, clip.duration, gridSize, false);
                             break;
+                        case 'curtain':
+                            timeOffset = this.calculateDurationCurtainOffset(row, col, clip.patternDirection, clip.duration, gridSize);
+                            break;
                         case 'dissolve':
                             timeOffset = this.calculateDurationDissolveOffset(row, col, clip.id, clip.duration, timeMs, false);
+                            break;
+                        case 'noise':
+                            timeOffset = this.calculateDurationNoiseOffset(
+                                row, col, clip.id, clip.duration, timeMs,
+                                clip.patternDensity ?? 0.5,
+                                clip.patternInterval ?? 100
+                            );
                             break;
                     }
                 }
@@ -411,7 +421,7 @@ export class ShowRenderer {
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * New Wave: direction-based wave that auto-scales to clip duration.
+     * Directional: direction-based wave that auto-scales to clip duration.
      * 8 cardinal/ordinal directions.  normalizedDistance ∈ [0, 1]
      */
     calculateDurationWaveOffset(row, col, direction, duration, gridSize, invert = false) {
@@ -475,17 +485,47 @@ export class ShowRenderer {
             Math.pow(centerCol, 2)
         );
 
-        const dir = direction || 'outward';
-        let type = String(dir).split('-')[0];
+        let type = direction || 'close';
         if (invert) {
-            type = type === 'outward' ? 'inward' : 'outward';
+            type = type === 'close' ? 'open' : 'close';
         }
 
         let normalized;
-        if (type === 'outward') {
+        if (type === 'close' || type === 'outward') {
             normalized = maxDistance > 0 ? distance / maxDistance : 0;
         } else {
+            // open or inward
             normalized = maxDistance > 0 ? (maxDistance - distance) / maxDistance : 0;
+        }
+        return normalized * duration;
+    }
+
+    /**
+     * Curtain (duration-based): expands from the center axis outwards.
+     */
+    calculateDurationCurtainOffset(row, col, direction, duration, gridSize) {
+        let normalized;
+        if (direction === 'vert-close') {
+            const center = (gridSize.rows - 1) / 2;
+            const maxDist = Math.max(center, gridSize.rows - 1 - center);
+            const dist = Math.abs(row - center);
+            normalized = maxDist > 0 ? dist / maxDist : 0;
+        } else if (direction === 'vert-open') {
+            const center = (gridSize.rows - 1) / 2;
+            const maxDist = Math.max(center, gridSize.rows - 1 - center);
+            const dist = Math.abs(row - center);
+            normalized = maxDist > 0 ? (maxDist - dist) / maxDist : 0;
+        } else if (direction === 'horiz-open') {
+            const center = (gridSize.cols - 1) / 2;
+            const maxDist = Math.max(center, gridSize.cols - 1 - center);
+            const dist = Math.abs(col - center);
+            normalized = maxDist > 0 ? (maxDist - dist) / maxDist : 0;
+        } else {
+            // horiz-close (default)
+            const center = (gridSize.cols - 1) / 2;
+            const maxDist = Math.max(center, gridSize.cols - 1 - center);
+            const dist = Math.abs(col - center);
+            normalized = maxDist > 0 ? dist / maxDist : 0;
         }
         return normalized * duration;
     }
@@ -500,6 +540,33 @@ export class ShowRenderer {
         let normalized = rand - Math.floor(rand);
         if (invert) normalized = 1.0 - normalized;
         return normalized * duration;
+    }
+
+    calculateDurationNoiseOffset(row, col, clipId, duration, timeMs, density = 0.5, interval = 100) {
+        const intervalMs = Math.max(20, interval || 100);
+        const timeFactor = Math.floor(timeMs / intervalMs);
+
+        // Robust integer-based hash for predictable randomness
+        const clipBase = parseInt(String(clipId).substring(0, 8), 16) || 0;
+        let h = (row * 1013 + col * 67 + timeFactor * 123 + clipBase) >>> 0;
+
+        // Simple but effective MurmurHash-style mixer
+        h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+        h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+        h ^= h >>> 16;
+
+        // Normalize to 0-1
+        const rand = (h >>> 0) / 4294967296;
+
+        // Density fallback
+        const d = (density === undefined || density === null) ? 0.5 : Number(density);
+
+        if (rand < d) {
+            return 0; // Active car
+        } else {
+            // Far out of range to ensure it stays OFF
+            return duration + 10000;
+        }
     }
 
     renderLayer(layer, timeMs) {

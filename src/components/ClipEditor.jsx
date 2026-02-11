@@ -400,11 +400,18 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                     // Reset direction to valid default for the new pattern type
                                     const dirDefaults = {
                                         'wave': 'horizontal', 'sequential': 'row-by-row', 'radial': 'outward',
-                                        'new-wave': 'right', 'new-radial': 'outward',
+                                        'directional': 'right', 'new-radial': 'close', 'curtain': 'vert-close',
                                     };
                                     const newDir = dirDefaults[newPattern];
                                     const updates = { pattern: newPattern };
                                     if (newDir) updates.patternDirection = newDir;
+
+                                    // Set defaults for new patterns to avoid undefined/NaN in renderer
+                                    if (newPattern === 'noise') {
+                                        updates.patternDensity = 0.5;
+                                        updates.patternInterval = 100;
+                                    }
+
                                     handleChanges(updates);
                                 }}
                                 style={{ flex: 1 }}
@@ -415,11 +422,13 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 <option value="sequential">Sequential</option>
                                 <option value="radial">Radial (Oval)</option>
                                 <option disabled>──────────</option>
-                                <option value="new-wave">New Wave</option>
+                                <option value="directional">Directional</option>
                                 <option value="new-radial">New Radial</option>
+                                <option value="curtain">Curtain</option>
                                 <option value="dissolve">Dissolve</option>
+                                <option value="noise">Noise</option>
                             </select>
-                            {clip.pattern !== '__mixed__' && ['new-wave', 'new-radial', 'dissolve'].includes(clip.pattern) && (
+                            {clip.pattern !== '__mixed__' && ['directional', 'new-radial', 'curtain', 'dissolve', 'noise'].includes(clip.pattern) && (
                                 <div className="invert-toggle-mini">
                                     <input
                                         type="checkbox"
@@ -433,10 +442,45 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             )}
                         </div>
 
+                        {clip.pattern === 'noise' && (
+                            <div className="section-container content-box" style={{ marginTop: '4px', padding: '8px' }}>
+                                <div className="form-group" style={{ marginBottom: '6px' }}>
+                                    <label className="compact-label" style={{ minWidth: '80px' }}>Density</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        step="5"
+                                        value={clip.patternDensity === '__mixed__' ? 50 : (clip.patternDensity * 100 || 50)}
+                                        onChange={e => handleChange('patternDensity', parseInt(e.target.value) / 100)}
+                                        style={{ flex: 1 }}
+                                    />
+                                    <span style={{ fontSize: '11px', minWidth: '35px', textAlign: 'right' }}>
+                                        {clip.patternDensity === '__mixed__' ? '??%' : Math.round((clip.patternDensity || 0.5) * 100) + '%'}
+                                    </span>
+                                </div>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label className="compact-label" style={{ minWidth: '80px' }}>Interval</label>
+                                    <input
+                                        type="range"
+                                        min="20"
+                                        max="200"
+                                        step="20"
+                                        value={clip.patternInterval === '__mixed__' ? 100 : (clip.patternInterval || 100)}
+                                        onChange={e => handleChange('patternInterval', parseInt(e.target.value))}
+                                        style={{ flex: 1 }}
+                                    />
+                                    <span style={{ fontSize: '11px', minWidth: '35px', textAlign: 'right' }}>
+                                        {clip.patternInterval === '__mixed__' ? '??ms' : (clip.patternInterval || 100) + 'ms'}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
                         {clip.pattern !== '__mixed__' && clip.pattern !== 'uniform' && (
                             <>
-                                {/* Direction: show for all except dissolve */}
-                                {clip.pattern !== 'dissolve' && (
+                                {/* Direction: show for all except dissolve and noise */}
+                                {clip.pattern !== 'dissolve' && clip.pattern !== 'noise' && (
                                     <div className="form-group">
                                         <label className="compact-label" style={{ minWidth: '80px' }}>Dir</label>
                                         <select
@@ -464,7 +508,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                                     <option value="inward">Inward</option>
                                                 </>
                                             )}
-                                            {clip.pattern === 'new-wave' && (
+                                            {clip.pattern === 'directional' && (
                                                 <>
                                                     <option value="right">Right</option>
                                                     <option value="left">Left</option>
@@ -478,8 +522,16 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                             )}
                                             {clip.pattern === 'new-radial' && (
                                                 <>
-                                                    <option value="outward">Outward</option>
-                                                    <option value="inward">Inward</option>
+                                                    <option value="close">Close</option>
+                                                    <option value="open">Open</option>
+                                                </>
+                                            )}
+                                            {clip.pattern === 'curtain' && (
+                                                <>
+                                                    <option value="vert-close">Vertical Close</option>
+                                                    <option value="vert-open">Vertical Open</option>
+                                                    <option value="horiz-close">Horizontal Close</option>
+                                                    <option value="horiz-open">Horizontal Open</option>
                                                 </>
                                             )}
                                         </select>

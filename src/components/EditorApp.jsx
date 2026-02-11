@@ -872,7 +872,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 const newClip = {
                     ...clip,
                     id: crypto.randomUUID(),
-                    startTime: currentTime + relativeOffset
+                    startTime: currentTimeRef.current + relativeOffset
                 };
                 layer.clips.push(newClip);
                 newPastedIds.push(newClip.id);
@@ -943,14 +943,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             if (layer) {
                 // Smart placement logic: check for overlaps at currentTime
-                let startTime = currentTime;
+                let startTime = currentTimeRef.current;
 
                 // Sort clips by startTime to find the right gap
                 const sortedClips = [...layer.clips].sort((a, b) => a.startTime - b.startTime);
 
                 // Find if currentTime is inside any clip
                 const overlappingClip = sortedClips.find(c =>
-                    currentTime >= c.startTime && currentTime < (c.startTime + c.duration)
+                    currentTimeRef.current >= c.startTime && currentTimeRef.current < (c.startTime + c.duration)
                 );
 
                 if (overlappingClip) {

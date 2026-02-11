@@ -2,40 +2,71 @@ import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
 import { Settings, Eye, EyeOff } from 'lucide-react';
 
-const WaveformCanvas = ({ waveform, pixelsPerSecond, totalWidth, height = 40 }) => {
+const WaveformTile = ({ peaks, startIndex, widthPerPoint, height, pixelsPerSecond, tileOffset }) => {
     const canvasRef = useRef(null);
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas || !waveform) return;
+        if (!canvas) return;
 
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
+        const tileWidth = peaks.length * widthPerPoint;
 
-        canvas.width = totalWidth * dpr;
+        canvas.width = tileWidth * dpr;
         canvas.height = height * dpr;
-        canvas.style.width = `${totalWidth}px`;
+        canvas.style.width = `${tileWidth}px`;
         canvas.style.height = `${height}px`;
         ctx.scale(dpr, dpr);
 
-        ctx.clearRect(0, 0, totalWidth, height);
-
-        // Brighter and more vivid color: Neon Cyan
+        ctx.clearRect(0, 0, tileWidth, height);
         ctx.fillStyle = '#00f2ff';
         ctx.globalAlpha = 0.6;
-
-        const { peaks, pointsPerSecond } = waveform;
-        const widthPerPoint = pixelsPerSecond / pointsPerSecond;
 
         peaks.forEach((peak, i) => {
             const x = i * widthPerPoint;
             const h = peak * height * 0.95;
-            // Draw symmetric waveform for better look in ruler
-            ctx.fillRect(x, (height - h) / 2, Math.max(1, widthPerPoint - 0.5), h);
+            ctx.fillRect(x, (height - h) / 2, Math.max(0.5, widthPerPoint - 0.5), h);
         });
-    }, [waveform, pixelsPerSecond, totalWidth, height]);
+    }, [peaks, widthPerPoint, height, pixelsPerSecond]);
 
-    return <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 1 }} />;
+    return <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: tileOffset, pointerEvents: 'none', zIndex: 1 }} />;
+};
+
+const WaveformCanvas = ({ waveform, pixelsPerSecond, totalWidth, height = 40 }) => {
+    if (!waveform) return null;
+
+    const { peaks, pointsPerSecond } = waveform;
+    const widthPerPoint = pixelsPerSecond / pointsPerSecond;
+    const TILE_SIZE = 2000; // 2000px per canvas tile is safe for all browsers
+    const pointsPerTile = Math.floor(TILE_SIZE / widthPerPoint);
+
+    if (pointsPerTile <= 0) return null;
+
+    const tiles = [];
+    for (let i = 0; i < peaks.length; i += pointsPerTile) {
+        tiles.push({
+            peaks: peaks.slice(i, i + pointsPerTile),
+            startIndex: i,
+            tileOffset: i * widthPerPoint
+        });
+    }
+
+    return (
+        <>
+            {tiles.map((tile, idx) => (
+                <WaveformTile
+                    key={`wf-tile-${idx}`}
+                    peaks={tile.peaks}
+                    startIndex={tile.startIndex}
+                    tileOffset={tile.tileOffset}
+                    widthPerPoint={widthPerPoint}
+                    height={height}
+                    pixelsPerSecond={pixelsPerSecond}
+                />
+            ))}
+        </>
+    );
 };
 
 export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipIds = [], selectedLayerId, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {

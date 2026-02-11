@@ -270,6 +270,21 @@ export class ShowRenderer {
                         case 'curtain':
                             timeOffset = this.calculateDurationCurtainOffset(row, col, clip.patternDirection, clip.duration, gridSize);
                             break;
+                        case 'diamond':
+                            timeOffset = this.calculateDurationDiamondOffset(row, col, clip.patternDirection, clip.duration, gridSize);
+                            break;
+                        case 'zig-zag':
+                            timeOffset = this.calculateDurationZigZagOffset(row, col, clip.patternDirection, clip.duration, gridSize);
+                            break;
+                        case 'box-spiral':
+                            timeOffset = this.calculateDurationBoxSpiralOffset(row, col, clip.patternDirection, clip.duration, gridSize);
+                            break;
+                        case 'interlace':
+                            timeOffset = this.calculateDurationInterlaceOffset(row, col, clip.patternDirection, clip.duration, gridSize);
+                            break;
+                        case 'raindrops':
+                            timeOffset = this.calculateDurationRaindropsOffset(row, col, clip.id, clip.duration);
+                            break;
                         case 'dissolve':
                             timeOffset = this.calculateDurationDissolveOffset(row, col, clip.id, clip.duration, timeMs, false);
                             break;
@@ -536,6 +551,170 @@ export class ShowRenderer {
             normalized = maxDist > 0 ? dist / maxDist : 0;
         }
         return normalized * duration;
+    }
+
+    /**
+     * Diamond: Manhattan distance expansion/collapse, corrected for aspect ratio.
+     */
+    calculateDurationDiamondOffset(row, col, direction, duration, gridSize) {
+        const centerR = (gridSize.rows - 1) / 2;
+        const centerC = (gridSize.cols - 1) / 2;
+
+        // Normalized axial distances [0, 1]
+        const normY = centerR > 0 ? Math.abs(row - centerR) / centerR : 0;
+        const normX = centerC > 0 ? Math.abs(col - centerC) / centerC : 0;
+
+        let dist, maxDist;
+        if (direction && direction.includes('straight')) {
+            // Chebyshev distance (Square)
+            dist = Math.max(normY, normX);
+            maxDist = 1.0;
+        } else {
+            // Manhattan distance (Diamond)
+            dist = normY + normX;
+            maxDist = 2.0;
+        }
+
+        let normalized;
+        if (direction && direction.includes('open')) { // edges to center
+            normalized = (maxDist - dist) / maxDist;
+        } else { // close (center to edges)
+            normalized = dist / maxDist;
+        }
+        return Math.max(0, Math.min(1, normalized)) * duration;
+    }
+
+
+    /**
+     * Zig-Zag: Serpentine motion across rows or columns.
+     */
+    calculateDurationZigZagOffset(row, col, direction, duration, gridSize) {
+        let index, total;
+        const maxR = gridSize.rows - 1;
+        const maxC = gridSize.cols - 1;
+
+        if (direction === 'vertical') {
+            const isColReverse = col % 2 !== 0;
+            const rowPos = isColReverse ? (maxR - row) : row;
+            index = col * (maxR + 1) + rowPos;
+            total = (maxC + 1) * (maxR + 1) - 1;
+        } else { // horizontal
+            const isRowReverse = row % 2 !== 0;
+            const colPos = isRowReverse ? (maxC - col) : col;
+            index = row * (maxC + 1) + colPos;
+            total = (maxR + 1) * (maxC + 1) - 1;
+        }
+        const normalized = total > 0 ? index / total : 0;
+        return normalized * duration;
+    }
+
+    /**
+     * Box Spiral: Winding path through concentric squares, corrected for aspect ratio.
+     */
+    calculateDurationBoxSpiralOffset(row, col, direction, duration, gridSize) {
+        const centerR = Math.floor((gridSize.rows - 1) / 2);
+        const centerC = Math.floor((gridSize.cols - 1) / 2);
+
+        let dr = col - centerC;
+        let dc = row - centerR;
+
+        if (direction && direction.includes('tilted')) {
+            // Rotate 45 deg: (x+y), (y-x)
+            const rX = dr + dc;
+            const rC = dc - dr;
+            dr = rX;
+            dc = rC;
+        }
+
+        // Use raw distance to find shell to avoid float precision issues at boundaries
+        const shell = Math.max(Math.abs(dr), Math.abs(dc));
+
+        // Calculate a continuous winding value derived from position on the perimeter
+        let perimeterVal = 0;
+        if (shell > 0) {
+            if (dr === shell && dc > -shell) { // Right side
+                perimeterVal = 0.5 + (dc / shell) * 0.5; // [0.5, 1.0] -> 0.125 to 0.25 of total circle
+                perimeterVal = 1 + (dc / shell); // [0, 2]
+            } else if (dc === shell) { // Bottom side
+                perimeterVal = 3 + (shell - dr) / shell; // [2, 4]
+                perimeterVal = 4 - (dr / shell); // [3, 5]
+            } else if (dr === -shell) { // Left side
+                perimeterVal = 6 - (dc / shell); // [5, 7]
+            } else { // Top side
+                perimeterVal = 7 + (dr / shell); // [7, 8]
+            }
+        }
+
+        // More robust winding map: 0 to 8 per shell
+        let winding;
+        if (shell === 0) {
+            winding = 0;
+        } else {
+            // Detect side using cleaner thresholds
+            const absX = Math.abs(dr);
+            const absY = Math.abs(dc);
+
+            if (dr === shell && dc > -shell) winding = 1 + (dc / shell);
+            else if (dc === shell) winding = 3 + (shell - dr) / shell;
+            else if (dr === -shell) winding = 5 + (shell - dc) / shell;
+            else winding = 7 + (shell + dr) / shell;
+        }
+
+        // Normalize based on max shell size
+        const maxShell = Math.max(centerR, centerC) || 1;
+        const normalizedShell = shell / maxShell;
+        const normalizedWinding = winding / 8; // 0 to 1 around the shell
+
+        // Combine shell and winding for smooth fill
+        const dist = normalizedShell * 0.9 + (normalizedWinding * 0.1 / Math.max(1, shell));
+
+        // Simplified robust normalization: (Shell growth + Winding order)
+        const finalDist = (shell + winding / 8) / (maxShell + 1);
+
+        let final;
+        if (direction && direction.includes('open')) {
+            final = 1.0 - finalDist;
+        } else {
+            final = finalDist;
+        }
+
+        return Math.max(0, Math.min(1, final)) * duration;
+    }
+
+    /**
+     * Interlace: Alternating lines moving in opposite directions.
+     */
+    calculateDurationInterlaceOffset(row, col, direction, duration, gridSize) {
+        const maxR = gridSize.rows - 1;
+        const maxC = gridSize.cols - 1;
+        let dist, maxDist;
+
+        if (direction === 'vertical') {
+            const isColOdd = col % 2 !== 0;
+            dist = isColOdd ? (maxR - row) : row;
+            maxDist = maxR;
+        } else { // horizontal
+            const isRowOdd = row % 2 !== 0;
+            dist = isRowOdd ? (maxC - col) : col;
+            maxDist = maxC;
+        }
+        const normalized = maxDist > 0 ? dist / maxDist : 0;
+        return normalized * duration;
+    }
+
+    /**
+     * Raindrops: Fixed random seed per car for clip lifetime.
+     */
+    calculateDurationRaindropsOffset(row, col, clipId, duration) {
+        const clipBase = parseInt(String(clipId).substring(0, 8), 16) || 0;
+        let h = (row * 1013 + col * 67 + clipBase) >>> 0;
+
+        h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+        h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+        h ^= h >>> 16;
+        const rand = (h >>> 0) / 4294967296;
+
+        return rand * duration;
     }
 
     /**

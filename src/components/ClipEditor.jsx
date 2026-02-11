@@ -401,6 +401,8 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                     const dirDefaults = {
                                         'wave': 'horizontal', 'sequential': 'row-by-row', 'radial': 'outward',
                                         'directional': 'to-right', 'new-radial': 'close', 'curtain': 'vert-close',
+                                        'diamond': 'close-straight', 'zig-zag': 'horizontal',
+                                        'box-spiral': 'close-straight', 'interlace': 'horizontal',
                                     };
                                     const newDir = dirDefaults[newPattern];
                                     const updates = { pattern: newPattern };
@@ -425,6 +427,11 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 <option value="directional">Directional</option>
                                 <option value="new-radial">New Radial</option>
                                 <option value="curtain">Curtain</option>
+                                <option value="diamond">Diamond</option>
+                                <option value="zig-zag">Zig-Zag</option>
+                                <option value="box-spiral">Box Spiral</option>
+                                <option value="interlace">Interlace</option>
+                                <option value="raindrops">Raindrops</option>
                                 <option value="dissolve">Dissolve</option>
                                 <option value="noise">Noise</option>
                             </select>
@@ -496,6 +503,18 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                                     <option value="diagonal-left">↙ (Down-Left)</option>
                                                 </>
                                             )}
+                                            {['wave', 'directional'].includes(clip.pattern) && (
+                                                <>
+                                                    <option value="to-right">To Right</option>
+                                                    <option value="to-left">To Left</option>
+                                                    <option value="to-down">To Down</option>
+                                                    <option value="to-up">To Up</option>
+                                                    <option value="to-down-right">To Down-Right</option>
+                                                    <option value="to-down-left">To Down-Left</option>
+                                                    <option value="to-up-right">To Up-Right</option>
+                                                    <option value="to-up-left">To Up-Left</option>
+                                                </>
+                                            )}
                                             {clip.pattern === 'sequential' && (
                                                 <>
                                                     <option value="row-by-row">Row</option>
@@ -508,22 +527,16 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                                     <option value="inward">Inward</option>
                                                 </>
                                             )}
-                                            {clip.pattern === 'directional' && (
+                                            {['new-radial', 'diamond', 'box-spiral'].includes(clip.pattern) && (
                                                 <>
-                                                    <option value="to-right">To Right</option>
-                                                    <option value="to-left">To Left</option>
-                                                    <option value="to-down">To Down</option>
-                                                    <option value="to-up">To Up</option>
-                                                    <option value="to-down-right">To Down-Right</option>
-                                                    <option value="to-down-left">To Down-Left</option>
-                                                    <option value="to-up-right">To Up-Right</option>
-                                                    <option value="to-up-left">To Up-Left</option>
-                                                </>
-                                            )}
-                                            {clip.pattern === 'new-radial' && (
-                                                <>
-                                                    <option value="close">Close</option>
-                                                    <option value="open">Open</option>
+                                                    <option value="close-straight">Close (Straight)</option>
+                                                    <option value="open-straight">Open (Straight)</option>
+                                                    {['diamond', 'box-spiral'].includes(clip.pattern) && (
+                                                        <>
+                                                            <option value="close-tilted">Close (Tilted)</option>
+                                                            <option value="open-tilted">Open (Tilted)</option>
+                                                        </>
+                                                    )}
                                                 </>
                                             )}
                                             {clip.pattern === 'curtain' && (
@@ -532,6 +545,12 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                                     <option value="vert-open">Vertical Open</option>
                                                     <option value="horiz-close">Horizontal Close</option>
                                                     <option value="horiz-open">Horizontal Open</option>
+                                                </>
+                                            )}
+                                            {['zig-zag', 'interlace'].includes(clip.pattern) && (
+                                                <>
+                                                    <option value="horizontal">Horizontal</option>
+                                                    <option value="vertical">Vertical</option>
                                                 </>
                                             )}
                                         </select>

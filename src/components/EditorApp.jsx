@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -1092,6 +1092,91 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
     };
 
+    const handleRemoveGaps = () => {
+        if (selectedClipIds.length < 2) return;
+
+        const json = project.toJSON(false);
+        const newProject = ProjectState.fromJSONSync(json);
+        newProject.assets = project.assets;
+
+        // Collect all selected clips across layers
+        const selectedClipsData = [];
+        newProject.layers.forEach(layer => {
+            layer.clips.forEach(clip => {
+                if (selectedClipIds.includes(clip.id)) {
+                    selectedClipsData.push({ clip, layer });
+                }
+            });
+        });
+
+        if (selectedClipsData.length < 2) return;
+
+        // Sort by start time
+        selectedClipsData.sort((a, b) => a.clip.startTime - b.clip.startTime);
+
+        // Adjust timings
+        for (let i = 1; i < selectedClipsData.length; i++) {
+            const prev = selectedClipsData[i - 1].clip;
+            const current = selectedClipsData[i].clip;
+            current.startTime = prev.startTime + prev.duration;
+        }
+
+        saveToHistory(newProject);
+    };
+
+    const handleAlignToSnap = () => {
+        if (selectedClipIds.length === 0 || snapMode === 'off') return;
+
+        const json = project.toJSON(false);
+        const newProject = ProjectState.fromJSONSync(json);
+        newProject.assets = project.assets;
+
+        const analysis = project.analysis;
+        const beatMarkers = analysis?.beat_times || [];
+        const onsetMarkers = analysis?.onset_times || [];
+        const duration = project.duration || 60000;
+
+        let snapIntervalMs = null;
+        const beatDurationMs = (60 / (bpm || 120)) * 1000;
+        const multiplier = snapMode === '1' ? 1
+            : snapMode === '1/2' ? 0.5
+                : snapMode === '1/4' ? 0.25
+                    : 0.125;
+        snapIntervalMs = beatDurationMs * multiplier;
+
+        const snapCandidates = [0, ...beatMarkers.map(t => t * 1000), ...onsetMarkers.map(t => t * 1000)];
+        if (snapIntervalMs) {
+            for (let t = 0; t <= duration; t += snapIntervalMs) {
+                snapCandidates.push(t);
+            }
+        }
+
+        let changed = false;
+        newProject.layers.forEach(layer => {
+            layer.clips.forEach(clip => {
+                if (selectedClipIds.includes(clip.id)) {
+                    let snappedTime = clip.startTime;
+                    let minDiff = Infinity;
+                    snapCandidates.forEach(snap => {
+                        const diff = Math.abs(clip.startTime - snap);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            snappedTime = snap;
+                        }
+                    });
+                    if (Math.abs(clip.startTime - snappedTime) > 0.1) {
+                        clip.startTime = snappedTime;
+                        changed = true;
+                    }
+                }
+            });
+        });
+
+        if (changed) {
+            saveToHistory(newProject);
+        }
+    };
+
     const handleExportXsq = async () => {
         try {
             const writer = new XsqWriter();
@@ -1643,6 +1728,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </button>
                         <button onClick={handleRestoreSnapshot} disabled={!snapshot} className={`btn-icon ${!snapshot ? 'disabled' : ''}`} title="Restore Snapshot" style={{ color: '#e82020' }}>
                             <RotateCcw size={18} />
+                        </button>
+                        <button onClick={handleRemoveGaps} disabled={selectedClipIds.length < 2} className="btn-icon" title="Remove Gaps" style={{ marginLeft: '5px', color: '#ffbb00' }}>
+                            <Magnet size={18} />
+                        </button>
+                        <button onClick={handleAlignToSnap} disabled={selectedClipIds.length === 0 || snapMode === 'off'} className="btn-icon" title="Align to Snap" style={{ marginLeft: '5px', color: '#00ccff' }}>
+                            <Grid size={18} />
                         </button>
                     </div>
                     <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>

@@ -881,13 +881,24 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         const layer = newProject.layers.find(l => l.id === targetLayerId);
 
         if (layer) {
+            let clipsToPaste = slot.clips;
+
+            if (slot.randomToggle) {
+                const randomIndex = Math.floor(Math.random() * slot.clips.length);
+                clipsToPaste = [slot.clips[randomIndex]];
+            } else if (slot.sequentialToggle) {
+                const index = (slot.sequentialIndex || 0) % slot.clips.length;
+                clipsToPaste = [slot.clips[index]];
+                // We'll update the index later in the project state
+            }
+
             // Find earliest clip in slot to calculate relative offsets
-            const earliestClip = slot.clips.reduce((earliest, current) =>
-                current.startTime < earliest.startTime ? current : earliest, slot.clips[0]
+            const earliestClip = clipsToPaste.reduce((earliest, current) =>
+                current.startTime < earliest.startTime ? current : earliest, clipsToPaste[0]
             );
 
             const newPastedIds = [];
-            slot.clips.forEach(clip => {
+            clipsToPaste.forEach(clip => {
                 const relativeOffset = clip.startTime - earliestClip.startTime;
                 const newClip = {
                     ...clip,
@@ -897,6 +908,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 layer.clips.push(newClip);
                 newPastedIds.push(newClip.id);
             });
+
+            if (slot.sequentialToggle) {
+                const slotInNewProject = newProject.palette[slotIndex];
+                slotInNewProject.sequentialIndex = ((slotInNewProject.sequentialIndex || 0) + 1) % slot.clips.length;
+            }
 
             saveToHistory(newProject);
             setSelectedClipIds(newPastedIds);
@@ -1903,7 +1919,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .editor-header h2 { line-height: 1; margin: 0; }
         .editor-main { flex: 1; display: flex; overflow: hidden; margin: 0; padding: 0; }
         .preview-panel { flex: 1 1 auto; min-width: 400px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; padding: 0; margin: 0; }
-        .palette-panel { flex: 0 0 250px; min-width: 200px; max-width: 300px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
+        .palette-panel { flex: 0 0 280px; min-width: 230px; max-width: 350px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
         .properties-panel { flex: 0 0 350px; min-width: 280px; max-width: 400px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
         .timeline-panel { height: 350px; background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; margin: 0; padding: 0; }
         .timeline-controls { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, ClipboardPaste, X } from 'lucide-react';
+import { Plus, ClipboardPaste, X, Shuffle, Repeat } from 'lucide-react';
 
 export default function ClipPalette({
     palette,
@@ -81,6 +81,37 @@ export default function ClipPalette({
                                 title="Set from Clipboard"
                             >
                                 <ClipboardPaste size={14} />
+                            </button>
+                            <button
+                                className={`slot-random-btn ${slot.randomToggle ? 'active' : ''}`}
+                                onClick={() => {
+                                    const newPalette = [...palette];
+                                    const current = newPalette[index];
+                                    current.randomToggle = !current.randomToggle;
+                                    if (current.randomToggle) {
+                                        current.sequentialToggle = false;
+                                    }
+                                    onPaletteChange(newPalette);
+                                }}
+                                title="Pick one random clip"
+                            >
+                                <Shuffle size={14} />
+                            </button>
+                            <button
+                                className={`slot-sequential-btn ${slot.sequentialToggle ? 'active' : ''}`}
+                                onClick={() => {
+                                    const newPalette = [...palette];
+                                    const current = newPalette[index];
+                                    current.sequentialToggle = !current.sequentialToggle;
+                                    if (current.sequentialToggle) {
+                                        current.randomToggle = false;
+                                        current.sequentialIndex = 0; // Reset index when enabled
+                                    }
+                                    onPaletteChange(newPalette);
+                                }}
+                                title="Pick clips in order"
+                            >
+                                <Repeat size={14} />
                             </button>
                             <button
                                 className="slot-clear-btn"
@@ -238,6 +269,60 @@ export default function ClipPalette({
                 .slot-paste-btn:disabled {
                     opacity: 0.5;
                     cursor: not-allowed;
+                }
+                
+                .slot-random-btn {
+                    width: 28px;
+                    height: 28px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #333;
+                    border: 1px solid #444;
+                    color: #888;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    flex-shrink: 0;
+                }
+                
+                .slot-random-btn:hover {
+                    background: #444;
+                    color: #eee;
+                }
+                
+                .slot-random-btn.active {
+                    background: rgba(74, 144, 226, 0.2);
+                    border-color: #4a90e2;
+                    color: #4a90e2;
+                    box-shadow: 0 0 5px rgba(74, 144, 226, 0.3);
+                }
+
+                .slot-sequential-btn {
+                    width: 28px;
+                    height: 28px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #333;
+                    border: 1px solid #444;
+                    color: #888;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    flex-shrink: 0;
+                }
+
+                .slot-sequential-btn:hover {
+                    background: #444;
+                    color: #eee;
+                }
+
+                .slot-sequential-btn.active {
+                    background: rgba(40, 167, 69, 0.2);
+                    border-color: #28a745;
+                    color: #28a745;
+                    box-shadow: 0 0 5px rgba(40, 167, 69, 0.3);
                 }
 
                 .slot-clear-btn {

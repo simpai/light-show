@@ -35,6 +35,9 @@ export class ProjectState {
             id: uuidv4(),
             shortcut: key,
             note: "",
+            randomToggle: false,
+            sequentialToggle: false,
+            sequentialIndex: 0,
             clips: []
         }));
     }
@@ -200,6 +203,9 @@ export class ProjectState {
         // Migration: Ensure all palette slots have a note property
         project.palette.forEach(slot => {
             if (slot.note === undefined) slot.note = "";
+            if (slot.randomToggle === undefined) slot.randomToggle = false;
+            if (slot.sequentialToggle === undefined) slot.sequentialToggle = false;
+            if (slot.sequentialIndex === undefined) slot.sequentialIndex = 0;
         });
         return project;
     }

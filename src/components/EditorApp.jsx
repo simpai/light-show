@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid, AlignLeft } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -1177,6 +1177,48 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
     };
 
+    const handleAlignClips = () => {
+        if (selectedClipIds.length === 0) return;
+
+        const json = project.toJSON(false);
+        const newProject = ProjectState.fromJSONSync(json);
+        newProject.assets = project.assets;
+
+        // Group selected clips by layer
+        const selectionByLayer = new Map();
+        let globalMin = Infinity;
+
+        newProject.layers.forEach(layer => {
+            const selectedInLayer = layer.clips.filter(c => selectedClipIds.includes(c.id));
+            if (selectedInLayer.length > 0) {
+                selectionByLayer.set(layer.id, selectedInLayer);
+                selectedInLayer.forEach(c => {
+                    if (c.startTime < globalMin) globalMin = c.startTime;
+                });
+            }
+        });
+
+        if (globalMin === Infinity) return;
+
+        let changed = false;
+        selectionByLayer.forEach((clips, layerId) => {
+            // Find the earliest selected clip in this layer
+            const layerMin = Math.min(...clips.map(c => c.startTime));
+            const offset = globalMin - layerMin;
+
+            if (Math.abs(offset) > 0.1) {
+                clips.forEach(c => {
+                    c.startTime += offset;
+                });
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            saveToHistory(newProject);
+        }
+    };
+
     const handleExportXsq = async () => {
         try {
             const writer = new XsqWriter();
@@ -1734,6 +1776,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </button>
                         <button onClick={handleAlignToSnap} disabled={selectedClipIds.length === 0 || snapMode === 'off'} className="btn-icon" title="Align to Snap" style={{ marginLeft: '5px', color: '#00ccff' }}>
                             <Grid size={18} />
+                        </button>
+                        <button onClick={handleAlignClips} disabled={selectedClipIds.length === 0} className="btn-icon" title="Align Tracks" style={{ marginLeft: '5px', color: '#00ff88' }}>
+                            <AlignLeft size={18} />
                         </button>
                     </div>
                     <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>

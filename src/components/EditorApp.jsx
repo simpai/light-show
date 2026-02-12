@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid, AlignLeft } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid, AlignLeft, Heart } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -66,6 +66,9 @@ const CHANNEL_NAMES = {
 for (let i = 46; i < 48; i++) {
     if (!CHANNEL_NAMES[i]) CHANNEL_NAMES[i] = `Channel ${i}`;
 }
+
+const isMac = window.navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const modKey = isMac ? '⌘' : 'Ctrl';
 
 
 
@@ -1965,88 +1968,136 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             {
                 showHelpModal && (
-                    <Modal title="Help & Shortcuts" onClose={() => setShowHelpModal(false)}>
-                        <div className="help-content">
-                            <table className="help-table">
-                                <thead>
-                                    <tr>
-                                        <th>Category</th>
-                                        <th>Shortcut</th>
-                                        <th>Function</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td rowSpan="2" className="cat-cell">Playback</td>
-                                        <td><kbd>Space</kbd></td>
-                                        <td>Play / Pause</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Enter</kbd></td>
-                                        <td>Play from Bookmark</td>
-                                    </tr>
-                                    <tr>
-                                        <td rowSpan="5" className="cat-cell">Editing</td>
-                                        <td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td>
-                                        <td>Undo / Redo</td>
-                                    </tr>
-                                    <tr>
-                                        <td className="cat-cell" style={{ borderTop: 'none', borderLeft: 'none' }}>Snapshot</td>
-                                        <td colSpan="2">
-                                            <div style={{ display: 'flex', gap: '15px' }}>
-                                                <span><Camera size={14} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#4a90e2' }} /> Take Snapshot</span>
-                                                <span><RotateCcw size={14} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#e82020' }} /> Restore Snapshot</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Ctrl+C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></td>
-                                        <td>Copy / Paste / Cut</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Ctrl+D</kbd></td>
-                                        <td>Duplicate Clip</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Del</kbd> / <kbd>Backspace</kbd></td>
-                                        <td>Delete Clip</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>1-5</kbd>, <kbd>Q-T</kbd></td>
-                                        <td>Paste from Palette Slot 1-10</td>
-                                    </tr>
-                                    <tr>
-                                        <td rowSpan="6" className="cat-cell">Timeline</td>
-                                        <td><kbd>Ctrl + Wheel</kbd></td>
-                                        <td>Zoom In/Out</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Shift + Drag</kbd></td>
-                                        <td>Marquee Selection</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Ctrl + Click</kbd></td>
-                                        <td>Multi-select Clips</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Alt + Drag</kbd></td>
-                                        <td>Duplicate selection while moving</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Shift + Wheel</kbd></td>
-                                        <td>Horizontal Scroll</td>
-                                    </tr>
-                                    <tr>
-                                        <td><kbd>Ctrl + Click</kbd></td>
-                                        <td>Toggle Bookmark (in Ruler)</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <div className="help-extras">
-                                <p><strong>Pro Tip:</strong> Click and drag bookmarks in the ruler to move them. Double-click a track header to open track-specific settings.</p>
+                    <Modal
+                        title="Help & Shortcuts"
+                        onClose={() => setShowHelpModal(false)}
+                        footer={
+                            < div className="help-footer-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
+                                <div className="help-contact" style={{ flex: 1, textAlign: 'left', fontSize: '12px', color: '#ccc', lineHeight: '1.4' }}>
+                                    <span style={{ fontWeight: 'bold', color: 'white', display: 'block', marginBottom: '4px' }}>Bug Report & Inquiries</span>
+                                    X: <a href="https://x.com/mikiglico" target="_blank" rel="noopener noreferrer" style={{ color: '#4a90e2', textDecoration: 'none' }}>@mikiglico</a> |
+                                    Email: <a href="mailto:junghun.cha@gmail.com" style={{ color: '#4a90e2', textDecoration: 'none' }}>junghun.cha@gmail.com</a>
+                                </div>
+                                <div className="help-donation">
+                                    <a
+                                        href="https://buymeacoffee.com/lightstory"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ color: '#ffdd00', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 'bold', background: 'rgba(255,221,0,0.1)', padding: '8px 16px', borderRadius: '8px', border: '1px solid rgba(255,221,0,0.2)' }}
+                                    >
+                                        <Heart size={18} fill="#ffdd00" /> Buy me a coffee
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    >
+                        <div className="help-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+                            <div className="help-col">
+                                <table className="help-table">
+                                    <thead>
+                                        <tr><th colSpan="3" style={{ textAlign: 'left', color: '#888', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px', paddingBottom: '10px' }}>Playback & Editing</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td className="cat-cell">Playback</td>
+                                            <td><kbd>Space</kbd></td>
+                                            <td>Play / Pause</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell"></td>
+                                            <td><kbd>Enter</kbd></td>
+                                            <td>Play Bookmark</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell">Editing</td>
+                                            <td><kbd>{modKey}+Z/Y</kbd></td>
+                                            <td>Undo / Redo</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell"></td>
+                                            <td><kbd>{modKey}+C/V/X</kbd></td>
+                                            <td>Copy/Paste/Cut</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell"></td>
+                                            <td><kbd>{modKey}+D</kbd></td>
+                                            <td>Duplicate</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell"></td>
+                                            <td><kbd>Del / BS</kbd></td>
+                                            <td>Delete</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div className="help-section-header" style={{ marginTop: '20px', marginBottom: '10px', color: '#888', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>Quick Tools</div>
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><Camera size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#4a90e2' }} /> Snapshot</span>
+                                    <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><RotateCcw size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#e82020' }} /> Restore</span>
+                                    <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><Magnet size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#ffbb00' }} /> Remove Gaps</span>
+                                    <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><Grid size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#00ccff' }} /> Snap</span>
+                                    <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><AlignLeft size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#00ff88' }} /> Align Tracks</span>
+                                </div>
+                            </div>
+
+                            <div className="help-col">
+                                <table className="help-table">
+                                    <thead>
+                                        <tr><th colSpan="3" style={{ textAlign: 'left', color: '#888', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px', paddingBottom: '10px' }}>Timeline Controls</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td className="cat-cell">Zoom</td>
+                                            <td><kbd>{modKey}+Wheel</kbd></td>
+                                            <td>In / Out</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell">Scroll</td>
+                                            <td><kbd>Shift+Wheel</kbd></td>
+                                            <td>Horizontal</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell">Select</td>
+                                            <td><kbd>Shift+Drag</kbd></td>
+                                            <td>Marquee</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell"></td>
+                                            <td><kbd>{modKey}+Click</kbd></td>
+                                            <td>Multi-select</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell">Move</td>
+                                            <td><kbd>{isMac ? 'Opt' : 'Alt'}+Drag</kbd></td>
+                                            <td>Duplicate</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="cat-cell">Bookmark</td>
+                                            <td><kbd>{modKey}+Click</kbd></td>
+                                            <td>Toggle Ruler</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                    </Modal>
+
+                        <style>{`
+                            .help-table { width: 100%; border-collapse: collapse; }
+                            .help-table td { padding: 4px 0; font-size: 13px; vertical-align: top; }
+                            .help-table .cat-cell { width: 70px; color: #666; font-size: 11px; text-transform: uppercase; padding-top: 6px; }
+                            .help-table kbd { 
+                                background: #333; 
+                                border: 1px solid #444; 
+                                border-radius: 4px; 
+                                padding: 2px 6px; 
+                                font-size: 11px; 
+                                font-family: monospace;
+                                color: #eee;
+                                margin-right: 8px;
+                            }
+                        `}</style>
+                    </Modal >
                 )
             }
 
@@ -2090,7 +2141,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     );
 }
 
-function Modal({ title, children, onClose }) {
+function Modal({ title, children, onClose, footer }) {
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -2101,6 +2152,11 @@ function Modal({ title, children, onClose }) {
                 <div className="modal-body">
                     {children}
                 </div>
+                {footer && (
+                    <div className="modal-footer">
+                        {footer}
+                    </div>
+                )}
             </div>
             <style>{`
                 .modal-overlay {
@@ -2119,9 +2175,9 @@ function Modal({ title, children, onClose }) {
                     background: #1a1a1a;
                     border: 1px solid #333;
                     border-radius: 12px;
-                    width: 90%;
-                    max-width: 600px;
-                    max-height: 80vh;
+                    width: 95%;
+                    max-width: 800px;
+                    max-height: 90vh;
                     display: flex;
                     flex-direction: column;
                     box-shadow: 0 20px 40px rgba(0,0,0,0.4);
@@ -2154,6 +2210,13 @@ function Modal({ title, children, onClose }) {
                     padding: 20px;
                     overflow-y: auto;
                     flex: 1;
+                }
+                .modal-footer {
+                    padding: 16px 20px;
+                    border-top: 1px solid #333;
+                    background: #222;
+                    border-bottom-left-radius: 12px;
+                    border-bottom-right-radius: 12px;
                 }
             `}</style>
         </div>

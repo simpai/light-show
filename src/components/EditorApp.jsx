@@ -1099,29 +1099,30 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         const newProject = ProjectState.fromJSONSync(json);
         newProject.assets = project.assets;
 
-        // Collect all selected clips across layers
-        const selectedClipsData = [];
+        let changed = false;
+
         newProject.layers.forEach(layer => {
-            layer.clips.forEach(clip => {
-                if (selectedClipIds.includes(clip.id)) {
-                    selectedClipsData.push({ clip, layer });
+            const selectedInLayer = layer.clips
+                .filter(c => selectedClipIds.includes(c.id))
+                .sort((a, b) => a.startTime - b.startTime);
+
+            if (selectedInLayer.length >= 2) {
+                for (let i = 1; i < selectedInLayer.length; i++) {
+                    const prev = selectedInLayer[i - 1];
+                    const current = selectedInLayer[i];
+                    const nextStartTime = prev.startTime + prev.duration;
+
+                    if (Math.abs(current.startTime - nextStartTime) > 0.1) {
+                        current.startTime = nextStartTime;
+                        changed = true;
+                    }
                 }
-            });
+            }
         });
 
-        if (selectedClipsData.length < 2) return;
-
-        // Sort by start time
-        selectedClipsData.sort((a, b) => a.clip.startTime - b.clip.startTime);
-
-        // Adjust timings
-        for (let i = 1; i < selectedClipsData.length; i++) {
-            const prev = selectedClipsData[i - 1].clip;
-            const current = selectedClipsData[i].clip;
-            current.startTime = prev.startTime + prev.duration;
+        if (changed) {
+            saveToHistory(newProject);
         }
-
-        saveToHistory(newProject);
     };
 
     const handleAlignToSnap = () => {
@@ -1765,12 +1766,18 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <button onClick={handleRedo} disabled={redoStack.length === 0} className="btn-icon" title="Redo (Ctrl+Y)">
                             <Redo size={18} />
                         </button>
+
+                        <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
+
                         <button onClick={handleTakeSnapshot} className="btn-icon" title="Take Snapshot" style={{ marginLeft: '5px', color: '#4a90e2' }}>
                             <Camera size={18} />
                         </button>
                         <button onClick={handleRestoreSnapshot} disabled={!snapshot} className={`btn-icon ${!snapshot ? 'disabled' : ''}`} title="Restore Snapshot" style={{ color: '#e82020' }}>
                             <RotateCcw size={18} />
                         </button>
+
+                        <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
+
                         <button onClick={handleRemoveGaps} disabled={selectedClipIds.length < 2} className="btn-icon" title="Remove Gaps" style={{ marginLeft: '5px', color: '#ffbb00' }}>
                             <Magnet size={18} />
                         </button>
@@ -1780,6 +1787,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <button onClick={handleAlignClips} disabled={selectedClipIds.length === 0} className="btn-icon" title="Align Tracks" style={{ marginLeft: '5px', color: '#00ff88' }}>
                             <AlignLeft size={18} />
                         </button>
+
+                        <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
                     </div>
                     <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>
 

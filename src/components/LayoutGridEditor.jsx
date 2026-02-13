@@ -766,7 +766,7 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
 
                 .le-cell {
                     width: 32px;
-                    height: 32px;
+                    height: 38px;
                     border: 1px solid #333;
                     background: #1e1e1e;
                     text-align: center;
@@ -797,7 +797,7 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
                 }
 
                 .le-car-icon {
-                    font-size: 10px;
+                    font-size: 16px;
                     color: #6ecf6e;
                     line-height: 1;
                     transition: transform 0.2s;

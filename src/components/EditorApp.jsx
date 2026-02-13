@@ -6,7 +6,7 @@ import { ShowRenderer } from '../core/ShowRenderer';
 import { Timeline } from './Timeline';
 import ClipEditor from './ClipEditor';
 import ClipPalette from './ClipPalette';
-import { LayoutParser } from '../utils/LayoutParser';
+
 import { FseqWriter } from '../utils/FseqWriter';
 import { XsqWriter } from '../utils/XsqWriter';
 import { AudioWaveformManager } from '../utils/AudioWaveformManager';
@@ -109,7 +109,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
     // Layout system state
     const [layoutData, setLayoutData] = useState(null);
-    const [layoutFileName, setLayoutFileName] = useState('');
     const [showGroundLight, setShowGroundLight] = useState(true);
     const [activeModal, setActiveModal] = useState(null); // 'lightGroups', 'trackProperties', 'carGroups'
     const [selectedCars, setSelectedCars] = useState(new Set());
@@ -154,7 +153,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setGridLayoutData(gd);
         const converted = gridDataToLayoutData(gd);
         setLayoutData(converted);
-        setLayoutFileName('grid-layout');
         const newConfig = { rows: gd.rows, cols: gd.cols };
         setMatrixConfig(newConfig);
         rendererRef.current.setMatrixMode(true, newConfig);
@@ -165,7 +163,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const rendererRef = useRef(new ShowRenderer());
     const requestRef = useRef();
     const fileInputRef = useRef(null);
-    const layoutInputRef = useRef(null);
+
     const audioUrlRef = useRef(null); // Cache audio URL
     const lastTickRef = useRef(0); // For manual playback timing
     const isPlayingRef = useRef(false);
@@ -320,7 +318,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 if (bundledData.matrixConfig) setMatrixConfig(bundledData.matrixConfig);
                 if (bundledData.layoutData) setLayoutData(bundledData.layoutData);
                 if (bundledData.gridLayoutData) setGridLayoutData(bundledData.gridLayoutData);
-                setLayoutFileName(bundledData.layoutFileName || '');
+
                 if (bundledData.bookmarks) setBookmarks(bundledData.bookmarks);
 
                 // 2. Load Audio if provided via bundle (already set in setAudioFile in App.jsx but we need local state)
@@ -728,32 +726,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }, 500); // Fake delay for UX
     };
 
-    const handleLayoutUpload = async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            try {
-                const parsed = await LayoutParser.parseLayoutImage(file);
-                setLayoutData(parsed);
-                setLayoutFileName(file.name);
 
-                // Reset input value
-                e.target.value = '';
-
-                // Update matrix config based on image dimensions
-                const newConfig = {
-                    rows: parsed.height,
-                    cols: parsed.width
-                };
-                setMatrixConfig(newConfig);
-                rendererRef.current.setMatrixMode(true, newConfig);
-
-                console.log('Layout loaded:', parsed.width, 'x', parsed.height);
-            } catch (err) {
-                console.error('Failed to load layout:', err);
-                alert('Failed to load layout image: ' + err.message);
-            }
-        }
-    };
 
     const handleSeek = (timeMs) => {
         if (audioFile && audioRef.current) {
@@ -1432,7 +1405,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 project: project.toJSON(),
                 matrixConfig,
                 audioFileName,
-                layoutFileName,
+
                 layoutData,
                 gridLayoutData,
                 bookmarks
@@ -1488,7 +1461,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             if (data.matrixConfig) setMatrixConfig(data.matrixConfig);
             if (data.layoutData) setLayoutData(data.layoutData);
             if (data.gridLayoutData) setGridLayoutData(data.gridLayoutData);
-            setLayoutFileName(data.layoutFileName || '');
+
             if (data.bookmarks) setBookmarks(data.bookmarks);
 
             // 3. Load Audio from bundle
@@ -1636,27 +1609,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <Save size={20} />
                     </button>
 
-                    {/* Layout Image Upload */}
-                    <input
-                        ref={layoutInputRef}
-                        type="file"
-                        accept="image/png"
-                        onChange={handleLayoutUpload}
-                        style={{ display: 'none' }}
-                    />
-                    <button
-                        className="btn-icon"
-                        tabIndex={-1}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={(e) => {
-                            e.currentTarget.blur();
-                            layoutInputRef.current?.click();
-                        }}
-                        title="Upload Layout Image (PNG)"
-                        style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
-                    >
-                        <ImageIcon size={20} />
-                    </button>
                     <button
                         className={`btn-icon ${showLayoutEditor ? 'active' : ''}`}
                         tabIndex={-1}
@@ -1666,14 +1618,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             setShowLayoutEditor(true);
                         }}
                         title="Layout Grid Editor"
+                        style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
                     >
                         <Grid size={20} />
                     </button>
-                    {layoutFileName && (
-                        <span style={{ fontSize: '12px', color: '#888', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {layoutFileName}
-                        </span>
-                    )}
 
                     <button
                         className={`btn-icon ${activeModal === 'lightGroups' ? 'active' : ''}`}

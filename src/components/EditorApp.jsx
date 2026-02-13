@@ -12,6 +12,7 @@ import { XsqWriter } from '../utils/XsqWriter';
 import { AudioWaveformManager } from '../utils/AudioWaveformManager';
 import JSZip from 'jszip';
 import MatrixPreview2D from './MatrixPreview2D';
+import LayoutGridEditor, { createDefaultGridData } from './LayoutGridEditor';
 
 const CHANNEL_NAMES = {
     0: "Left Outer Main Beam",
@@ -113,6 +114,52 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [activeModal, setActiveModal] = useState(null); // 'lightGroups', 'trackProperties', 'carGroups'
     const [selectedCars, setSelectedCars] = useState(new Set());
     const [fitTrigger2D, setFitTrigger2D] = useState(0);
+    const [showLayoutEditor, setShowLayoutEditor] = useState(false);
+    const [gridLayoutData, setGridLayoutData] = useState(null);
+
+    // Convert grid layout data to the existing layoutData format used by MatrixPreview2D and exports
+    const gridDataToLayoutData = (gd) => {
+        if (!gd) return null;
+        const layout = [];
+        for (let r = 0; r < gd.rows; r++) {
+            layout[r] = [];
+            for (let c = 0; c < gd.cols; c++) {
+                const cell = gd.cells[r]?.[c] || { exists: true, yaw: 0 };
+                layout[r][c] = {
+                    exists: cell.exists,
+                    offsetX: 0,
+                    offsetY: 0,
+                    rotation: cell.yaw || 0,
+                    raw: { r: 127, g: 127, b: Math.round((cell.yaw || 0) / 360 * 255), a: cell.exists ? 255 : 0 }
+                };
+            }
+        }
+        return { width: gd.cols, height: gd.rows, layout, imageUrl: null };
+    };
+
+    // Get the car filename for a given grid position using gridLayoutData IDs
+    const getCarFileName = (r, c) => {
+        if (gridLayoutData) {
+            const colId = gridLayoutData.colIds[c] || '';
+            const rowId = gridLayoutData.rowIds[r] || '';
+            return gridLayoutData.colFirst ? `${colId}${rowId}` : `${rowId}${colId}`;
+        }
+        // Fallback to default naming
+        const rowLetter = String.fromCharCode(65 + r);
+        const colId = (c + 1).toString().padStart(2, '0');
+        return `${rowLetter}${colId}`;
+    };
+
+    const handleApplyGridLayout = (gd) => {
+        setGridLayoutData(gd);
+        const converted = gridDataToLayoutData(gd);
+        setLayoutData(converted);
+        setLayoutFileName('grid-layout');
+        const newConfig = { rows: gd.rows, cols: gd.cols };
+        setMatrixConfig(newConfig);
+        rendererRef.current.setMatrixMode(true, newConfig);
+        setFitTrigger2D(Date.now());
+    };
 
     const audioRef = useRef(null);
     const rendererRef = useRef(new ShowRenderer());
@@ -272,6 +319,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                 if (bundledData.matrixConfig) setMatrixConfig(bundledData.matrixConfig);
                 if (bundledData.layoutData) setLayoutData(bundledData.layoutData);
+                if (bundledData.gridLayoutData) setGridLayoutData(bundledData.gridLayoutData);
                 setLayoutFileName(bundledData.layoutFileName || '');
                 if (bundledData.bookmarks) setBookmarks(bundledData.bookmarks);
 
@@ -1247,13 +1295,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             frames.push(frame);
                         }
 
-                        const rowLetter = String.fromCharCode(65 + r);
-                        const colId = (c + 1).toString().padStart(2, '0');
+                        const carName = getCarFileName(r, c);
                         const xml = writer.createXsq(frames, {
-                            song: `${audioFileName} - ${rowLetter}${colId}`,
+                            song: `${audioFileName} - ${carName}`,
                             author: 'Lightshow Generator'
                         });
-                        zip.file(`${rowLetter}${colId}.xsq`, xml);
+                        zip.file(`${carName}.xsq`, xml);
                         hasFiles = true;
                     }
                 }
@@ -1321,12 +1368,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         frames.push(frame);
                     }
 
-                    // Use requested naming convention
-                    const rowLetter = String.fromCharCode(65 + r); // A, B, C...
-                    const colId = (c + 1).toString().padStart(2, '0'); // 01, 02...
+                    // Use grid layout car IDs or default naming
+                    const carName = getCarFileName(r, c);
                     const blob = writer.createFseq(frames);
                     const arrayBuffer = await blob.arrayBuffer(); // Convert to ArrayBuffer for JSZip
-                    zip.file(`${rowLetter}${colId}.fseq`, arrayBuffer);
+                    zip.file(`${carName}.fseq`, arrayBuffer);
                     hasFiles = true;
                 }
             }
@@ -1388,6 +1434,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 audioFileName,
                 layoutFileName,
                 layoutData,
+                gridLayoutData,
                 bookmarks
             };
 
@@ -1440,6 +1487,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             if (data.matrixConfig) setMatrixConfig(data.matrixConfig);
             if (data.layoutData) setLayoutData(data.layoutData);
+            if (data.gridLayoutData) setGridLayoutData(data.gridLayoutData);
             setLayoutFileName(data.layoutFileName || '');
             if (data.bookmarks) setBookmarks(data.bookmarks);
 
@@ -1608,6 +1656,18 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
                     >
                         <ImageIcon size={20} />
+                    </button>
+                    <button
+                        className={`btn-icon ${showLayoutEditor ? 'active' : ''}`}
+                        tabIndex={-1}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                            e.currentTarget.blur();
+                            setShowLayoutEditor(true);
+                        }}
+                        title="Layout Grid Editor"
+                    >
+                        <Grid size={20} />
                     </button>
                     {layoutFileName && (
                         <span style={{ fontSize: '12px', color: '#888', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -2100,6 +2160,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     </Modal >
                 )
             }
+
+            {showLayoutEditor && (
+                <LayoutGridEditor
+                    gridData={gridLayoutData || createDefaultGridData(matrixConfig.cols, matrixConfig.rows)}
+                    onApply={handleApplyGridLayout}
+                    onClose={() => setShowLayoutEditor(false)}
+                />
+            )}
 
             <audio
                 ref={audioRef}

@@ -12,7 +12,10 @@ export class ProjectState {
                     R: 'Red',
                     G: 'MainWhite',
                     B: 'Yellow'
-                }
+                },
+                isMidi: false,
+                midiData: null,
+                midiMappings: {}
             }
         ];
         this.assets = {}; // Store blob URLs or Image objects for GIFs
@@ -52,7 +55,38 @@ export class ProjectState {
                 R: 'Red',
                 G: 'MainWhite',
                 B: 'Yellow'
-            }
+            },
+            isMidi: false,
+            midiData: null,
+            midiMappings: {}
+        });
+    }
+
+    addMidiLayer(name = 'Midi Track', midiData = []) {
+        let maxTime = 1000;
+        if (midiData && midiData.length > 0) {
+            maxTime = Math.max(...midiData.map(n => n.time + n.duration));
+        }
+
+        this.layers.push({
+            id: uuidv4(),
+            name,
+            muted: false,
+            clips: [{
+                id: `midi-region-${Date.now()}`,
+                type: 'midi-region',
+                startTime: 0,
+                duration: maxTime
+            }],
+            lightMapping: {
+                R: 'Red',
+                G: 'MainWhite',
+                B: 'Yellow'
+            },
+            isMidi: true,
+            midiData: midiData,
+            midiMappings: {},
+            midiComments: {}
         });
     }
 
@@ -153,6 +187,27 @@ export class ProjectState {
                     G: 'MainWhite',
                     B: 'Yellow'
                 };
+            }
+            if (layer.isMidi === undefined) {
+                layer.isMidi = false;
+                layer.midiData = null;
+                layer.midiMappings = {};
+                layer.midiComments = {};
+            } else if (layer.isMidi) {
+                // Migration: old midi tracks don't have clips
+                if (!layer.clips || layer.clips.length === 0) {
+                    let maxTime = 1000;
+                    if (layer.midiData && layer.midiData.length > 0) {
+                        maxTime = Math.max(...layer.midiData.map(n => n.time + n.duration));
+                    }
+                    layer.clips = [{
+                        id: `midi-region-${Date.now()}-${layer.id}`,
+                        type: 'midi-region',
+                        startTime: 0,
+                        duration: maxTime
+                    }];
+                }
+                if (!layer.midiComments) layer.midiComments = {};
             }
         });
 

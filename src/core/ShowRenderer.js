@@ -168,12 +168,34 @@ export class ShowRenderer {
         let hasPositionPattern = false;
         for (const layer of this.project.layers) {
             if (layer.muted) continue;
-            for (const clip of layer.clips) {
-                if (timeMs >= clip.startTime && timeMs < (clip.startTime + clip.duration)) {
-                    if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif' || clip.carGroupId) {
-                        hasPositionPattern = true;
-                        break;
+
+            let activeClips = [];
+            if (layer.isMidi && layer.midiData) {
+                const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
+                if (regionClip) {
+                    const localTimeMs = timeMs - regionClip.startTime;
+                    for (const note of layer.midiData) {
+                        if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
+                            const mappedFx = layer.midiMappings?.[note.midi];
+                            if (mappedFx) {
+                                activeClips.push({
+                                    ...mappedFx,
+                                    startTime: regionClip.startTime + note.time,
+                                    duration: note.duration,
+                                    id: `midi-${note.midi}-${note.time}`
+                                });
+                            }
+                        }
                     }
+                }
+            } else {
+                activeClips = layer.clips.filter(clip => timeMs >= clip.startTime && timeMs < (clip.startTime + clip.duration));
+            }
+
+            for (const clip of activeClips) {
+                if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif' || clip.carGroupId) {
+                    hasPositionPattern = true;
+                    break;
                 }
             }
             if (hasPositionPattern) break;
@@ -217,13 +239,34 @@ export class ShowRenderer {
         for (const layer of this.project.layers) {
             if (layer.muted) continue;
 
-            // Find active clip at this time
-            const clip = layer.clips.find(c =>
-                timeMs >= c.startTime &&
-                timeMs < (c.startTime + c.duration)
-            );
+            // Find active clips at this time
+            let activeClips = [];
+            if (layer.isMidi && layer.midiData) {
+                const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
+                if (regionClip) {
+                    const localTimeMs = timeMs - regionClip.startTime;
+                    for (const note of layer.midiData) {
+                        if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
+                            const mappedFx = layer.midiMappings?.[note.midi];
+                            if (mappedFx) {
+                                activeClips.push({
+                                    ...mappedFx,
+                                    startTime: regionClip.startTime + note.time, // Global start time for standard rendering logic
+                                    duration: note.duration,
+                                    id: `midi-${note.midi}-${note.time}`
+                                });
+                            }
+                        }
+                    }
+                }
+            } else {
+                activeClips = layer.clips.filter(c =>
+                    timeMs >= c.startTime &&
+                    timeMs < (c.startTime + c.duration)
+                );
+            }
 
-            if (clip) {
+            for (const clip of activeClips) {
                 // Filter by Car Group if applicable
                 if (clip.carGroupId) {
                     const group = this.project.carGroups?.find(g => g.id === clip.carGroupId);
@@ -759,13 +802,34 @@ export class ShowRenderer {
     renderLayer(layer, timeMs) {
         const frame = new Uint8Array(CHANNEL_COUNT).fill(0);
 
-        // Find active clip at this time
-        const clip = layer.clips.find(c =>
-            timeMs >= c.startTime &&
-            timeMs < (c.startTime + c.duration)
-        );
+        // Find active clips at this time
+        let activeClips = [];
+        if (layer.isMidi && layer.midiData) {
+            const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
+            if (regionClip) {
+                const localTimeMs = timeMs - regionClip.startTime;
+                for (const note of layer.midiData) {
+                    if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
+                        const mappedFx = layer.midiMappings?.[note.midi];
+                        if (mappedFx) {
+                            activeClips.push({
+                                ...mappedFx,
+                                startTime: regionClip.startTime + note.time, // Global start time
+                                duration: note.duration,
+                                id: `midi-${note.midi}-${note.time}`
+                            });
+                        }
+                    }
+                }
+            }
+        } else {
+            activeClips = layer.clips.filter(c =>
+                timeMs >= c.startTime &&
+                timeMs < (c.startTime + c.duration)
+            );
+        }
 
-        if (clip) {
+        for (const clip of activeClips) {
             const clipTime = timeMs - clip.startTime;
             this.renderClip(clip, clipTime, frame, null, null, null, layer);
         }

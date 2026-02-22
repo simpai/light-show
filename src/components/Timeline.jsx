@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
-import { Settings, Eye, EyeOff } from 'lucide-react';
+import { Settings, Eye, EyeOff, Trash2 } from 'lucide-react';
 
 const WaveformTile = ({ peaks, startIndex, widthPerPoint, height, pixelsPerSecond, tileOffset }) => {
     const canvasRef = useRef(null);
@@ -380,9 +380,9 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         // Detect if resizing (only allowed when dragging a single clip)
         let dragMode = 'move';
         if (clipsToDrag.length === 1) {
-            const isEffect = primaryClip.type === 'effect';
+            const isResizable = primaryClip.type === 'effect' || primaryClip.type === 'midi-region';
             const resizeThresholdPx = 8;
-            if (isEffect) {
+            if (isResizable) {
                 if (xInClipPx < resizeThresholdPx) dragMode = 'resize-left';
                 else if (xInClipPx > rect.width - resizeThresholdPx) dragMode = 'resize-right';
             }
@@ -626,20 +626,50 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                 {layer.muted ? <EyeOff size={14} /> : <Eye size={14} />}
                             </button>
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', opacity: layer.muted ? 0.5 : 1 }}>{layer.name}</span>
-                            <button
-                                className="track-settings-btn"
-                                tabIndex={-1}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.currentTarget.blur();
-                                    onLayerSelect(layer.id);
-                                    onLayerDoubleClick(layer.id);
-                                }}
-                                title="Track Settings"
-                            >
-                                <Settings size={14} />
-                            </button>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                    className="track-settings-btn"
+                                    tabIndex={-1}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.currentTarget.blur();
+                                        onLayerSelect(layer.id);
+                                        onLayerDoubleClick(layer.id);
+                                    }}
+                                    title="Track Settings"
+                                >
+                                    <Settings size={14} />
+                                </button>
+                                <button
+                                    className="track-delete-btn"
+                                    style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 0.2s', borderRadius: '4px' }}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = '#888'}
+                                    tabIndex={-1}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.currentTarget.blur();
+                                        if (window.confirm(`Are you sure you want to delete track "${layer.name}"?`)) {
+                                            const json = project.toJSON();
+                                            const newProject = ProjectState.fromJSONSync(json);
+                                            newProject.assets = project.assets;
+                                            newProject.layers = newProject.layers.filter(l => l.id !== layer.id);
+
+                                            if (onProjectChange) {
+                                                onProjectChange(newProject);
+                                            }
+                                            if (selectedLayerId === layer.id && onLayerSelect) {
+                                                onLayerSelect(null);
+                                            }
+                                        }
+                                    }}
+                                    title="Delete Track"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -679,6 +709,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                 className={`track-lane ${selectedLayerId === layer.id ? 'selected' : ''} ${layer.muted ? 'muted' : ''}`}
                                 onMouseDown={(e) => handleLaneMouseDown(e, layer.id)}
                             >
+                                {/* MIDI events are now rendered inside 'midi-region' clips */}
                                 {layer.clips.map(clip => {
                                     const dragging = draggingClips.find(c => c.id === clip.id);
                                     const isDragging = !!dragging;
@@ -721,7 +752,9 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                                 background: (() => {
                                                     // 1. Determine Base Color/Gradient (vertical stripes for groups)
                                                     let baseStyle = '#444'; // Default
-                                                    if (clip.type === 'gif') {
+                                                    if (clip.type === 'midi-region') {
+                                                        baseStyle = 'rgba(160, 32, 240, 0.15)';
+                                                    } else if (clip.type === 'gif') {
                                                         baseStyle = '#4a90e2';
                                                     } else if (usedGroups.length === 1) {
                                                         baseStyle = usedGroups[0].color;
@@ -771,7 +804,27 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                         >
                                             <div className="resize-handle left" />
                                             <div className="clip-content" style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                                                {/* <span className="clip-label" style={{ zIndex: 2 }}>{clip.effectType || 'Clip'}</span> */}
+                                                {clip.type === 'midi-region' && layer.midiData && layer.midiData.map((note, idx) => {
+                                                    const isMapped = !!layer.midiMappings?.[note.midi];
+                                                    const nWidth = Math.max(2, (note.duration / 1000) * pixelsPerSecond);
+                                                    const nLeft = (note.time / 1000) * pixelsPerSecond;
+                                                    return (
+                                                        <div
+                                                            key={`midi-in-${note.midi}-${idx}`}
+                                                            style={{
+                                                                left: nLeft,
+                                                                width: nWidth,
+                                                                position: 'absolute',
+                                                                height: '70%',
+                                                                top: '15%',
+                                                                background: isMapped ? '#a020f0' : '#666',
+                                                                borderRadius: '2px',
+                                                                opacity: isMapped ? 0.9 : 0.3,
+                                                                pointerEvents: 'none'
+                                                            }}
+                                                        />
+                                                    );
+                                                })}
                                             </div>
                                             <div className="resize-handle right" />
                                         </div>
@@ -811,7 +864,9 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                                 width: clipWidth,
                                                 background: (() => {
                                                     let baseStyle = '#444';
-                                                    if (dragging.type === 'gif') {
+                                                    if (dragging.type === 'midi-region') {
+                                                        baseStyle = 'rgba(160, 32, 240, 0.15)';
+                                                    } else if (dragging.type === 'gif') {
                                                         baseStyle = '#4a90e2';
                                                     } else if (usedGroups.length === 1) {
                                                         baseStyle = usedGroups[0].color;

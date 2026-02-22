@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid, AlignLeft, Heart } from 'lucide-react';
+import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid, AlignLeft, Heart, ClipboardPaste } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -13,6 +13,7 @@ import { AudioWaveformManager } from '../utils/AudioWaveformManager';
 import JSZip from 'jszip';
 import MatrixPreview2D from './MatrixPreview2D';
 import LayoutGridEditor, { createDefaultGridData } from './LayoutGridEditor';
+import { Midi } from '@tonejs/midi';
 
 const CHANNEL_NAMES = {
     0: "Left Outer Main Beam",
@@ -805,6 +806,48 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
         setProject(newProject);
         setSelectedLayerId(newProject.layers[newProject.layers.length - 1].id);
+    };
+
+    const handleAddMidiTrack = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.mid,.midi';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const midi = new Midi(arrayBuffer);
+
+                    // Extract all notes from all tracks
+                    const midiData = [];
+                    midi.tracks.forEach(track => {
+                        track.notes.forEach(note => {
+                            midiData.push({
+                                time: note.time * 1000,
+                                duration: note.duration * 1000,
+                                midi: note.midi,
+                                name: note.name,
+                                velocity: note.velocity
+                            });
+                        });
+                    });
+
+                    // Sort by time
+                    midiData.sort((a, b) => a.time - b.time);
+
+                    project.addMidiLayer(file.name || 'Midi Track', midiData);
+                    const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                    setProject(newProject);
+                    setSelectedLayerId(newProject.layers[newProject.layers.length - 1].id);
+                } catch (err) {
+                    console.error("Failed to parse MIDI file:", err);
+                    alert("Failed to parse MIDI file: " + err.message);
+                }
+            }
+            e.target.value = ''; // Reset
+        };
+        input.click();
     };
 
     const handleClipUpdate = (updatedData, field = null) => {
@@ -1803,7 +1846,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     </div>
                     <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>
 
-                    <div className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: '20px' }}>
+                    <div className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '0px' }}>
                         <span style={{ fontSize: '12px', color: '#666' }}>Zoom:</span>
                         <input
                             type="range"
@@ -1811,11 +1854,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             max="200"
                             value={zoom}
                             onChange={(e) => setZoom(parseInt(e.target.value))}
-                            style={{ width: '100px' }}
+                            style={{ width: '80px' }}
                         />
                     </div>
 
-                    <div className="snap-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '20px' }}>
+                    <div className="snap-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '0px' }}>
                         <span style={{ fontSize: '12px', color: '#666' }}>Snap:</span>
                         <select
                             value={snapMode}
@@ -1838,7 +1881,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </select>
                     </div>
 
-                    <div className="bpm-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '20px' }}>
+                    <div className="bpm-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '0px' }}>
                         <span style={{ fontSize: '12px', color: '#666' }}>BPM:</span>
                         <input
                             type="number"
@@ -1858,7 +1901,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         />
                     </div>
 
-                    <div className="jitter-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '20px' }}>
+                    <div className="jitter-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '0px' }}>
                         <span style={{ fontSize: '12px', color: '#666' }}>Jitter:</span>
                         <input
                             type="number"
@@ -1887,6 +1930,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     <div className="control-group" style={{ marginLeft: '20px', display: 'flex', gap: '5px' }}>
                         <button onClick={handleAddTrack} className="btn-icon" title="Add Track">
                             <Layers size={20} /> <Plus size={10} style={{ marginLeft: -8, marginBottom: 8 }} />
+                        </button>
+                        <button onClick={handleAddMidiTrack} className="btn-icon" title="Add Midi Track" style={{ color: '#a020f0' }}>
+                            <Music size={20} /> <Plus size={10} style={{ marginLeft: -8, marginBottom: 8 }} />
                         </button>
                         <button onClick={() => handleAddClip('effect')} className="btn-icon" title="Add Effect at Cursor" style={{ color: '#e82020' }}>
                             <Zap size={20} /> Effect
@@ -1940,19 +1986,30 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             }
 
             {
-                activeModal === 'trackProperties' && selectedLayerId && (
-                    <Modal title="Track Properties" onClose={() => setActiveModal(null)}>
-                        <TrackProperties
-                            layer={project.layers.find(l => l.id === selectedLayerId)}
-                            lightGroups={project.lightGroups}
-                            onUpdate={(updatedLayer) => {
-                                const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
-                                newProject.layers = newProject.layers.map(l => l.id === updatedLayer.id ? updatedLayer : l);
-                                saveToHistory(newProject);
-                            }}
-                        />
-                    </Modal>
-                )
+                activeModal === 'trackProperties' && selectedLayerId && (() => {
+                    const layer = project.layers.find(l => l.id === selectedLayerId);
+                    return (
+                        <Modal
+                            title="Track Properties"
+                            onClose={() => setActiveModal(null)}
+                            className={layer?.isMidi ? "modal-wide" : ""}
+                        >
+                            <TrackProperties
+                                layer={layer}
+                                lightGroups={project.lightGroups}
+                                clipboard={clipboard}
+                                onUpdate={(updatedLayer) => {
+                                    const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                                    newProject.layers = newProject.layers.map(l => l.id === updatedLayer.id ? updatedLayer : l);
+                                    saveToHistory(newProject);
+                                }}
+                                assets={project.assets}
+                                carGroups={project.carGroups}
+                                allCarsThumbnail={allCarsThumbnail}
+                            />
+                        </Modal>
+                    );
+                })()
             }
 
             {
@@ -2157,10 +2214,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     );
 }
 
-function Modal({ title, children, onClose, footer }) {
+function Modal({ title, children, onClose, footer, className = "" }) {
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className={`modal-content ${className}`} onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h3>{title}</h3>
                     <button className="modal-close" onClick={onClose}><X size={20} /></button>
@@ -2197,6 +2254,14 @@ function Modal({ title, children, onClose, footer }) {
                     display: flex;
                     flex-direction: column;
                     box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+                }
+                .modal-content.modal-wide {
+                    max-width: 100vw;
+                    width: 100vw;
+                    height: 100vh;
+                    max-height: 100vh;
+                    border-radius: 0;
+                    border: none;
                 }
                 .modal-header {
                     padding: 16px 20px;
@@ -2582,7 +2647,9 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
     );
 }
 
-function TrackProperties({ layer, lightGroups, onUpdate }) {
+function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carGroups, allCarsThumbnail }) {
+    const [selectedNote, setSelectedNote] = useState(null);
+
     if (!layer) return null;
 
     const handleUpdateMapping = (color, groupName) => {
@@ -2597,7 +2664,7 @@ function TrackProperties({ layer, lightGroups, onUpdate }) {
     };
 
     return (
-        <div className="track-properties">
+        <div className="track-properties" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div className="form-group mb-6">
                 <label>Track Name</label>
                 <input
@@ -2608,35 +2675,263 @@ function TrackProperties({ layer, lightGroups, onUpdate }) {
                 />
             </div>
 
-            <div className="mapping-section">
-                <h4>RGB Pixel Mapping</h4>
-                <p className="section-desc">Map the Red, Green, and Blue channels of your images/GIFs to light groups.</p>
-                <div className="mapping-grid">
-                    {['R', 'G', 'B'].map(color => {
-                        const labels = { R: 'Red Pixels', G: 'Green Pixels', B: 'Blue Pixels' };
-                        const dotColors = { R: '#ef4444', G: '#10b981', B: '#3b82f6' };
-                        return (
-                            <div key={color} className="mapping-item">
-                                <div className="mapping-label">
-                                    <div className="channel-indicator" style={{ backgroundColor: dotColors[color] }}></div>
-                                    <span>{labels[color]}</span>
+            {(!layer.isMidi) && (
+                <div className="mapping-section">
+                    <h4>RGB Pixel Mapping</h4>
+                    <p className="section-desc">Map the Red, Green, and Blue channels of your images/GIFs to light groups.</p>
+                    <div className="mapping-grid">
+                        {['R', 'G', 'B'].map(color => {
+                            const labels = { R: 'Red Pixels', G: 'Green Pixels', B: 'Blue Pixels' };
+                            const dotColors = { R: '#ef4444', G: '#10b981', B: '#3b82f6' };
+                            return (
+                                <div key={color} className="mapping-item">
+                                    <div className="mapping-label">
+                                        <div className="channel-indicator" style={{ backgroundColor: dotColors[color] }}></div>
+                                        <span>{labels[color]}</span>
+                                    </div>
+                                    <div className="mapping-select-wrapper">
+                                        <select
+                                            value={layer.lightMapping?.[color] || ''}
+                                            onChange={(e) => handleUpdateMapping(color, e.target.value)}
+                                        >
+                                            <option value="">(Not Mapped)</option>
+                                            {Object.keys(lightGroups).map(groupName => (
+                                                <option key={groupName} value={groupName}>{groupName}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="mapping-select-wrapper">
-                                    <select
-                                        value={layer.lightMapping?.[color] || ''}
-                                        onChange={(e) => handleUpdateMapping(color, e.target.value)}
-                                    >
-                                        <option value="">(Not Mapped)</option>
-                                        {Object.keys(lightGroups).map(groupName => (
-                                            <option key={groupName} value={groupName}>{groupName}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {layer.isMidi && layer.midiData && (() => {
+                const handleExportMidiMapping = () => {
+                    const exportData = {
+                        mappings: layer.midiMappings || {},
+                        comments: layer.midiComments || {}
+                    };
+                    const dataStr = JSON.stringify(exportData, null, 2);
+                    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                    const exportFileDefaultName = `${layer.name || 'Midi_Track'}_Mapping.json`;
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', exportFileDefaultName);
+                    linkElement.click();
+                };
+
+                const handleImportMidiMapping = () => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.json';
+                    input.onchange = (e) => {
+                        const file = e.target.files[0];
+                        const reader = new FileReader();
+                        reader.readAsText(file, 'UTF-8');
+                        reader.onload = (readerEvent) => {
+                            try {
+                                const content = JSON.parse(readerEvent.target.result);
+                                onUpdate({
+                                    ...layer,
+                                    midiMappings: content.mappings || content, // Try to support older direct mapping exports if any
+                                    midiComments: content.comments || {}
+                                });
+                            } catch (err) {
+                                alert('Invalid JSON file');
+                            }
+                        };
+                        e.target.value = ''; // Reset
+                    };
+                    input.click();
+                };
+
+                return (
+                    <div className="midi-mapping-section" style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h4>Midi Note Mapping</h4>
+                                <p className="section-desc">Assign copied FX clips to specific MIDI notes, then tweak them on the right.</p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn-link-small" onClick={handleImportMidiMapping} title="Import Mapping" style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px' }}>
+                                    <Upload size={14} /> Import
+                                </button>
+                                <button className="btn-link-small" onClick={handleExportMidiMapping} title="Export Mapping" style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px' }}>
+                                    <Download size={14} /> Export
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '20px', alignItems: 'stretch', marginTop: '12px', flex: 1, minHeight: 0 }}>
+                            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px' }} className="custom-scrollbar">
+                                {(() => {
+                                    const uniqueNotes = [...new Set(layer.midiData.map(n => n.midi))].sort((a, b) => a - b);
+                                    return uniqueNotes.map(noteNumber => {
+                                        const noteName = layer.midiData.find(n => n.midi === noteNumber)?.name || `Note ${noteNumber}`;
+                                        const isMapped = !!layer.midiMappings?.[noteNumber];
+                                        const isSelected = selectedNote === noteNumber;
+                                        return (
+                                            <div key={noteNumber}
+                                                onClick={() => setSelectedNote(noteNumber)}
+                                                className={`midi-note-row ${isSelected ? 'selected' : ''}`}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px',
+                                                    background: isSelected ? 'rgba(160, 32, 240, 0.2)' : 'transparent',
+                                                    border: isSelected ? '1px solid rgba(160, 32, 240, 0.4)' : '1px solid transparent',
+                                                    padding: '0px 4px',
+                                                    transition: 'all 0.2s',
+                                                    cursor: 'pointer'
+                                                }}>
+                                                <div style={{ width: '70px', color: isSelected ? '#fff' : '#ccc', fontSize: '12px', fontWeight: isSelected ? 'bold' : 'normal' }} title={noteName}>
+                                                    {noteNumber} ({noteName.split('-')[0]})
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Comment..."
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    value={layer.midiComments?.[noteNumber] || ''}
+                                                    onChange={(e) => {
+                                                        onUpdate({
+                                                            ...layer,
+                                                            midiComments: {
+                                                                ...(layer.midiComments || {}),
+                                                                [noteNumber]: e.target.value
+                                                            }
+                                                        });
+                                                    }}
+                                                    style={{ flex: 1, minWidth: '200px', background: 'rgba(0,0,0,0.2)', border: '1px solid #444', color: '#fff', fontSize: '12px', padding: '4px 4px', outline: 'none' }}
+                                                    title="Add comment for this note"
+                                                />
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (clipboard && clipboard.length > 0) {
+                                                            const fxToPaste = clipboard[0];
+                                                            const { id, startTime, duration, ...fxData } = fxToPaste;
+                                                            onUpdate({
+                                                                ...layer,
+                                                                midiMappings: {
+                                                                    ...layer.midiMappings,
+                                                                    [noteNumber]: fxData
+                                                                }
+                                                            });
+                                                            setSelectedNote(noteNumber);
+                                                        } else {
+                                                            alert('Clipboard is empty! Copy an FX first.');
+                                                        }
+                                                    }}
+                                                    className="btn-link-small"
+                                                    style={{ flex: 1, Width: '200px', padding: '4px 4px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
+                                                    title="Paste copied FX here"
+                                                >
+                                                    <ClipboardPaste size={14} />
+                                                    {isMapped ? `${layer.midiMappings[noteNumber].type === 'effect' ? layer.midiMappings[noteNumber].effectType || 'FX' : 'GIF'}` : ''}
+                                                </button>
+
+                                                {isMapped && (
+                                                    <button onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const newMappings = { ...layer.midiMappings };
+                                                        delete newMappings[noteNumber];
+                                                        onUpdate({
+                                                            ...layer,
+                                                            midiMappings: newMappings
+                                                        });
+                                                        if (isSelected) setSelectedNote(null);
+                                                    }} className="btn-icon" title="Remove Mapping" style={{ color: '#ef4444', padding: '4px' }}>
+                                                        <X size={16} />
+                                                    </button>
+                                                )}
+
+                                                {!isMapped && (
+                                                    <button className="btn-icon" title="Remove Mapping" style={{ color: '#555', padding: '4px' }}>
+                                                        <X size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+
+                            {/* Editor Side Panel */}
+                            <div style={{
+                                width: '340px',
+                                minWidth: '340px',
+                                overflowY: 'auto',
+                                background: '#151515',
+                                borderRadius: '8px',
+                                border: '1px solid #333',
+                            }} className="custom-scrollbar">
+                                {selectedNote ? (
+                                    layer.midiMappings?.[selectedNote] ? (
+                                        <div style={{ padding: '10px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '10px' }}>
+                                                <h4 style={{ margin: 0, color: '#a020f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <Settings size={16} />
+                                                    Editing Note {selectedNote}
+                                                </h4>
+                                            </div>
+                                            <ClipEditor
+                                                clips={[{
+                                                    ...layer.midiMappings[selectedNote],
+                                                    id: `midi-${selectedNote}`,
+                                                    type: layer.midiMappings[selectedNote].type || 'effect'
+                                                }]}
+                                                onChange={(updatedData) => {
+                                                    const { id, startTime, duration, ...fxData } = updatedData;
+                                                    onUpdate({
+                                                        ...layer,
+                                                        midiMappings: {
+                                                            ...layer.midiMappings,
+                                                            [selectedNote]: fxData
+                                                        }
+                                                    });
+                                                }}
+                                                onDelete={() => {
+                                                    const newMappings = { ...layer.midiMappings };
+                                                    delete newMappings[selectedNote];
+                                                    onUpdate({
+                                                        ...layer,
+                                                        midiMappings: newMappings
+                                                    });
+                                                    setSelectedNote(null);
+                                                }}
+                                                assets={assets}
+                                                lightGroups={lightGroups}
+                                                carGroups={carGroups}
+                                                allCarsThumbnail={allCarsThumbnail}
+                                            />
+                                            {/* Hide timing fields in clip editor as they are overridden by Midi notes */}
+                                            <style>{`
+                                            .midi-mapping-section .custom-number-input-container:has(label:contains("Start Time")),
+                                            .midi-mapping-section .custom-number-input-container:has(label:contains("Duration")) {
+                                                opacity: 0.5;
+                                                pointer-events: none;
+                                            }
+                                            .midi-mapping-section .header { display: none; /* hide clip editor default header */ }
+                                            `}</style>
+                                        </div>
+                                    ) : (
+                                        <div style={{ padding: '20px', textAlign: 'center', color: '#666', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                            Note {selectedNote} is not mapped. Paste an FX first to edit properties.
+                                        </div>
+                                    )
+                                ) : (
+                                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#888', fontSize: '14px', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                        <div style={{ margin: '0 auto 12px auto' }}>
+                                            <Settings size={32} opacity={0.3} style={{ display: 'block', margin: '0 auto' }} />
+                                        </div>
+                                        Select a Note row to view or edit its FX properties
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
             <style>{`
                 .track-properties { color: white; }
                 .form-group { display: flex; flex-direction: column; gap: 8px; }

@@ -275,7 +275,18 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             value={clip.startTime === '__mixed__' ? '' : Number((clip.startTime || 0).toFixed(2))}
                             step={10}
                             min={0}
-                            onChange={val => handleChange('startTime', parseFloat(val.toFixed(2)) || 0)}
+                            onChange={val => {
+                                const newStartTime = parseFloat(val.toFixed(2)) || 0;
+                                if (clip.type === 'midi-region' && !isMulti) {
+                                    const diff = newStartTime - (clip.startTime || 0);
+                                    handleChanges({
+                                        startTime: newStartTime,
+                                        startOffset: (clip.startOffset || 0) + diff
+                                    });
+                                } else {
+                                    handleChange('startTime', newStartTime);
+                                }
+                            }}
                             className="timing-input"
                         />
                         <span className="unit-hint-sub">{clip.startTime === '__mixed__' ? 'Mixed' : (clip.startTime / 1000).toFixed(2) + 's'}</span>

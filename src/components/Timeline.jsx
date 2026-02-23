@@ -457,11 +457,15 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     const snappedPrimaryTime = getSnappedTime(primaryNewTimeMs);
                     const clampedPrimaryTime = Math.max(0, snappedPrimaryTime);
 
-                    // All other clips move relative to the primary clip's snapped position
-                    nextClips = prev.map(c => ({
-                        ...c,
-                        startTime: Math.max(0, clampedPrimaryTime + c.relativeOffset)
-                    }));
+                    nextClips = prev.map(c => {
+                        const newStart = Math.max(0, clampedPrimaryTime + c.relativeOffset);
+                        const diff = newStart - c.originalStartTime;
+                        return {
+                            ...c,
+                            startTime: newStart,
+                            ...(c.type === 'midi-region' && { startOffset: (c.originalStartOffset || 0) + diff })
+                        };
+                    });
                 }
 
                 draggingClipsRef.current = nextClips;

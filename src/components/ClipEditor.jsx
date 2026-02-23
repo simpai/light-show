@@ -314,8 +314,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             onChange={bpm => {
                                 const updatedClip = { ...clip, bpm, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
-                                handleChange('bpm', bpm);
-                                handleChange('duration', duration);
+                                handleChanges({ bpm, duration });
                             }}
                         />
                         <CustomNumberInput
@@ -326,8 +325,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             onChange={beatsPerFrame => {
                                 const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
-                                handleChange('beatsPerFrame', beatsPerFrame);
-                                handleChange('duration', duration);
+                                handleChanges({ beatsPerFrame, duration });
                             }}
                         />
                         <CustomNumberInput
@@ -338,8 +336,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             onChange={repetitions => {
                                 const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
-                                handleChange('repetitions', repetitions);
-                                handleChange('duration', duration);
+                                handleChanges({ repetitions, duration });
                             }}
                         />
                     </div>

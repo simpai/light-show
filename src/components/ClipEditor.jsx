@@ -363,6 +363,46 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                 </div>
             )}
 
+            {clip.type === 'gif' && (
+                <div className="section-container">
+                    <label className="section-title">Transition</label>
+                    <div className="form-group">
+                        <label className="compact-label" style={{ minWidth: '80px' }}>Type</label>
+                        <select
+                            value={clip.transitionType === '__mixed__' ? '' : (clip.transitionType || 'none')}
+                            onChange={e => handleChange('transitionType', e.target.value)}
+                        >
+                            {clip.transitionType === '__mixed__' && <option value="">(Mixed)</option>}
+                            <option value="none">None</option>
+                            <option value="dissolve">Dissolve</option>
+                            <option value="wipe-right">Wipe Right</option>
+                            <option value="wipe-left">Wipe Left</option>
+                            <option value="wipe-down">Wipe Down</option>
+                            <option value="wipe-up">Wipe Up</option>
+                            <option value="push-right">Push Right</option>
+                            <option value="push-left">Push Left</option>
+                        </select>
+                    </div>
+
+                    {(clip.transitionType && clip.transitionType !== 'none' && clip.transitionType !== '__mixed__') && (
+                        <div className="form-group">
+                            <label className="compact-label" style={{ minWidth: '80px' }}>Overlap</label>
+                            <div className="slider-with-val" style={{ flex: 1 }}>
+                                <input
+                                    type="range"
+                                    min="0.05"
+                                    max="0.95"
+                                    step="0.05"
+                                    value={clip.transitionOverlap === '__mixed__' ? 0.5 : (clip.transitionOverlap || 0.5)}
+                                    onChange={e => handleChange('transitionOverlap', parseFloat(e.target.value))}
+                                />
+                                <span className="val-hint">{clip.transitionOverlap === '__mixed__' ? 'Mixed' : Math.round((clip.transitionOverlap || 0.5) * 100) + '%'}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {clip.type === 'effect' && (
                 <>
                     <div className="section-container">

@@ -988,38 +988,138 @@ export class ShowRenderer {
         const assetFrameCount = asset.frames.length;
         const rawFrameIndex = Math.floor(clipTime / frameDuration);
         const frameIndex = (rawFrameIndex < 0) ? 0 : (rawFrameIndex % assetFrameCount);
-        const imageData = asset.frames[frameIndex];
 
-        // Map grid position to image coordinates (Scale pattern to fit grid if needed)
-        // Adjust for offsets: shift the grid position we are sampling for
-        const adjustedRow = row - (clip.offsetY || 0);
-        const adjustedCol = col - (clip.offsetX || 0);
+        // --- Transition blending logic ---
+        const transType = clip.transitionType || 'none';
+        const transOverlap = clip.transitionOverlap || 0.5;
 
-        // Check if the adjusted position is within the original grid bounds
-        // If not, this car should be transparent for this clip
-        if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
-            return;
-        }
+        // Time within the current frame period
+        const timeInFrame = clipTime - rawFrameIndex * frameDuration;
+        // The point in time where transition begins
+        const transitionStart = frameDuration * (1.0 - transOverlap);
 
-        // If single car, GS is 1x1, so we take the center of the image
-        let imgRow, imgCol;
-        if (gridSize.rows > 1 || gridSize.cols > 1) {
-            imgRow = Math.floor((adjustedRow / gridSize.rows) * imageData.height);
-            imgCol = Math.floor((adjustedCol / gridSize.cols) * imageData.width);
+        let r, g, b, a;
+
+        // Check if we are in the transition zone and the transition type is active
+        if (transType !== 'none' && timeInFrame >= transitionStart && transOverlap > 0) {
+            const nextFrameIndex = ((rawFrameIndex < 0 ? 0 : rawFrameIndex) + 1) % assetFrameCount;
+            const currentImageData = asset.frames[frameIndex];
+            const nextImageData = asset.frames[nextFrameIndex];
+
+            // Progress through the transition: 0.0 (start) → 1.0 (end)
+            const transitionDuration = frameDuration * transOverlap;
+            const progress = Math.min(1.0, (timeInFrame - transitionStart) / transitionDuration);
+
+            // Get pixel from current frame
+            const getPixel = (imgData, aRow, aCol, gs) => {
+                let iR, iC;
+                if (gs.rows > 1 || gs.cols > 1) {
+                    iR = Math.floor((aRow / gs.rows) * imgData.height);
+                    iC = Math.floor((aCol / gs.cols) * imgData.width);
+                } else {
+                    iR = Math.floor(imgData.height / 2);
+                    iC = Math.floor(imgData.width / 2);
+                }
+                iR = Math.max(0, Math.min(iR, imgData.height - 1));
+                iC = Math.max(0, Math.min(iC, imgData.width - 1));
+                const idx = (iR * imgData.width + iC) * 4;
+                return [imgData.data[idx], imgData.data[idx + 1], imgData.data[idx + 2], imgData.data[idx + 3]];
+            };
+
+            const adjustedRow = row - (clip.offsetY || 0);
+            const adjustedCol = col - (clip.offsetX || 0);
+
+            if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
+                return;
+            }
+
+            const [cr, cg, cb, ca] = getPixel(currentImageData, adjustedRow, adjustedCol, gridSize);
+            const [nr, ng, nb, na] = getPixel(nextImageData, adjustedRow, adjustedCol, gridSize);
+
+            if (transType === 'dissolve') {
+                // Crossfade: linear blend
+                const inv = 1.0 - progress;
+                r = Math.round(cr * inv + nr * progress);
+                g = Math.round(cg * inv + ng * progress);
+                b = Math.round(cb * inv + nb * progress);
+                a = Math.round(ca * inv + na * progress);
+            } else if (transType.startsWith('wipe-')) {
+                // Wipe: hard-cut sweep based on normalized grid position
+                let normPos;
+                if (transType === 'wipe-right') {
+                    normPos = gridSize.cols > 1 ? adjustedCol / (gridSize.cols - 1) : 0.5;
+                } else if (transType === 'wipe-left') {
+                    normPos = gridSize.cols > 1 ? 1.0 - adjustedCol / (gridSize.cols - 1) : 0.5;
+                } else if (transType === 'wipe-down') {
+                    normPos = gridSize.rows > 1 ? adjustedRow / (gridSize.rows - 1) : 0.5;
+                } else { // wipe-up
+                    normPos = gridSize.rows > 1 ? 1.0 - adjustedRow / (gridSize.rows - 1) : 0.5;
+                }
+                if (normPos < progress) {
+                    r = nr; g = ng; b = nb; a = na;
+                } else {
+                    r = cr; g = cg; b = cb; a = ca;
+                }
+            } else if (transType.startsWith('push-')) {
+                // Push: both frames slide in the specified direction
+                const totalCols = gridSize.cols;
+                const shiftAmount = Math.floor(progress * totalCols);
+                let srcCol;
+                if (transType === 'push-right') {
+                    srcCol = adjustedCol - shiftAmount;
+                    if (srcCol < 0) {
+                        // This pixel now shows the next frame, wrapped from the other side
+                        const wrappedCol = totalCols + srcCol;
+                        const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
+                        r = pr; g = pg; b = pb; a = pa;
+                    } else {
+                        const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
+                        r = pr; g = pg; b = pb; a = pa;
+                    }
+                } else { // push-left
+                    srcCol = adjustedCol + shiftAmount;
+                    if (srcCol >= totalCols) {
+                        const wrappedCol = srcCol - totalCols;
+                        const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
+                        r = pr; g = pg; b = pb; a = pa;
+                    } else {
+                        const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
+                        r = pr; g = pg; b = pb; a = pa;
+                    }
+                }
+            } else {
+                // Fallback to no transition
+                r = cr; g = cg; b = cb; a = ca;
+            }
         } else {
-            imgRow = Math.floor(imageData.height / 2);
-            imgCol = Math.floor(imageData.width / 2);
+            // No transition — use current frame normally
+            const imageData = asset.frames[frameIndex];
+
+            // Map grid position to image coordinates
+            const adjustedRow = row - (clip.offsetY || 0);
+            const adjustedCol = col - (clip.offsetX || 0);
+
+            if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
+                return;
+            }
+
+            let imgRow, imgCol;
+            if (gridSize.rows > 1 || gridSize.cols > 1) {
+                imgRow = Math.floor((adjustedRow / gridSize.rows) * imageData.height);
+                imgCol = Math.floor((adjustedCol / gridSize.cols) * imageData.width);
+            } else {
+                imgRow = Math.floor(imageData.height / 2);
+                imgCol = Math.floor(imageData.width / 2);
+            }
+            imgRow = Math.max(0, Math.min(imgRow, imageData.height - 1));
+            imgCol = Math.max(0, Math.min(imgCol, imageData.width - 1));
+
+            const pixIdx = (imgRow * imageData.width + imgCol) * 4;
+            r = imageData.data[pixIdx];
+            g = imageData.data[pixIdx + 1];
+            b = imageData.data[pixIdx + 2];
+            a = imageData.data[pixIdx + 3];
         }
-
-        // Clamp to image bounds
-        imgRow = Math.max(0, Math.min(imgRow, imageData.height - 1));
-        imgCol = Math.max(0, Math.min(imgCol, imageData.width - 1));
-
-        const pixIdx = (imgRow * imageData.width + imgCol) * 4;
-        const r = imageData.data[pixIdx];
-        const g = imageData.data[pixIdx + 1];
-        const b = imageData.data[pixIdx + 2];
-        const a = imageData.data[pixIdx + 3];
 
         if (layer && layer.lightMapping && this.project.lightGroups) {
             const mapping = layer.lightMapping;

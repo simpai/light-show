@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
-import { Settings, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Settings, Eye, EyeOff, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 
 const WaveformTile = ({ peaks, startIndex, widthPerPoint, height, pixelsPerSecond, tileOffset }) => {
     const canvasRef = useRef(null);
@@ -636,7 +636,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             >
                 {/* Fixed track headers */}
                 <div className="track-headers-fixed" style={{ width: trackHeaderWidth }}>
-                    {project.layers.map(layer => (
+                    {project.layers.map((layer, index) => (
                         <div
                             key={layer.id}
                             className={`track-header ${selectedLayerId === layer.id ? 'selected' : ''}`}

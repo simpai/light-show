@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2 } from 'lucide-react';
+import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -2015,6 +2015,48 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         <span style={{ fontSize: '11px', color: '#666' }}>ms</span>
                     </div>
                     <div className="control-group" style={{ marginLeft: '20px', display: 'flex', gap: '5px' }}>
+                        <div style={{ display: 'flex', borderRight: '1px solid #333', paddingRight: '10px', marginRight: '5px' }}>
+                            <button
+                                onClick={() => {
+                                    if (!selectedLayerId) return;
+                                    const index = project.layers.findIndex(l => l.id === selectedLayerId);
+                                    if (index > 0) {
+                                        const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                                        const temp = newProject.layers[index];
+                                        newProject.layers[index] = newProject.layers[index - 1];
+                                        newProject.layers[index - 1] = temp;
+                                        setProject(newProject);
+                                        rendererRef.current.setProject(newProject);
+                                    }
+                                }}
+                                className="btn-icon"
+                                title="Move Track Up"
+                                disabled={!selectedLayerId || project.layers.findIndex(l => l.id === selectedLayerId) <= 0}
+                                style={{ color: (!selectedLayerId || project.layers.findIndex(l => l.id === selectedLayerId) <= 0) ? '#444' : '#fff' }}
+                            >
+                                <ChevronUp size={20} />
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!selectedLayerId) return;
+                                    const index = project.layers.findIndex(l => l.id === selectedLayerId);
+                                    if (index !== -1 && index < project.layers.length - 1) {
+                                        const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                                        const temp = newProject.layers[index];
+                                        newProject.layers[index] = newProject.layers[index + 1];
+                                        newProject.layers[index + 1] = temp;
+                                        setProject(newProject);
+                                        rendererRef.current.setProject(newProject);
+                                    }
+                                }}
+                                className="btn-icon"
+                                title="Move Track Down"
+                                disabled={!selectedLayerId || project.layers.findIndex(l => l.id === selectedLayerId) >= project.layers.length - 1}
+                                style={{ color: (!selectedLayerId || project.layers.findIndex(l => l.id === selectedLayerId) >= project.layers.length - 1) ? '#444' : '#fff' }}
+                            >
+                                <ChevronDown size={20} />
+                            </button>
+                        </div>
                         <button onClick={handleAddTrack} className="btn-icon" title="Add Track">
                             <Layers size={20} /> <Plus size={10} style={{ marginLeft: -8, marginBottom: 8 }} />
                         </button>

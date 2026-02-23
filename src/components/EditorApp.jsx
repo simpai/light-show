@@ -3033,6 +3033,30 @@ function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carG
                                                     >
                                                         <ClipboardPaste size={14} />
                                                     </button>
+                                                    {isMapped && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (window.confirm(`Clear all mappings for note ${noteNumber}?`)) {
+                                                                    const newMappings = { ...layer.midiMappings };
+                                                                    delete newMappings[noteNumber];
+                                                                    onUpdate({
+                                                                        ...layer,
+                                                                        midiMappings: newMappings
+                                                                    });
+                                                                    if (selectedNote === noteNumber) {
+                                                                        setSelectedNote(null);
+                                                                        setSelectedNoteIndex(0);
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="btn-icon"
+                                                            style={{ padding: '4px', color: '#ef4444', background: 'rgba(239,68,68,0.1)', borderRadius: '4px', marginLeft: 'auto' }}
+                                                            title="Clear all mappings for this note"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    )}
                                                 </div>
 
                                                 {/* Mini Timeline Preview */}

@@ -173,15 +173,27 @@ export class ShowRenderer {
             if (layer.isMidi && layer.midiData) {
                 const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
                 if (regionClip) {
-                    const localTimeMs = timeMs - regionClip.startTime;
+                    const localTimeMs = timeMs - regionClip.startTime + (regionClip.startOffset || 0);
                     for (const note of layer.midiData) {
                         if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
-                            const mappedFx = layer.midiMappings?.[note.midi];
-                            if (mappedFx) {
+                            const mappedFxData = layer.midiMappings?.[note.midi];
+                            if (mappedFxData) {
+                                let mappedFx = mappedFxData;
+                                if (Array.isArray(mappedFxData) && mappedFxData.length > 0) {
+                                    const hash = Math.abs(Math.sin(note.time * 12.9898 + note.midi * 78.233)) * 10000;
+                                    const selectedIdx = Math.floor(hash) % mappedFxData.length;
+                                    mappedFx = mappedFxData[selectedIdx];
+                                }
+
+                                // Clamp the visual start time of the FX to the region's start time if the note began before the region was cropped in.
+                                // This prevents animations from starting with deep negative timestamps which causes clumping bugs.
+                                const rawStartTime = regionClip.startTime + note.time - (regionClip.startOffset || 0);
+                                const clampedStartTime = Math.max(regionClip.startTime, rawStartTime);
+
                                 activeClips.push({
                                     ...mappedFx,
-                                    startTime: regionClip.startTime + note.time,
-                                    duration: note.duration,
+                                    startTime: clampedStartTime,
+                                    duration: note.duration - (clampedStartTime - rawStartTime), // Reduce duration if we clamped
                                     id: `midi-${note.midi}-${note.time}`
                                 });
                             }
@@ -244,15 +256,25 @@ export class ShowRenderer {
             if (layer.isMidi && layer.midiData) {
                 const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
                 if (regionClip) {
-                    const localTimeMs = timeMs - regionClip.startTime;
+                    const localTimeMs = timeMs - regionClip.startTime + (regionClip.startOffset || 0);
                     for (const note of layer.midiData) {
                         if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
-                            const mappedFx = layer.midiMappings?.[note.midi];
-                            if (mappedFx) {
+                            const mappedFxData = layer.midiMappings?.[note.midi];
+                            if (mappedFxData) {
+                                let mappedFx = mappedFxData;
+                                if (Array.isArray(mappedFxData) && mappedFxData.length > 0) {
+                                    const hash = Math.abs(Math.sin(note.time * 12.9898 + note.midi * 78.233)) * 10000;
+                                    const selectedIdx = Math.floor(hash) % mappedFxData.length;
+                                    mappedFx = mappedFxData[selectedIdx];
+                                }
+
+                                const rawStartTime = regionClip.startTime + note.time - (regionClip.startOffset || 0);
+                                const clampedStartTime = Math.max(regionClip.startTime, rawStartTime);
+
                                 activeClips.push({
                                     ...mappedFx,
-                                    startTime: regionClip.startTime + note.time, // Global start time for standard rendering logic
-                                    duration: note.duration,
+                                    startTime: clampedStartTime,
+                                    duration: note.duration - (clampedStartTime - rawStartTime),
                                     id: `midi-${note.midi}-${note.time}`
                                 });
                             }
@@ -807,15 +829,25 @@ export class ShowRenderer {
         if (layer.isMidi && layer.midiData) {
             const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
             if (regionClip) {
-                const localTimeMs = timeMs - regionClip.startTime;
+                const localTimeMs = timeMs - regionClip.startTime + (regionClip.startOffset || 0);
                 for (const note of layer.midiData) {
                     if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
-                        const mappedFx = layer.midiMappings?.[note.midi];
-                        if (mappedFx) {
+                        const mappedFxData = layer.midiMappings?.[note.midi];
+                        if (mappedFxData) {
+                            let mappedFx = mappedFxData;
+                            if (Array.isArray(mappedFxData) && mappedFxData.length > 0) {
+                                const hash = Math.abs(Math.sin(note.time * 12.9898 + note.midi * 78.233)) * 10000;
+                                const selectedIdx = Math.floor(hash) % mappedFxData.length;
+                                mappedFx = mappedFxData[selectedIdx];
+                            }
+
+                            const rawStartTime = regionClip.startTime + note.time - (regionClip.startOffset || 0);
+                            const clampedStartTime = Math.max(regionClip.startTime, rawStartTime);
+
                             activeClips.push({
                                 ...mappedFx,
-                                startTime: regionClip.startTime + note.time, // Global start time
-                                duration: note.duration,
+                                startTime: clampedStartTime,
+                                duration: note.duration - (clampedStartTime - rawStartTime),
                                 id: `midi-${note.midi}-${note.time}`
                             });
                         }

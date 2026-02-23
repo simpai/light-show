@@ -76,6 +76,7 @@ export class ProjectState {
                 id: `midi-region-${Date.now()}`,
                 type: 'midi-region',
                 startTime: 0,
+                startOffset: 0,
                 duration: maxTime
             }],
             lightMapping: {
@@ -204,8 +205,15 @@ export class ProjectState {
                         id: `midi-region-${Date.now()}-${layer.id}`,
                         type: 'midi-region',
                         startTime: 0,
+                        startOffset: 0,
                         duration: maxTime
                     }];
+                } else {
+                    layer.clips.forEach(c => {
+                        if (c.type === 'midi-region' && c.startOffset === undefined) {
+                            c.startOffset = 0;
+                        }
+                    });
                 }
                 if (!layer.midiComments) layer.midiComments = {};
             }

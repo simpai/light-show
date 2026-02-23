@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, Plus, Layers, Upload, Download, Zap, Undo, Redo, Bookmark, Image as ImageIcon, Music, FolderOpen, SkipBack, Car, Trash2, X, Settings, HelpCircle, Camera, RotateCcw, Magnet, Grid, AlignLeft, Heart, ClipboardPaste } from 'lucide-react';
+import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
+import { LayoutParser } from '../utils/LayoutParser';
 import { Timeline } from './Timeline';
 import ClipEditor from './ClipEditor';
 import ClipPalette from './ClipPalette';
@@ -1417,6 +1418,72 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         }
     };
 
+    const handleExportTimeline = () => {
+        try {
+            const timelineData = {
+                version: '1.2_timeline',
+                layers: project.layers,
+                duration: project.duration,
+                palette: project.palette,
+                assets: project.serializeAssets()
+            };
+
+            const dataStr = JSON.stringify(timelineData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `timeline_data_${new Date().getTime()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Timeline export failed:', error);
+            alert('Failed to export timeline data: ' + error.message);
+        }
+    };
+
+    const handleImportTimeline = (file) => {
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                if (!data.layers || !data.version?.includes('timeline')) {
+                    alert('Invalid timeline data file.');
+                    return;
+                }
+
+                // Create a clone of the current project to merge into
+                const newProject = ProjectState.fromJSONSync(project.toJSON(false));
+                newProject.assets = project.assets; // keep existing ones temporarily
+
+                // Deserialize and merge new assets into current project
+                if (data.assets) {
+                    const importedAssets = await ProjectState.deserializeAssets(data.assets);
+                    newProject.assets = { ...newProject.assets, ...importedAssets };
+                }
+
+                // Overwrite purely timeline data
+                newProject.layers = data.layers;
+                if (data.duration) newProject.duration = data.duration;
+                if (data.palette) newProject.palette = data.palette;
+
+                saveToHistory(newProject);
+                alert('Timeline data imported successfully!');
+
+            } catch (err) {
+                console.error('Timeline import failed:', err);
+                alert('Failed to import timeline data: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+
     const selectedClips = useMemo(() => {
         if (selectedClipIds.length === 0) return [];
         const found = [];
@@ -1840,6 +1907,26 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </button>
                         <button onClick={handleAlignClips} disabled={selectedClipIds.length === 0} className="btn-icon" title="Align Tracks" style={{ marginLeft: '5px', color: '#00ff88' }}>
                             <AlignLeft size={18} />
+                        </button>
+
+                        <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
+
+                        <label className="btn-icon" title="Import Timeline Data" style={{ marginLeft: '5px', color: '#ff77aa', cursor: 'pointer' }}>
+                            <Upload size={18} />
+                            <input
+                                type="file"
+                                accept=".json"
+                                onChange={(e) => {
+                                    if (e.target.files[0]) {
+                                        handleImportTimeline(e.target.files[0]);
+                                    }
+                                    e.target.value = '';
+                                }}
+                                style={{ display: 'none' }}
+                            />
+                        </label>
+                        <button onClick={handleExportTimeline} className="btn-icon" title="Export Timeline Data" style={{ marginLeft: '5px', color: '#ff77aa' }}>
+                            <Download size={18} />
                         </button>
 
                         <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
@@ -2649,6 +2736,40 @@ function LightGroupEditor({ lightGroups, onUpdate }) {
 
 function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carGroups, allCarsThumbnail }) {
     const [selectedNote, setSelectedNote] = useState(null);
+    const [selectedNoteIndex, setSelectedNoteIndex] = useState(0);
+
+    const playNote = (midiNumber, durationMs = 200) => {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            // MIDI to Frequency: 440 * 2^((d-69)/12)
+            const frequency = 440 * Math.pow(2, (midiNumber - 69) / 12);
+            osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+
+            // Simple synth envelope
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.05);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime + (durationMs / 1000) - 0.05);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + (durationMs / 1000));
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + (durationMs / 1000));
+
+            // Cleanup context after play
+            setTimeout(() => {
+                if (audioCtx.state !== 'closed') {
+                    audioCtx.close();
+                }
+            }, durationMs + 100);
+        } catch (e) {
+            console.warn("AudioContext playback failed", e);
+        }
+    };
 
     if (!layer) return null;
 
@@ -2768,8 +2889,17 @@ function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carG
                             <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px' }} className="custom-scrollbar">
                                 {(() => {
                                     const uniqueNotes = [...new Set(layer.midiData.map(n => n.midi))].sort((a, b) => a - b);
+
+                                    // Calculate maximum time in track for timeline scale
+                                    let maxEndTime = 1000; // minimum 1 sec scale
+                                    layer.midiData.forEach(n => {
+                                        const end = n.time + n.duration;
+                                        if (end > maxEndTime) maxEndTime = end;
+                                    });
+
                                     return uniqueNotes.map(noteNumber => {
                                         const noteName = layer.midiData.find(n => n.midi === noteNumber)?.name || `Note ${noteNumber}`;
+                                        const noteOccurrences = layer.midiData.filter(n => n.midi === noteNumber);
                                         const isMapped = !!layer.midiMappings?.[noteNumber];
                                         const isSelected = selectedNote === noteNumber;
                                         return (
@@ -2801,55 +2931,107 @@ function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carG
                                                             }
                                                         });
                                                     }}
-                                                    style={{ flex: 1, minWidth: '200px', background: 'rgba(0,0,0,0.2)', border: '1px solid #444', color: '#fff', fontSize: '12px', padding: '4px 4px', outline: 'none' }}
+                                                    style={{ flex: 1, maxWidth: '100px', background: 'rgba(0,0,0,0.2)', border: '1px solid #444', color: '#fff', fontSize: '12px', padding: '4px 4px', outline: 'none' }}
                                                     title="Add comment for this note"
                                                 />
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (clipboard && clipboard.length > 0) {
-                                                            const fxToPaste = clipboard[0];
-                                                            const { id, startTime, duration, ...fxData } = fxToPaste;
-                                                            onUpdate({
-                                                                ...layer,
-                                                                midiMappings: {
-                                                                    ...layer.midiMappings,
-                                                                    [noteNumber]: fxData
-                                                                }
-                                                            });
-                                                            setSelectedNote(noteNumber);
-                                                        } else {
-                                                            alert('Clipboard is empty! Copy an FX first.');
-                                                        }
-                                                    }}
-                                                    className="btn-link-small"
-                                                    style={{ flex: 1, Width: '200px', padding: '4px 4px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
-                                                    title="Paste copied FX here"
-                                                >
-                                                    <ClipboardPaste size={14} />
-                                                    {isMapped ? `${layer.midiMappings[noteNumber].type === 'effect' ? layer.midiMappings[noteNumber].effectType || 'FX' : 'GIF'}` : ''}
-                                                </button>
+                                                <div style={{ flex: 1, minWidth: '200px', display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                                    {isMapped && (() => {
+                                                        const mappingData = layer.midiMappings[noteNumber];
+                                                        const mappedArray = Array.isArray(mappingData) ? mappingData : [mappingData];
+                                                        return mappedArray.map((fxItem, idx) => (
+                                                            <button
+                                                                key={idx}
+                                                                title={`Select Variation ${idx + 1}`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedNote(noteNumber);
+                                                                    setSelectedNoteIndex(idx);
+                                                                }}
+                                                                className={`btn-link-small`}
+                                                                style={{
+                                                                    padding: '4px 8px', fontSize: '11px',
+                                                                    background: (isSelected && selectedNoteIndex === idx) ? '#a020f0' : 'rgba(255,255,255,0.1)',
+                                                                    color: (isSelected && selectedNoteIndex === idx) ? '#fff' : '#ccc',
+                                                                    border: (isSelected && selectedNoteIndex === idx) ? '1px solid #d884ff' : '1px solid #444'
+                                                                }}
+                                                            >
+                                                                {fxItem.type === 'effect' ? (fxItem.effectType || 'FX') : 'GIF'}
+                                                            </button>
+                                                        ));
+                                                    })()}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (clipboard && clipboard.length > 0) {
+                                                                const newFxDatas = clipboard.map(clip => {
+                                                                    // eslint-disable-next-line no-unused-vars
+                                                                    const { id, startTime, duration, ...fxData } = clip;
+                                                                    return fxData;
+                                                                });
 
-                                                {isMapped && (
-                                                    <button onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const newMappings = { ...layer.midiMappings };
-                                                        delete newMappings[noteNumber];
-                                                        onUpdate({
-                                                            ...layer,
-                                                            midiMappings: newMappings
-                                                        });
-                                                        if (isSelected) setSelectedNote(null);
-                                                    }} className="btn-icon" title="Remove Mapping" style={{ color: '#ef4444', padding: '4px' }}>
-                                                        <X size={16} />
-                                                    </button>
-                                                )}
+                                                                const existing = layer.midiMappings[noteNumber];
+                                                                const currentArr = Array.isArray(existing) ? existing : (existing ? [existing] : []);
 
-                                                {!isMapped && (
-                                                    <button className="btn-icon" title="Remove Mapping" style={{ color: '#555', padding: '4px' }}>
-                                                        <X size={16} />
+                                                                onUpdate({
+                                                                    ...layer,
+                                                                    midiMappings: {
+                                                                        ...layer.midiMappings,
+                                                                        [noteNumber]: [...currentArr, ...newFxDatas]
+                                                                    }
+                                                                });
+                                                                setSelectedNote(noteNumber);
+                                                                setSelectedNoteIndex(currentArr.length); // Select the first pasted one
+                                                            } else {
+                                                                alert('Clipboard is empty! Copy an FX first.');
+                                                            }
+                                                        }}
+                                                        className="btn-icon"
+                                                        style={{ padding: '4px', color: '#ccc', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}
+                                                        title="Paste copied clip(s) as new variation"
+                                                    >
+                                                        <ClipboardPaste size={14} />
                                                     </button>
-                                                )}
+                                                </div>
+
+                                                {/* Mini Timeline Preview */}
+                                                <div style={{
+                                                    flex: 2,
+                                                    minWidth: '200px',
+                                                    height: '24px',
+                                                    background: 'rgba(0,0,0,0.3)',
+                                                    border: '1px solid #333',
+                                                    borderRadius: '4px',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    {noteOccurrences.map((occ, oIdx) => {
+                                                        const leftPct = (occ.time / maxEndTime) * 100;
+                                                        const widthPct = Math.max(0.5, (occ.duration / maxEndTime) * 100);
+                                                        return (
+                                                            <div
+                                                                key={`prev-${noteNumber}-${oIdx}`}
+                                                                onMouseDown={(e) => {
+                                                                    e.stopPropagation();
+                                                                    playNote(noteNumber, Math.min(1000, occ.duration || 200));
+                                                                }}
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    left: `${leftPct}%`,
+                                                                    width: `${widthPct}%`,
+                                                                    height: '100%',
+                                                                    background: isMapped ? '#a020f0' : '#4a90e2',
+                                                                    opacity: 0.8,
+                                                                    borderRadius: '2px',
+                                                                    cursor: 'pointer',
+                                                                    border: '1px solid rgba(255,255,255,0.2)'
+                                                                }}
+                                                                title={`Play ${noteName} (${(occ.duration / 1000).toFixed(2)}s)`}
+                                                                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                                                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         );
                                     });
@@ -2874,36 +3056,76 @@ function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carG
                                                     Editing Note {selectedNote}
                                                 </h4>
                                             </div>
-                                            <ClipEditor
-                                                clips={[{
-                                                    ...layer.midiMappings[selectedNote],
-                                                    id: `midi-${selectedNote}`,
-                                                    type: layer.midiMappings[selectedNote].type || 'effect'
-                                                }]}
-                                                onChange={(updatedData) => {
-                                                    const { id, startTime, duration, ...fxData } = updatedData;
-                                                    onUpdate({
-                                                        ...layer,
-                                                        midiMappings: {
-                                                            ...layer.midiMappings,
-                                                            [selectedNote]: fxData
-                                                        }
-                                                    });
-                                                }}
-                                                onDelete={() => {
-                                                    const newMappings = { ...layer.midiMappings };
-                                                    delete newMappings[selectedNote];
-                                                    onUpdate({
-                                                        ...layer,
-                                                        midiMappings: newMappings
-                                                    });
-                                                    setSelectedNote(null);
-                                                }}
-                                                assets={assets}
-                                                lightGroups={lightGroups}
-                                                carGroups={carGroups}
-                                                allCarsThumbnail={allCarsThumbnail}
-                                            />
+                                            {(() => {
+                                                const mappingData = layer.midiMappings[selectedNote];
+                                                const mappedArray = Array.isArray(mappingData) ? mappingData : [mappingData];
+
+                                                // Ensure index is valid
+                                                const activeIdx = Math.min(selectedNoteIndex, mappedArray.length - 1);
+                                                if (activeIdx < 0) return null; // Shouldn't happen if mappedArray exists
+                                                const fxItem = mappedArray[activeIdx];
+
+                                                return (
+                                                    <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', border: '1px solid #444' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                            <span style={{ fontSize: '13px', color: '#a020f0', fontWeight: 'bold' }}>Variation {activeIdx + 1} of {mappedArray.length}</span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const currentArr = Array.isArray(layer.midiMappings[selectedNote]) ? layer.midiMappings[selectedNote] : [layer.midiMappings[selectedNote]];
+                                                                    const newArr = currentArr.filter((_, i) => i !== activeIdx);
+
+                                                                    const newMappings = { ...layer.midiMappings };
+                                                                    if (newArr.length > 0) {
+                                                                        newMappings[selectedNote] = newArr;
+                                                                        setSelectedNoteIndex(0);
+                                                                    } else {
+                                                                        delete newMappings[selectedNote];
+                                                                        setSelectedNote(null);
+                                                                        setSelectedNoteIndex(0);
+                                                                    }
+
+                                                                    onUpdate({
+                                                                        ...layer,
+                                                                        midiMappings: newMappings
+                                                                    });
+                                                                }}
+                                                                className="btn-icon"
+                                                                title="Delete this FX variation"
+                                                                style={{ color: '#ef4444', padding: '4px' }}
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                        <ClipEditor
+                                                            clips={[{
+                                                                ...fxItem,
+                                                                id: `midi-${selectedNote}-${activeIdx}`,
+                                                                type: fxItem.type || 'effect'
+                                                            }]}
+                                                            onChange={(updatedData) => {
+                                                                // eslint-disable-next-line no-unused-vars
+                                                                const { id, startTime, duration, ...updatedFxData } = updatedData;
+                                                                const currentArr = Array.isArray(layer.midiMappings[selectedNote]) ? layer.midiMappings[selectedNote] : [layer.midiMappings[selectedNote]];
+                                                                const newArr = [...currentArr];
+                                                                newArr[activeIdx] = updatedFxData;
+
+                                                                onUpdate({
+                                                                    ...layer,
+                                                                    midiMappings: {
+                                                                        ...layer.midiMappings,
+                                                                        [selectedNote]: newArr
+                                                                    }
+                                                                });
+                                                            }}
+                                                            onDelete={() => { }} // Disabled the delete call inside clipEditor to use our custom header button
+                                                            assets={assets}
+                                                            lightGroups={lightGroups}
+                                                            carGroups={carGroups}
+                                                            allCarsThumbnail={allCarsThumbnail}
+                                                        />
+                                                    </div>
+                                                );
+                                            })()}
                                             {/* Hide timing fields in clip editor as they are overridden by Midi notes */}
                                             <style>{`
                                             .midi-mapping-section .custom-number-input-container:has(label:contains("Start Time")),

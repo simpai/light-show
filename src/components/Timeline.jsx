@@ -78,6 +78,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
     const lanesScrollRef = useRef(null);
 
     const [draggingClips, setDraggingClips] = useState([]);
+    const draggingClipsRef = useRef([]);
     const [dragOffset, setDragOffset] = useState(0); // Offset within primary clip in ms
     const [marquee, setMarquee] = useState(null); // { startX, startY, endX, endY }
 
@@ -357,14 +358,14 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 for (const layer of project.layers) {
                     const found = layer.clips.find(c => c.id === id);
                     if (found) {
-                        clipsToDrag.push({ ...found, originalStartTime: found.startTime, originalDuration: found.duration, layerId: layer.id });
+                        clipsToDrag.push({ ...found, originalStartTime: found.startTime, originalDuration: found.duration, originalStartOffset: found.startOffset || 0, layerId: layer.id });
                         break;
                     }
                 }
             });
         } else {
             // Drag only this clip (even if it was just selected via Ctrl/Single-click)
-            clipsToDrag = [{ ...primaryClip, originalStartTime: primaryClip.startTime, originalDuration: primaryClip.duration, layerId: primaryLayerId }];
+            clipsToDrag = [{ ...primaryClip, originalStartTime: primaryClip.startTime, originalDuration: primaryClip.duration, originalStartOffset: primaryClip.startOffset || 0, layerId: primaryLayerId }];
         }
 
         // If it's a multi-selection but we clicked a non-selected clip WITHOUT Ctrl, 
@@ -381,10 +382,16 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         let dragMode = 'move';
         if (clipsToDrag.length === 1) {
             const isResizable = primaryClip.type === 'effect' || primaryClip.type === 'midi-region';
-            const resizeThresholdPx = 8;
             if (isResizable) {
-                if (xInClipPx < resizeThresholdPx) dragMode = 'resize-left';
-                else if (xInClipPx > rect.width - resizeThresholdPx) dragMode = 'resize-right';
+                if (e.target.classList.contains('resize-handle') && e.target.classList.contains('left')) {
+                    dragMode = 'resize-left';
+                } else if (e.target.classList.contains('resize-handle') && e.target.classList.contains('right')) {
+                    dragMode = 'resize-right';
+                } else {
+                    const resizeThresholdPx = 10;
+                    if (xInClipPx < resizeThresholdPx) dragMode = 'resize-left';
+                    else if (xInClipPx > rect.width - resizeThresholdPx) dragMode = 'resize-right';
+                }
             }
         }
 
@@ -398,6 +405,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             relativeOffset: c.startTime - primaryClip.startTime
         }));
 
+        draggingClipsRef.current = draggingClipsWithMode;
         setDraggingClips(draggingClipsWithMode);
         setDragOffset(xInClipMs);
 
@@ -416,15 +424,33 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
                 const snappedTime = getSnappedTime(currentTimeMs);
 
+                let nextClips;
                 if (primary.dragMode === 'resize-left') {
                     const newStart = Math.max(0, snappedTime);
-                    const diff = primary.startTime - newStart;
-                    const newDuration = Math.max(20, primary.duration + diff);
-                    return prev.map(c => c.id === primary.id ? { ...c, startTime: newStart, duration: newDuration } : c);
+                    const diff = primary.originalStartTime - newStart; // if moving left, diff is positive. if right, diff is negative
+                    const newDuration = Math.max(20, primary.originalDuration + diff);
+
+                    nextClips = prev.map(c => {
+                        if (c.id === primary.id) {
+                            // diff = originalStartTime - newStart
+                            // If diff is positive (dragging leftwards, expanding start), offset should DECREASE by diff
+                            // If diff is negative (dragging rightwards, trimming start), offset should INCREASE by abs(diff)
+                            // Thus: newOffset = originalStartOffset - diff
+                            const newOffset = (c.originalStartOffset || 0) - diff;
+
+                            return {
+                                ...c,
+                                startTime: newStart,
+                                duration: newDuration,
+                                startOffset: newOffset
+                            };
+                        }
+                        return c;
+                    });
                 } else if (primary.dragMode === 'resize-right') {
                     const newEnd = snappedTime;
-                    const newDuration = Math.max(20, newEnd - primary.startTime);
-                    return prev.map(c => c.id === primary.id ? { ...c, duration: newDuration } : c);
+                    const newDuration = Math.max(20, newEnd - primary.originalStartTime);
+                    nextClips = prev.map(c => c.id === primary.id ? { ...c, duration: newDuration } : c);
                 } else {
                     // Move mode for all
                     const primaryNewTimeMs = (xInLanePx / pixelsPerSecond) * 1000 - xInClipMs;
@@ -432,11 +458,14 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     const clampedPrimaryTime = Math.max(0, snappedPrimaryTime);
 
                     // All other clips move relative to the primary clip's snapped position
-                    return prev.map(c => ({
+                    nextClips = prev.map(c => ({
                         ...c,
                         startTime: Math.max(0, clampedPrimaryTime + c.relativeOffset)
                     }));
                 }
+
+                draggingClipsRef.current = nextClips;
+                return nextClips;
             });
         };
 
@@ -444,72 +473,74 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
 
-            setDraggingClips(prev => {
-                if (prev && prev.length > 0) {
-                    // Check if anything actually moved
-                    const hasMoved = prev.some(c =>
-                        Math.abs(c.startTime - c.originalStartTime) > 1 ||
-                        Math.abs(c.duration - c.originalDuration) > 1
-                    );
+            const prev = draggingClipsRef.current;
+            if (prev && prev.length > 0) {
+                // Check if anything actually moved
+                const hasMoved = prev.some(c =>
+                    Math.abs(c.startTime - c.originalStartTime) > 1 ||
+                    Math.abs(c.duration - c.originalDuration) > 1
+                );
 
-                    if (hasMoved) {
-                        const json = project.toJSON();
-                        const newProject = ProjectState.fromJSONSync(json);
-                        newProject.assets = project.assets;
+                if (hasMoved) {
+                    const json = project.toJSON();
+                    const newProjectBuilt = ProjectState.fromJSONSync(json);
+                    newProjectBuilt.assets = project.assets;
 
-                        const isDuplicating = prev[0]?.isDuplicateMode;
-                        const newSelectionIds = [];
+                    const isCloning = prev[0]?.isDuplicateMode;
+                    const finalSelectionIds = [];
 
-                        prev.forEach(dragging => {
-                            const layer = newProject.layers.find(l => l.id === dragging.layerId);
-                            if (layer) {
-                                if (isDuplicating) {
-                                    // Clone mode
-                                    const newClip = {
-                                        ...dragging,
-                                        id: crypto.randomUUID(),
-                                        // startTime and duration already set to new values in dragging state
-                                    };
-                                    delete newClip.originalStartTime;
-                                    delete newClip.originalDuration;
-                                    delete newClip.relativeOffset;
-                                    delete newClip.isDuplicateMode;
-                                    delete newClip.dragMode;
-                                    delete newClip.layerId;
+                    prev.forEach(dragging => {
+                        const layer = newProjectBuilt.layers.find(l => l.id === dragging.layerId);
+                        if (layer) {
+                            if (isCloning) {
+                                // Clone mode
+                                const newClip = {
+                                    ...dragging,
+                                    id: crypto.randomUUID(),
+                                    // startTime and duration already set to new values in dragging state
+                                };
+                                delete newClip.originalStartTime;
+                                delete newClip.originalDuration;
+                                delete newClip.originalStartOffset;
+                                delete newClip.relativeOffset;
+                                delete newClip.isDuplicateMode;
+                                delete newClip.dragMode;
+                                delete newClip.layerId;
 
-                                    layer.clips.push(newClip);
-                                    newSelectionIds.push(newClip.id);
-                                } else {
-                                    // Move mode
-                                    const clipIdx = layer.clips.findIndex(c => c.id === dragging.id);
-                                    if (clipIdx !== -1) {
-                                        layer.clips[clipIdx].startTime = dragging.startTime;
-                                        layer.clips[clipIdx].duration = dragging.duration;
+                                layer.clips.push(newClip);
+                                finalSelectionIds.push(newClip.id);
+                            } else {
+                                // Move mode
+                                const clipIdx = layer.clips.findIndex(c => c.id === dragging.id);
+                                if (clipIdx !== -1) {
+                                    layer.clips[clipIdx].startTime = dragging.startTime;
+                                    layer.clips[clipIdx].duration = dragging.duration;
+                                    if (dragging.startOffset !== undefined) {
+                                        layer.clips[clipIdx].startOffset = dragging.startOffset;
                                     }
                                 }
                             }
-                        });
+                        }
+                    });
 
-                        if (onProjectChange) onProjectChange(newProject);
+                    if (onProjectChange) onProjectChange(newProjectBuilt);
 
-                        // Select new clones if duplicated
-                        if (isDuplicating && newSelectionIds.length > 0 && onClipSelect) {
-                            // Single batch selection in parent
-                            if (newSelectionIds.length === 1) {
-                                onClipSelect(newSelectionIds[0], { ctrlKey: false });
-                            } else {
-                                // Clear and then add (or just pass array if onClipSelect supports it)
-                                // Since we don't know if onClipSelect supports arrays, we'll assume it's the standard handler
-                                onClipSelect(newSelectionIds[0], { ctrlKey: false });
-                                newSelectionIds.slice(1).forEach(id => {
-                                    onClipSelect(id, { ctrlKey: true });
-                                });
-                            }
+                    // Select new clones if duplicated
+                    if (isCloning && finalSelectionIds.length > 0 && onClipSelect) {
+                        if (finalSelectionIds.length === 1) {
+                            onClipSelect(finalSelectionIds[0], { ctrlKey: false });
+                        } else {
+                            onClipSelect(finalSelectionIds[0], { ctrlKey: false });
+                            finalSelectionIds.slice(1).forEach(id => {
+                                onClipSelect(id, { ctrlKey: true });
+                            });
                         }
                     }
                 }
-                return [];
-            });
+            }
+
+            setDraggingClips([]);
+            draggingClipsRef.current = [];
         };
 
         document.addEventListener('mousemove', handleMouseMove);
@@ -807,7 +838,11 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                                 {clip.type === 'midi-region' && layer.midiData && layer.midiData.map((note, idx) => {
                                                     const isMapped = !!layer.midiMappings?.[note.midi];
                                                     const nWidth = Math.max(2, (note.duration / 1000) * pixelsPerSecond);
-                                                    const nLeft = (note.time / 1000) * pixelsPerSecond;
+                                                    const nLeft = ((note.time - (clip.startOffset || 0)) / 1000) * pixelsPerSecond;
+
+                                                    // Don't render notes that are visually outside the clip duration
+                                                    if (nLeft + nWidth < 0 || nLeft > (clip.duration / 1000) * pixelsPerSecond) return null;
+
                                                     return (
                                                         <div
                                                             key={`midi-in-${note.midi}-${idx}`}

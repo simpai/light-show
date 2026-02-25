@@ -1,4 +1,4 @@
-export const CHANNELS = {
+﻿export const CHANNELS = {
     "Left High Beam": 0,
     "Right High Beam": 1,
     "Left Low Beam": 2,
@@ -36,6 +36,8 @@ for (let i = 0; i < CHANNEL_COUNT; i++) {
         CHANNELS[`Channel ${i}`] = i;
     }
 }
+
+import { applyEasing } from '../utils/Easing.js';
 
 export class ShowRenderer {
     constructor() {
@@ -82,6 +84,62 @@ export class ShowRenderer {
                 }
             }
         }
+    }
+
+    /**
+     * Get pixel from image using 1:1 mapping, centered on the grid, with tiling.
+     * Each grid cell maps to exactly one image pixel (no stretch/resize).
+     * Image is centered on the grid; out-of-bounds pixels wrap (tile).
+     */
+    getImagePixel1to1(imageData, gridRow, gridCol, gridSize, offsetX = 0, offsetY = 0) {
+        const imgW = imageData.width;
+        const imgH = imageData.height;
+        const gridRows = gridSize.rows;
+        const gridCols = gridSize.cols;
+
+        // Center the image on the grid
+        const centerOffsetCol = Math.floor((gridCols - imgW) / 2);
+        const centerOffsetRow = Math.floor((gridRows - imgH) / 2);
+
+        // Map grid position to image pixel (1:1) with offset
+        let imgCol = gridCol - centerOffsetCol + Math.round(offsetX);
+        let imgRow = gridRow - centerOffsetRow + Math.round(offsetY);
+
+        // Tiling: wrap around using modulo
+        imgCol = ((imgCol % imgW) + imgW) % imgW;
+        imgRow = ((imgRow % imgH) + imgH) % imgH;
+
+        const pixIdx = (imgRow * imgW + imgCol) * 4;
+        return [
+            imageData.data[pixIdx],
+            imageData.data[pixIdx + 1],
+            imageData.data[pixIdx + 2],
+            imageData.data[pixIdx + 3]
+        ];
+    }
+
+    /**
+     * Calculate current animated offset for a clip at a given clip-local time.
+     * Interpolates from start offset to end offset over the clip duration with easing.
+     * Backward compatible: falls back to legacy offsetX/offsetY if start/end not set.
+     */
+    getAnimatedOffset(clip, clipTime) {
+        const startX = clip.startOffsetX ?? clip.offsetX ?? 0;
+        const startY = clip.startOffsetY ?? clip.offsetY ?? 0;
+        const endX = clip.endOffsetX ?? startX;
+        const endY = clip.endOffsetY ?? startY;
+
+        if (startX === endX && startY === endY) {
+            return { x: startX, y: startY };
+        }
+
+        const progress = clip.duration > 0 ? Math.max(0, Math.min(1, clipTime / clip.duration)) : 0;
+        const easedProgress = applyEasing(progress, clip.offsetEasing || 'linear');
+
+        return {
+            x: startX + (endX - startX) * easedProgress,
+            y: startY + (endY - startY) * easedProgress
+        };
     }
 
     /**
@@ -1026,22 +1084,11 @@ export class ShowRenderer {
 
             if (hasImage && this.project.assets[band.imageId].frames?.length > 0) {
                 const imageData = this.project.assets[band.imageId].frames[0];
-                const gridRows = gridSize?.rows || 10;
-                const gridCols = gridSize?.cols || 10;
-
                 const targetRow = row !== null ? row : 0;
                 const targetCol = col !== null ? col : 0;
+                const gs = { rows: gridSize?.rows || 10, cols: gridSize?.cols || 10 };
 
-                const r_idx = Math.floor((targetRow / gridRows) * imageData.height);
-                const c_idx = Math.floor((targetCol / gridCols) * imageData.width);
-                const safeR = Math.max(0, Math.min(r_idx, imageData.height - 1));
-                const safeC = Math.max(0, Math.min(c_idx, imageData.width - 1));
-
-                const pixIdx = (safeR * imageData.width + safeC) * 4;
-                const rCol = imageData.data[pixIdx];
-                const gCol = imageData.data[pixIdx + 1];
-                const bCol = imageData.data[pixIdx + 2];
-                const aCol = imageData.data[pixIdx + 3];
+                const [rCol, gCol, bCol, aCol] = this.getImagePixel1to1(imageData, targetRow, targetCol, gs, 0, 0);
 
                 const luminance = (0.299 * rCol + 0.587 * gCol + 0.114 * bCol) * (aCol / 255);
                 pixelSensitivity = luminance / 255;
@@ -1144,197 +1191,95 @@ export class ShowRenderer {
         const rawFrameIndex = Math.floor(clipTime / frameDuration);
         const frameIndex = (rawFrameIndex < 0) ? 0 : (rawFrameIndex % assetFrameCount);
 
+        // Get animated offset for current clip time
+        const offset = this.getAnimatedOffset(clip, clipTime);
+
         // --- Transition blending logic ---
         const transType = clip.transitionType || 'none';
         const transOverlap = clip.transitionOverlap || 0.5;
-
-        // Time within the current frame period
         const timeInFrame = clipTime - rawFrameIndex * frameDuration;
-        // The point in time where transition begins
         const transitionStart = frameDuration * (1.0 - transOverlap);
 
         let r, g, b, a;
 
-        // Check if we are in the transition zone and the transition type is active
         if (transType !== 'none' && timeInFrame >= transitionStart && transOverlap > 0) {
             const absFrameIndex = rawFrameIndex < 0 ? 0 : rawFrameIndex;
             const nextAbsFrameIndex = absFrameIndex + 1;
-
-            // Check if the next frame would wrap back to 0
-            // If so and we're near the end of clip duration, don't transition
             const nextFrameIdx = ((rawFrameIndex < 0 ? 0 : rawFrameIndex) + 1) % assetFrameCount;
-            const wouldWrap = (nextFrameIdx <= frameIndex); // wraps back to start
+            const wouldWrap = (nextFrameIdx <= frameIndex);
             const nextFrameStartTime = ((rawFrameIndex < 0 ? 0 : rawFrameIndex) + 1) * frameDuration;
             const isLastPlayableFrame = wouldWrap && (nextFrameStartTime >= clip.duration - 1);
 
             if (isLastPlayableFrame) {
-                // Last frame — just hold, don't transition back to frame 0
                 const currentImageData = asset.frames[frameIndex];
-                const adjustedRow = row - (clip.offsetY || 0);
-                const adjustedCol = col - (clip.offsetX || 0);
-                if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) return;
-                const getPixelSimple = (imgData, aRow, aCol, gs) => {
-                    let iR, iC;
-                    if (gs.rows > 1 || gs.cols > 1) { iR = Math.floor((aRow / gs.rows) * imgData.height); iC = Math.floor((aCol / gs.cols) * imgData.width); }
-                    else { iR = Math.floor(imgData.height / 2); iC = Math.floor(imgData.width / 2); }
-                    iR = Math.max(0, Math.min(iR, imgData.height - 1)); iC = Math.max(0, Math.min(iC, imgData.width - 1));
-                    const idx = (iR * imgData.width + iC) * 4;
-                    return [imgData.data[idx], imgData.data[idx + 1], imgData.data[idx + 2], imgData.data[idx + 3]];
-                };
-                [r, g, b, a] = getPixelSimple(currentImageData, adjustedRow, adjustedCol, gridSize);
+                [r, g, b, a] = this.getImagePixel1to1(currentImageData, row, col, gridSize, offset.x, offset.y);
             } else {
                 const nextFrameIndex = nextAbsFrameIndex % assetFrameCount;
                 const currentImageData = asset.frames[frameIndex];
                 const nextImageData = asset.frames[nextFrameIndex];
-
-                // Progress through the transition: 0.0 (start) → 1.0 (end)
                 const transitionDuration = frameDuration * transOverlap;
                 const progress = Math.min(1.0, (timeInFrame - transitionStart) / transitionDuration);
 
-                // Get pixel from current frame
-                const getPixel = (imgData, aRow, aCol, gs) => {
-                    let iR, iC;
-                    if (gs.rows > 1 || gs.cols > 1) {
-                        iR = Math.floor((aRow / gs.rows) * imgData.height);
-                        iC = Math.floor((aCol / gs.cols) * imgData.width);
-                    } else {
-                        iR = Math.floor(imgData.height / 2);
-                        iC = Math.floor(imgData.width / 2);
-                    }
-                    iR = Math.max(0, Math.min(iR, imgData.height - 1));
-                    iC = Math.max(0, Math.min(iC, imgData.width - 1));
-                    const idx = (iR * imgData.width + iC) * 4;
-                    return [imgData.data[idx], imgData.data[idx + 1], imgData.data[idx + 2], imgData.data[idx + 3]];
-                };
-
-                const adjustedRow = row - (clip.offsetY || 0);
-                const adjustedCol = col - (clip.offsetX || 0);
-
-                if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
-                    return;
-                }
-
-                const [cr, cg, cb, ca] = getPixel(currentImageData, adjustedRow, adjustedCol, gridSize);
-                const [nr, ng, nb, na] = getPixel(nextImageData, adjustedRow, adjustedCol, gridSize);
+                const [cr, cg, cb, ca] = this.getImagePixel1to1(currentImageData, row, col, gridSize, offset.x, offset.y);
+                const [nr, ng, nb, na] = this.getImagePixel1to1(nextImageData, row, col, gridSize, offset.x, offset.y);
 
                 if (transType === 'dissolve') {
-                    // Noisy spatial dithering with temporal variation
-                    // Uses bit-mixing hash for high-quality pseudo-random distribution
-                    // Temporal step changes the noise pattern during transition for organic feel
-                    const temporalStep = Math.floor(clipTime / 20); // shifts pattern every 20ms
-                    let seed = adjustedRow * 374761 + adjustedCol * 668265 + rawFrameIndex * 93481 + temporalStep * 27183;
-                    // Bit-mixing (xorshift-like) for maximum noise quality
+                    const temporalStep = Math.floor(clipTime / 20);
+                    let seed = row * 374761 + col * 668265 + rawFrameIndex * 93481 + temporalStep * 27183;
                     seed = ((seed >>> 16) ^ seed) * 0x45d9f3b;
                     seed = ((seed >>> 16) ^ seed) * 0x45d9f3b;
                     seed = (seed >>> 16) ^ seed;
                     const hash = (seed & 0x7fffffff) / 0x7fffffff;
-                    if (hash < progress) {
-                        r = nr; g = ng; b = nb; a = na;
-                    } else {
-                        r = cr; g = cg; b = cb; a = ca;
-                    }
+                    if (hash < progress) { r = nr; g = ng; b = nb; a = na; }
+                    else { r = cr; g = cg; b = cb; a = ca; }
                 } else if (transType.startsWith('wipe-')) {
-                    // Wipe: hard-cut sweep based on normalized grid position
                     let normPos;
-                    if (transType === 'wipe-right') {
-                        normPos = gridSize.cols > 1 ? adjustedCol / (gridSize.cols - 1) : 0.5;
-                    } else if (transType === 'wipe-left') {
-                        normPos = gridSize.cols > 1 ? 1.0 - adjustedCol / (gridSize.cols - 1) : 0.5;
-                    } else if (transType === 'wipe-down') {
-                        normPos = gridSize.rows > 1 ? adjustedRow / (gridSize.rows - 1) : 0.5;
-                    } else { // wipe-up
-                        normPos = gridSize.rows > 1 ? 1.0 - adjustedRow / (gridSize.rows - 1) : 0.5;
-                    }
-                    if (normPos < progress) {
-                        r = nr; g = ng; b = nb; a = na;
-                    } else {
-                        r = cr; g = cg; b = cb; a = ca;
-                    }
+                    if (transType === 'wipe-right') normPos = gridSize.cols > 1 ? col / (gridSize.cols - 1) : 0.5;
+                    else if (transType === 'wipe-left') normPos = gridSize.cols > 1 ? 1.0 - col / (gridSize.cols - 1) : 0.5;
+                    else if (transType === 'wipe-down') normPos = gridSize.rows > 1 ? row / (gridSize.rows - 1) : 0.5;
+                    else normPos = gridSize.rows > 1 ? 1.0 - row / (gridSize.rows - 1) : 0.5;
+                    if (normPos < progress) { r = nr; g = ng; b = nb; a = na; }
+                    else { r = cr; g = cg; b = cb; a = ca; }
                 } else if (transType.startsWith('push-')) {
-                    // Push: both frames slide in the specified direction
                     const totalCols = gridSize.cols;
                     const shiftAmount = Math.floor(progress * totalCols);
-                    let srcCol;
                     if (transType === 'push-right') {
-                        srcCol = adjustedCol - shiftAmount;
-                        if (srcCol < 0) {
-                            // This pixel now shows the next frame, wrapped from the other side
-                            const wrappedCol = totalCols + srcCol;
-                            const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
-                            r = pr; g = pg; b = pb; a = pa;
-                        } else {
-                            const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
-                            r = pr; g = pg; b = pb; a = pa;
-                        }
-                    } else { // push-left
-                        srcCol = adjustedCol + shiftAmount;
-                        if (srcCol >= totalCols) {
-                            const wrappedCol = srcCol - totalCols;
-                            const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
-                            r = pr; g = pg; b = pb; a = pa;
-                        } else {
-                            const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
-                            r = pr; g = pg; b = pb; a = pa;
-                        }
+                        const srcCol = col - shiftAmount;
+                        if (srcCol < 0) [r, g, b, a] = this.getImagePixel1to1(nextImageData, row, totalCols + srcCol, gridSize, offset.x, offset.y);
+                        else[r, g, b, a] = this.getImagePixel1to1(currentImageData, row, srcCol, gridSize, offset.x, offset.y);
+                    } else {
+                        const srcCol = col + shiftAmount;
+                        if (srcCol >= totalCols) [r, g, b, a] = this.getImagePixel1to1(nextImageData, row, srcCol - totalCols, gridSize, offset.x, offset.y);
+                        else[r, g, b, a] = this.getImagePixel1to1(currentImageData, row, srcCol, gridSize, offset.x, offset.y);
                     }
                 } else {
-                    // Fallback to no transition
                     r = cr; g = cg; b = cb; a = ca;
                 }
-            } // end !isLastPlayableFrame
+            }
         } else {
-            // No transition — use current frame normally
+            // No transition — use current frame with 1:1 centered tiling
             const imageData = asset.frames[frameIndex];
-
-            // Map grid position to image coordinates
-            const adjustedRow = row - (clip.offsetY || 0);
-            const adjustedCol = col - (clip.offsetX || 0);
-
-            if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
-                return;
-            }
-
-            let imgRow, imgCol;
-            if (gridSize.rows > 1 || gridSize.cols > 1) {
-                imgRow = Math.floor((adjustedRow / gridSize.rows) * imageData.height);
-                imgCol = Math.floor((adjustedCol / gridSize.cols) * imageData.width);
-            } else {
-                imgRow = Math.floor(imageData.height / 2);
-                imgCol = Math.floor(imageData.width / 2);
-            }
-            imgRow = Math.max(0, Math.min(imgRow, imageData.height - 1));
-            imgCol = Math.max(0, Math.min(imgCol, imageData.width - 1));
-
-            const pixIdx = (imgRow * imageData.width + imgCol) * 4;
-            r = imageData.data[pixIdx];
-            g = imageData.data[pixIdx + 1];
-            b = imageData.data[pixIdx + 2];
-            a = imageData.data[pixIdx + 3];
+            [r, g, b, a] = this.getImagePixel1to1(imageData, row, col, gridSize, offset.x, offset.y);
         }
 
         if (layer && layer.lightMapping && this.project.lightGroups) {
             const mapping = layer.lightMapping;
             const groups = this.project.lightGroups;
-
             const getGroupChs = (mappingKey) => {
                 const groupName = mapping[mappingKey];
                 if (!groupName) return [];
-
                 const group = groups[groupName];
                 if (!group) return [];
                 return Array.isArray(group) ? group : (group.channels || []);
             };
-
             const chsR = getGroupChs('R');
             const chsG = getGroupChs('G');
             const chsB = getGroupChs('B');
-
             const mult = (a / 255) * intensity;
             this.applyToChannels(chsR, Math.floor(r * mult), frame);
             this.applyToChannels(chsG, Math.floor(g * mult), frame);
             this.applyToChannels(chsB, Math.floor(b * mult), frame);
         } else {
-            // Legacy fallthrough
             const luminance = (0.299 * r + 0.587 * g + 0.114 * b) * (a / 255);
             const val = Math.floor(luminance * intensity);
             const targets = this.resolveTargetChannels(clip);
@@ -1351,3 +1296,4 @@ export class ShowRenderer {
         });
     }
 }
+

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trash2, Plus, Minus, Download, Upload } from 'lucide-react';
+import { EASING_TYPES } from '../utils/Easing.js';
 
 const CHANNELS = {
     "Main Beams": [0, 1],
@@ -113,40 +114,41 @@ const GifPreview = ({ asset, fps = 15 }) => {
 };
 
 const CustomNumberInput = ({ value, onChange, label, step = 1, min = null, max = null, className = "" }) => {
-    const handleAdjust = (delta) => {
-        let val = (parseFloat(value) || 0) + delta;
-        if (min !== null) val = Math.max(min, val);
-        if (max !== null) val = Math.min(max, val);
-        // Fix floating point issues for steps like 0.01 or 0.125
-        const decimalPlaces = step.toString().split('.')[1]?.length || 0;
-        val = parseFloat(val.toFixed(decimalPlaces));
-        onChange(val);
+    const [localValue, setLocalValue] = React.useState(String(value ?? ''));
+    const prevValue = React.useRef(value);
+    if (value !== prevValue.current) {
+        prevValue.current = value;
+        setLocalValue(String(value ?? ''));
+    }
+
+    const commit = (raw) => {
+        const val = parseFloat(raw);
+        if (!isNaN(val)) {
+            let clamped = val;
+            if (min !== null) clamped = Math.max(min, clamped);
+            if (max !== null) clamped = Math.min(max, clamped);
+            onChange(clamped);
+            setLocalValue(String(clamped));
+        } else {
+            setLocalValue(String(value ?? ''));
+        }
     };
 
     return (
         <div className={`custom-number-input-container ${className}`}>
             {label && <label className="compact-label">{label}</label>}
-            <div className="custom-number-input-group">
-                <button className="adjust-btn minus" onClick={() => handleAdjust(-step)}>
-                    <Minus size={14} strokeWidth={3} />
-                </button>
-                <input
-                    type="number"
-                    value={value}
-                    step={step}
-                    onChange={(e) => {
-                        let val = parseFloat(e.target.value);
-                        if (!isNaN(val)) {
-                            if (min !== null) val = Math.max(min, val);
-                            if (max !== null) val = Math.min(max, val);
-                            onChange(val);
-                        }
-                    }}
-                />
-                <button className="adjust-btn plus" onClick={() => handleAdjust(step)}>
-                    <Plus size={14} strokeWidth={3} />
-                </button>
-            </div>
+            <input
+                type="text"
+                inputMode="decimal"
+                className="plain-number-input"
+                value={localValue}
+                onChange={(e) => setLocalValue(e.target.value)}
+                onBlur={(e) => commit(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') commit(e.target.value); }}
+                style={{
+                    width: '100%', fontSize: '14px', background: '#1e293b', border: '1px solid #334155', borderRadius: '3px', color: '#e2e8f0', height: '24px'
+                }}
+            />
         </div>
     );
 };
@@ -315,7 +317,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                 <div className="form-group grid-2">
                     <div className="timing-unit-wrapper">
                         <CustomNumberInput
-                            label="Start Time"
+                            label="Start"
                             value={clip.startTime === '__mixed__' ? '' : Number((clip.startTime || 0).toFixed(2))}
                             step={10}
                             min={0}
@@ -333,7 +335,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             }}
                             className="timing-input"
                         />
-                        <span className="unit-hint-sub">{clip.startTime === '__mixed__' ? 'Mixed' : (clip.startTime / 1000).toFixed(2) + 's'}</span>
+                        {/* <span className="unit-hint-sub">{clip.startTime === '__mixed__' ? 'Mixed' : (clip.startTime / 1000).toFixed(2) + 's'}</span> */}
                     </div>
                     <div className="timing-unit-wrapper">
                         <CustomNumberInput
@@ -344,12 +346,12 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             onChange={val => handleChange('duration', parseFloat(val.toFixed(2)) || 0)}
                             className="timing-input"
                         />
-                        <span className="unit-hint-sub">{clip.duration === '__mixed__' ? 'Mixed' : (clip.duration / 1000).toFixed(2) + 's'}</span>
+                        {/* <span className="unit-hint-sub">{clip.duration === '__mixed__' ? 'Mixed' : (clip.duration / 1000).toFixed(2) + 's'}</span> */}
                     </div>
                 </div>
 
                 {clip.type === 'gif' && (
-                    <div className="form-group grid-3" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #222' }}>
+                    <div className="form-group grid-3" style={{ borderTop: '1px solid #222' }}>
                         <CustomNumberInput
                             label="BPM"
                             value={clip.bpm === '__mixed__' ? '' : (clip.bpm || 120)}
@@ -389,20 +391,46 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
 
             {clip.type === 'gif' && (
                 <div className="section-container">
-                    <label className="section-title">Placement</label>
-                    <div className="form-group grid-3">
+                    <label className="section-title">Offset Animation</label>
+                    <div className="form-group grid-2">
                         <CustomNumberInput
-                            label="Offset X"
-                            value={clip.offsetX === '__mixed__' ? '' : (clip.offsetX || 0)}
+                            label="Start X"
+                            value={clip.startOffsetX === '__mixed__' ? '' : (clip.startOffsetX ?? clip.offsetX ?? 0)}
                             step={1}
-                            onChange={val => handleChange('offsetX', val)}
+                            onChange={val => handleChange('startOffsetX', val)}
                         />
                         <CustomNumberInput
-                            label="Offset Y"
-                            value={clip.offsetY === '__mixed__' ? '' : (clip.offsetY || 0)}
+                            label="Start Y"
+                            value={clip.startOffsetY === '__mixed__' ? '' : (clip.startOffsetY ?? clip.offsetY ?? 0)}
                             step={1}
-                            onChange={val => handleChange('offsetY', val)}
+                            onChange={val => handleChange('startOffsetY', val)}
                         />
+                    </div>
+                    <div className="form-group grid-2" style={{ marginTop: '4px' }}>
+                        <CustomNumberInput
+                            label="End X"
+                            value={clip.endOffsetX === '__mixed__' ? '' : (clip.endOffsetX ?? clip.startOffsetX ?? clip.offsetX ?? 0)}
+                            step={1}
+                            onChange={val => handleChange('endOffsetX', val)}
+                        />
+                        <CustomNumberInput
+                            label="End Y"
+                            value={clip.endOffsetY === '__mixed__' ? '' : (clip.endOffsetY ?? clip.startOffsetY ?? clip.offsetY ?? 0)}
+                            step={1}
+                            onChange={val => handleChange('endOffsetY', val)}
+                        />
+                    </div>
+                    <div className="form-group" style={{ marginTop: '4px' }}>
+                        <label className="compact-label" style={{ minWidth: '60px' }}>Easing</label>
+                        <select
+                            value={clip.offsetEasing || 'linear'}
+                            onChange={e => handleChange('offsetEasing', e.target.value)}
+                            className="select-input"
+                        >
+                            {EASING_TYPES.map(type => (
+                                <option key={type} value={type}>{type}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
             )}
@@ -1029,7 +1057,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
 
                 .form-group label {
                     flex-shrink: 0;
-                    min-width: 120px;
+                    min-width: 60px;
                     margin-bottom: 0;
                     font-size: 13px;
                     font-weight: 500;
@@ -1119,15 +1147,11 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                 .adjust-btn.plus:active { background: #059669; }
                 .adjust-btn.minus:active { background: #dc2626; }
 
-                .timing-input {
-                    max-width: 110px;
-                }
-
                 .timing-unit-wrapper {
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    gap: 4px;
+                    gap: 1px;
                 }
 
                 .unit-hint-sub {
@@ -1174,11 +1198,22 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                 }
 
                 .compact-label {
-                    font-size: 11px;
+                    font-size: 9px;
                     color: #888;
-                    margin-bottom: 4px;
-                    display: block;
+                    margin-bottom: 0;
+                    display: inline;
                     text-transform: uppercase;
+                    line-height: 1;
+                    white-space: nowrap;
+                    min-width: 50px;
+                    flex-shrink: 0;
+                }
+
+                .custom-number-input-container {
+                    display: flex;
+                    flex-direction: row;
+                    align-items: center;
+                    gap: 2px;
                 }
 
                 .input-group-compact {
@@ -1190,13 +1225,13 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                 .grid-2 {
                     display: grid !important;
                     grid-template-columns: 1fr 1fr;
-                    gap: 12px;
+                    gap: 6px;
                 }
 
                 .grid-3 {
                     display: grid !important;
                     grid-template-columns: repeat(3, 1fr);
-                    gap: 12px;
+                    gap: 6px;
                 }
 
                 .slider-with-val {

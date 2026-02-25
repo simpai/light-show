@@ -381,7 +381,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         // Detect if resizing (only allowed when dragging a single clip)
         let dragMode = 'move';
         if (clipsToDrag.length === 1) {
-            const isResizable = primaryClip.type === 'effect' || primaryClip.type === 'midi-region';
+            const isResizable = primaryClip.type === 'effect' || primaryClip.type === 'midi-region' || primaryClip.type === 'eq';
             if (isResizable) {
                 if (e.target.classList.contains('resize-handle') && e.target.classList.contains('left')) {
                     dragMode = 'resize-left';
@@ -791,6 +791,8 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                                         baseStyle = 'rgba(160, 32, 240, 0.15)';
                                                     } else if (clip.type === 'gif') {
                                                         baseStyle = '#4a90e2';
+                                                    } else if (clip.type === 'eq') {
+                                                        baseStyle = '#6366f1';
                                                     } else if (usedGroups.length === 1) {
                                                         baseStyle = usedGroups[0].color;
                                                     } else if (usedGroups.length > 1) {
@@ -907,6 +909,8 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                                         baseStyle = 'rgba(160, 32, 240, 0.15)';
                                                     } else if (dragging.type === 'gif') {
                                                         baseStyle = '#4a90e2';
+                                                    } else if (dragging.type === 'eq') {
+                                                        baseStyle = '#6366f1';
                                                     } else if (usedGroups.length === 1) {
                                                         baseStyle = usedGroups[0].color;
                                                     } else if (usedGroups.length > 1) {

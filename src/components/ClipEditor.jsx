@@ -630,6 +630,123 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
             )
             }
 
+            {clip.type === 'eq' && (
+                <div className="section-container content-box">
+                    <label className="section-title">Equalizer Bands</label>
+                    <div className="form-group grid-2">
+                        <CustomNumberInput
+                            label="Bands"
+                            value={clip.bandCount === '__mixed__' ? '' : (clip.bandCount || 1)}
+                            step={1} min={1} max={8}
+                            onChange={val => {
+                                const newCount = Math.min(8, Math.max(1, val));
+                                const currentBands = Array.isArray(clip.bands) ? [...clip.bands] : [];
+
+                                const BAND_PRESETS = {
+                                    1: [[20, 20000]],
+                                    2: [[20, 500], [500, 20000]],
+                                    3: [[20, 250], [250, 2000], [2000, 20000]],
+                                    4: [[20, 250], [250, 1000], [1000, 5000], [5000, 20000]],
+                                    5: [[20, 100], [100, 500], [500, 2000], [2000, 6000], [6000, 20000]],
+                                    6: [[20, 60], [60, 250], [250, 500], [500, 2000], [2000, 6000], [6000, 20000]],
+                                    7: [[20, 60], [60, 250], [250, 500], [500, 2000], [2000, 5000], [5000, 10000], [10000, 20000]],
+                                    8: [[20, 60], [60, 150], [150, 400], [400, 1000], [1000, 2500], [2500, 6000], [6000, 12000], [12000, 20000]]
+                                };
+
+                                const preset = BAND_PRESETS[newCount];
+
+                                const newBands = [];
+                                for (let i = 0; i < newCount; i++) {
+                                    const existing = currentBands[i] || { maxScale: 1.0, minCutoff: 0, imageId: null };
+                                    newBands.push({
+                                        ...existing,
+                                        minFreq: preset[i][0],
+                                        maxFreq: preset[i][1]
+                                    });
+                                }
+
+                                handleChanges({ bandCount: newCount, bands: newBands });
+                            }}
+                            className="timing-input"
+                        />
+                    </div>
+                </div>
+            )}
+
+            {clip.type === 'eq' && !isMulti && Array.isArray(clip.bands) && clip.bands.slice(0, clip.bandCount || 1).map((band, idx) => (
+                <div key={idx} className="section-container content-box eq-band-card" style={{ padding: '8px', borderLeft: '3px solid #6366f1', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '13px', color: '#a5b4fc', margin: 0 }}>Band {idx + 1}</strong>
+                        {band.imageId ? (
+                            <button className="btn-icon" onClick={() => {
+                                const newBands = [...clip.bands];
+                                newBands[idx].imageId = null;
+                                handleChange('bands', newBands);
+                            }} style={{ border: 'none', background: 'none', color: '#ef4444', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: '11px' }} title="Remove Image">
+                                Remove Image
+                            </button>
+                        ) : (
+                            <label className="btn-icon" style={{ cursor: 'pointer', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px', fontSize: '11px' }}>
+                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                        const event = new CustomEvent('image-upload', {
+                                            detail: { clipId: clip.id, file: e.target.files[0], bandIndex: idx }
+                                        });
+                                        window.dispatchEvent(event);
+                                    }
+                                }} />
+                                Upload Mapping Image
+                            </label>
+                        )}
+                    </div>
+                    {band.imageId && assets[band.imageId] && (
+                        <div style={{ marginBottom: '8px' }}>
+                            <GifPreview asset={assets[band.imageId]} fps={1} />
+                        </div>
+                    )}
+                    <div className="form-group grid-2">
+                        <CustomNumberInput label="Min Freq" value={band.minFreq} step={100} min={0} max={22000} onChange={val => {
+                            const newBands = [...clip.bands]; newBands[idx].minFreq = val; handleChange('bands', newBands);
+                        }} />
+                        <CustomNumberInput label="Max Freq" value={band.maxFreq} step={100} min={1} max={22000} onChange={val => {
+                            const newBands = [...clip.bands]; newBands[idx].maxFreq = val; handleChange('bands', newBands);
+                        }} />
+                    </div>
+                    <div className="form-group grid-2" style={{ marginTop: '8px' }}>
+                        <CustomNumberInput label="Scale" value={band.maxScale} step={0.1} min={0} max={10} onChange={val => {
+                            const newBands = [...clip.bands]; newBands[idx].maxScale = val; handleChange('bands', newBands);
+                        }} />
+                        <CustomNumberInput label="Cutoff" value={band.minCutoff} step={0.1} min={0} max={10} onChange={val => {
+                            const newBands = [...clip.bands]; newBands[idx].minCutoff = val; handleChange('bands', newBands);
+                        }} />
+                    </div>
+                </div>
+            ))}
+
+            {clip.type === 'eq' && (
+                <div className="section-container content-box">
+                    <label className="section-title">EQ Settings</label>
+                    <div className="form-group">
+                        <div className="toggle-group-inline" style={{ width: '100%', marginBottom: '8px' }}>
+                            <input type="checkbox" id="peak-hold-toggle" className="toggle-checkbox"
+                                checked={clip.peakHold === '__mixed__' ? false : (clip.peakHold || false)}
+                                ref={el => el && (el.indeterminate = clip.peakHold === '__mixed__')}
+                                onChange={e => handleChange('peakHold', e.target.checked)} />
+                            <label htmlFor="peak-hold-toggle" className="section-title-inline">Peak Hold</label>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label className="compact-label" style={{ minWidth: '80px' }}>Decay Rate</label>
+                        <CustomNumberInput
+                            value={clip.decay === '__mixed__' ? '' : (clip.decay !== undefined ? clip.decay : 0.1)}
+                            step={0.01} min={0} max={1.0}
+                            onChange={val => handleChange('decay', val)}
+                            className="timing-input"
+                        />
+                    </div>
+                </div>
+            )}
+
             {
                 clip.type !== 'gif' && (
                     <div className="section-container content-box">

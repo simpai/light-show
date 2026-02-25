@@ -139,7 +139,7 @@ export default function ClipPalette({
                                             title={`${clip.type}: ${clip.id}`}
                                         >
                                             <div className="clip-icon-placeholder">
-                                                {clip.type === 'gif' ? 'GIF' : 'FX'}
+                                                {clip.type === 'gif' ? 'GIF' : clip.type === 'eq' ? 'EQ' : 'FX'}
                                             </div>
                                         </div>
                                     ))}
@@ -385,6 +385,7 @@ export default function ClipPalette({
 
                 .palette-clip-item.gif { border-left: 3px solid #4a90e2; }
                 .palette-clip-item.effect { border-left: 3px solid #e82020; }
+                .palette-clip-item.eq { border-left: 3px solid #6366f1; }
 
                 .palette-clip-item:hover {
                     border-color: #666;

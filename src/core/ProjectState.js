@@ -120,6 +120,11 @@ export class ProjectState {
                 rampOffDuration: clipConf.rampOffDuration || 500,
                 patternDensity: clipConf.patternDensity !== undefined ? clipConf.patternDensity : 0.5,
                 patternInterval: clipConf.patternInterval !== undefined ? clipConf.patternInterval : 100,
+                // Eq properties
+                bandCount: clipConf.bandCount || 1,
+                bands: clipConf.bands || [{ minFreq: 20, maxFreq: 20000, maxScale: 1.0, minCutoff: 0, imageId: null }],
+                peakHold: clipConf.peakHold || false,
+                decay: clipConf.decay !== undefined ? clipConf.decay : 0.1,
                 ...clipConf
             };
             layer.clips.push(newClip);

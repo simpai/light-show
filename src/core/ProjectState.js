@@ -142,6 +142,12 @@ export class ProjectState {
      * Serialize project to JSON-compatible object
      */
     toJSON(includeAssets = true) {
+        let safeWaveform = this.waveform;
+        if (safeWaveform) {
+            safeWaveform = { ...this.waveform };
+            delete safeWaveform.spectrogram; // Remove huge array to prevent JSON stringify error
+        }
+
         return {
             layers: this.layers,
             assets: includeAssets ? this.serializeAssets() : {},
@@ -150,7 +156,7 @@ export class ProjectState {
             lightGroups: this.lightGroups,
             carGroups: this.carGroups,
             jitter: this.jitter,
-            waveform: this.waveform,
+            waveform: safeWaveform,
             palette: this.palette
         };
     }

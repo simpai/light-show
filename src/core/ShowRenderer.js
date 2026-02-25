@@ -47,12 +47,21 @@ export class ShowRenderer {
         this.initMatrixBuffer();
     }
 
+    clearCache() {
+        this.matrixBuffer = [];
+        this.initMatrixBuffer();
+    }
+
     setJitterSeed(seed) {
         this.jitterSeed = seed;
     }
 
     setProject(project) {
         this.project = project;
+    }
+
+    setLayoutData(layoutData) {
+        this.layoutData = layoutData;
     }
 
     setMatrixMode(enabled, config = { rows: 10, cols: 10 }) {
@@ -205,7 +214,7 @@ export class ShowRenderer {
             }
 
             for (const clip of activeClips) {
-                if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif' || clip.carGroupId) {
+                if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif' || clip.type === 'eq' || clip.carGroupId) {
                     hasPositionPattern = true;
                     break;
                 }
@@ -290,7 +299,7 @@ export class ShowRenderer {
 
             for (const clip of activeClips) {
                 // Filter by Car Group if applicable
-                if (clip.carGroupId) {
+                if (clip.carGroupId && clip.type !== 'eq') {
                     const group = this.project.carGroups?.find(g => g.id === clip.carGroupId);
                     if (group) {
                         const key = `${row},${col}`;
@@ -365,6 +374,7 @@ export class ShowRenderer {
 
                 const adjustedTime = timeMs + timeOffset + jitterOffset;
                 const clipTime = adjustedTime - clip.startTime;
+                const isInRange = clipTime >= 0 && clipTime < clip.duration;
 
                 if (isInRange || (clip.type === 'effect' && clip.patternInvert)) {
                     // Write directly to frameData, no intermediate alloc
@@ -961,8 +971,9 @@ export class ShowRenderer {
             const scale = band.maxScale || 1.0;
             const cutOff = band.minCutoff || 0;
 
-            // Raw STFT magnitudes vary. This base multiplier assumes a reasonably normalized signal.
-            avgVol = avgVol * scale * 5.0;
+            // Raw STFT magnitudes vary. Downsampled bins often average out peaks.
+            // We increase the base multiplier to 15.0 so we actually see some volume.
+            avgVol = avgVol * scale * 15.0;
 
             if (avgVol < cutOff) avgVol = 0;
 
@@ -978,7 +989,7 @@ export class ShowRenderer {
                         for (let b = startBin; b <= endBin; b++) {
                             pSum += spec[pastIndex][b];
                         }
-                        let pVol = (pSum / count) * scale * 5.0;
+                        let pVol = (pSum / count) * scale * 15.0;
                         if (pVol < cutOff) pVol = 0;
 
                         // Decay ranges typically 0 to 1. A decay of 0.1 means it loses 10% per frame.
@@ -1000,7 +1011,7 @@ export class ShowRenderer {
                         for (let b = startBin; b <= endBin; b++) {
                             pSum += spec[pastIndex][b];
                         }
-                        let pVol = (pSum / count) * scale * 5.0;
+                        let pVol = (pSum / count) * scale * 15.0;
                         if (pVol < cutOff) pVol = 0;
                         if (pVol > highest) highest = pVol;
                     }
@@ -1010,31 +1021,54 @@ export class ShowRenderer {
 
             let intensity = Math.min(1.0, Math.max(0, avgVol));
 
-            if (band.imageId && this.project.assets[band.imageId]) {
-                const asset = this.project.assets[band.imageId];
-                if (asset.frames && asset.frames.length > 0) {
-                    const imageData = asset.frames[0];
-                    const r_idx = Math.floor((row / gridSize.rows) * imageData.height);
-                    const c_idx = Math.floor((col / gridSize.cols) * imageData.width);
-                    const safeR = Math.max(0, Math.min(r_idx, imageData.height - 1));
-                    const safeC = Math.max(0, Math.min(c_idx, imageData.width - 1));
+            const hasImage = !!(band.imageId && this.project.assets[band.imageId]);
+            let pixelSensitivity = 0;
 
-                    const pixIdx = (safeR * imageData.width + safeC) * 4;
-                    const rCol = imageData.data[pixIdx];
-                    const gCol = imageData.data[pixIdx + 1];
-                    const bCol = imageData.data[pixIdx + 2];
-                    const aCol = imageData.data[pixIdx + 3];
+            if (hasImage && this.project.assets[band.imageId].frames?.length > 0) {
+                const imageData = this.project.assets[band.imageId].frames[0];
+                const gridRows = gridSize?.rows || 10;
+                const gridCols = gridSize?.cols || 10;
 
-                    const luminance = (0.299 * rCol + 0.587 * gCol + 0.114 * bCol) * (aCol / 255);
-                    const pixelSensitivity = luminance / 255;
+                const targetRow = row !== null ? row : 0;
+                const targetCol = col !== null ? col : 0;
 
-                    intensity = intensity * pixelSensitivity;
+                const r_idx = Math.floor((targetRow / gridRows) * imageData.height);
+                const c_idx = Math.floor((targetCol / gridCols) * imageData.width);
+                const safeR = Math.max(0, Math.min(r_idx, imageData.height - 1));
+                const safeC = Math.max(0, Math.min(c_idx, imageData.width - 1));
+
+                const pixIdx = (safeR * imageData.width + safeC) * 4;
+                const rCol = imageData.data[pixIdx];
+                const gCol = imageData.data[pixIdx + 1];
+                const bCol = imageData.data[pixIdx + 2];
+                const aCol = imageData.data[pixIdx + 3];
+
+                const luminance = (0.299 * rCol + 0.587 * gCol + 0.114 * bCol) * (aCol / 255);
+                pixelSensitivity = luminance / 255;
+
+                // Invert image mapping if enabled
+                if (band.invertImage) {
+                    pixelSensitivity = 1.0 - pixelSensitivity;
                 }
             }
 
-            if (intensity > 0) {
-                const targets = this.resolveTargetChannels(clip);
-                this.applyToChannels(targets, Math.floor(255 * intensity), frame);
+            const targets = this.resolveTargetChannels(clip);
+            if (targets.length === 0) continue;
+
+            let finalBrightness = 0;
+
+            if (hasImage) {
+                if (intensity >= pixelSensitivity && pixelSensitivity > 0) {
+                    finalBrightness = 255;
+                }
+            } else {
+                if (intensity > 0) {
+                    finalBrightness = 255;
+                }
+            }
+
+            if (finalBrightness > 0) {
+                this.applyToChannels(targets, finalBrightness, frame);
             }
         }
     }

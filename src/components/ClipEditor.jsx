@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Plus, Minus } from 'lucide-react';
+import { Trash2, Plus, Minus, Download, Upload } from 'lucide-react';
 
 const CHANNELS = {
     "Main Beams": [0, 1],
@@ -256,14 +256,58 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
         };
 
     const clip = mergedClip;
+    const importInputRef = React.useRef(null);
+
+    const handleExportClip = () => {
+        const exportData = { ...firstClip };
+        delete exportData.id;
+        delete exportData.startTime;
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+        const dnNode = document.createElement('a');
+        dnNode.setAttribute("href", dataStr);
+        dnNode.setAttribute("download", `clip_settings_${firstClip.type}.json`);
+        document.body.appendChild(dnNode);
+        dnNode.click();
+        dnNode.remove();
+    };
+
+    const handleImportClip = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const importedSettings = JSON.parse(event.target.result);
+                delete importedSettings.id;
+                delete importedSettings.startTime;
+                handleChanges(importedSettings);
+            } catch (err) {
+                console.error("Failed to parse clip settings", err);
+                alert("Invalid clip settings file.");
+            }
+            e.target.value = null;
+        };
+        reader.readAsText(file);
+    };
 
     return (
         <div className="clip-editor">
             <div className="header">
                 <h3>{isMulti ? `Edit ${clips.length} Clips` : 'Edit Clip'}</h3>
-                <button onClick={() => onDelete(isMulti ? clips.map(c => c.id) : clip.id)} className="delete-btn">
-                    <Trash2 size={18} />
-                </button>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <button onClick={handleExportClip} className="action-btn" title="Export Clip Settings">
+                        <Download size={16} />
+                    </button>
+                    <label className="action-btn" title="Import Clip Settings" style={{ cursor: 'pointer', margin: 0 }}>
+                        <Upload size={16} />
+                        <input type="file" ref={importInputRef} accept=".json" style={{ display: 'none' }} onChange={handleImportClip} />
+                    </label>
+                    <button onClick={() => onDelete(isMulti ? clips.map(c => c.id) : clip.id)} className="delete-btn" title="Delete Clip">
+                        <Trash2 size={18} />
+                    </button>
+                </div>
             </div>
 
             <div className="section-container">
@@ -678,18 +722,31 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
                         <strong style={{ fontSize: '13px', color: '#a5b4fc', margin: 0 }}>Band {idx + 1}</strong>
                         {band.imageId ? (
-                            <button className="btn-icon" onClick={() => {
-                                const newBands = [...clip.bands];
-                                newBands[idx].imageId = null;
-                                handleChange('bands', newBands);
-                            }} style={{ border: 'none', background: 'none', color: '#ef4444', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: '11px' }} title="Remove Image">
-                                Remove Image
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <label className="btn-icon" style={{ cursor: 'pointer', color: '#10b981', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px', fontSize: '11px' }} title="Replace Image">
+                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            const event = new CustomEvent('imageUpload', {
+                                                detail: { clipId: clip.id, file: e.target.files[0], bandIndex: idx }
+                                            });
+                                            window.dispatchEvent(event);
+                                        }
+                                    }} />
+                                    Replace
+                                </label>
+                                <button className="btn-icon" onClick={() => {
+                                    const newBands = [...clip.bands];
+                                    newBands[idx] = { ...newBands[idx], imageId: null };
+                                    handleChange('bands', newBands);
+                                }} style={{ border: 'none', background: 'none', color: '#ef4444', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: '11px' }} title="Remove Image">
+                                    Remove
+                                </button>
+                            </div>
                         ) : (
                             <label className="btn-icon" style={{ cursor: 'pointer', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px', fontSize: '11px' }}>
                                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
                                     if (e.target.files && e.target.files[0]) {
-                                        const event = new CustomEvent('image-upload', {
+                                        const event = new CustomEvent('imageUpload', {
                                             detail: { clipId: clip.id, file: e.target.files[0], bandIndex: idx }
                                         });
                                         window.dispatchEvent(event);
@@ -702,6 +759,14 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     {band.imageId && assets[band.imageId] && (
                         <div style={{ marginBottom: '8px' }}>
                             <GifPreview asset={assets[band.imageId]} fps={1} />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', marginTop: '4px', cursor: 'pointer', color: '#a5b4fc' }}>
+                                <input type="checkbox" checked={band.invertImage || false} onChange={(e) => {
+                                    const newBands = [...clip.bands];
+                                    newBands[idx] = { ...newBands[idx], invertImage: e.target.checked };
+                                    handleChange('bands', newBands);
+                                }} />
+                                Invert Image
+                            </label>
                         </div>
                     )}
                     <div className="form-group grid-2">
@@ -849,28 +914,30 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                 )
             }
 
-            <div className="section-container content-box car-selection-box">
-                <label className="section-title">Target Car Group</label>
-                <div className="group-grid">
-                    <button
-                        className={`group-grid-item ${clip.carGroupId === '' ? 'active' : ''}`}
-                        onClick={() => handleChange('carGroupId', '')}
-                    >
-                        <img src={allCarsThumbnail} alt="ALL" className="all-cars-icon" />
-                        <span>ALL</span>
-                    </button>
-                    {carGroups.map(group => (
+            {clip.type !== 'eq' && (
+                <div className="section-container content-box car-selection-box">
+                    <label className="section-title">Target Car Group</label>
+                    <div className="group-grid">
                         <button
-                            key={group.id}
-                            className={`group-grid-item ${clip.carGroupId === group.id ? 'active' : ''}`}
-                            onClick={() => handleChange('carGroupId', group.id)}
+                            className={`group-grid-item ${clip.carGroupId === '' ? 'active' : ''}`}
+                            onClick={() => handleChange('carGroupId', '')}
                         >
-                            <img src={group.thumbnail} alt={group.name} />
-                            <span>{group.name} {clip.carGroupId === '__mixed__' && '(Mixed)'}</span>
+                            <img src={allCarsThumbnail} alt="ALL" className="all-cars-icon" />
+                            <span>ALL</span>
                         </button>
-                    ))}
+                        {carGroups.map(group => (
+                            <button
+                                key={group.id}
+                                className={`group-grid-item ${clip.carGroupId === group.id ? 'active' : ''}`}
+                                onClick={() => handleChange('carGroupId', group.id)}
+                            >
+                                <img src={group.thumbnail} alt={group.name} />
+                                <span>{group.name} {clip.carGroupId === '__mixed__' && '(Mixed)'}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <style>{`
                 .clip-editor {
@@ -915,6 +982,24 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     height: 14px;
                 }
 
+                .action-btn {
+                    background: none;
+                    border: none;
+                    color: #d1d5db;
+                    cursor: pointer;
+                    padding: 8px;
+                    border-radius: 4px;
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .action-btn:hover {
+                    background: #2a2a2a;
+                    color: #ffffff;
+                }
+
                 .delete-btn {
                     background: none;
                     border: none;
@@ -923,6 +1008,9 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     padding: 8px;
                     border-radius: 4px;
                     transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                 }
 
                 .delete-btn:hover {

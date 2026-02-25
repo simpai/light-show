@@ -7,7 +7,7 @@ export class AudioWaveformManager {
      * @param {number} pointsPerSecond Resolution of the waveform.
      * @returns {Promise<{peaks: number[], duration: number, spectrogram: Float32Array[], fftSampleRate: number, fftSize: number}>}
      */
-    static async generateWaveform(file, pointsPerSecond = 20) {
+    static async generateWaveform(file, pointsPerSecond = 50) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = async (e) => {
@@ -57,10 +57,24 @@ export class AudioWaveformManager {
                             FFT.transform(windowed, imag);
                             const magnitudes = FFT.getMagnitudes(windowed, imag);
 
+                            // Downsample magnitudes to save memory (e.g., from 2048 to 64 bins)
+                            // This prevents Out-Of-Memory (OOM) crashes on large audio files
+                            const targetBins = 128;
+                            const downsampled = new Float32Array(targetBins);
+                            const binsPerGroup = Math.floor(magnitudes.length / targetBins);
+
+                            for (let b = 0; b < targetBins; b++) {
+                                let sumMag = 0;
+                                for (let k = 0; k < binsPerGroup; k++) {
+                                    sumMag += magnitudes[b * binsPerGroup + k];
+                                }
+                                downsampled[b] = sumMag / binsPerGroup;
+                            }
+
                             // Keep in memory
-                            spectrogram[i] = magnitudes;
+                            spectrogram[i] = downsampled;
                         } else {
-                            spectrogram[i] = new Float32Array(fftSize / 2);
+                            spectrogram[i] = new Float32Array(128); // match targetBins
                         }
                     }
 

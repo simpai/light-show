@@ -173,6 +173,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const projectRef = useRef(project);
     const currentTimeRef = useRef(currentTime);
     const animateRef = useRef();
+    const [fpsDisplay, setFpsDisplay] = useState(0);
 
     // Keep refs in sync with state for the animation loop
     useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
@@ -399,14 +400,21 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 project.assets[assetId] = asset;
 
                 // Update clip
+                // Update clip by deeply cloning the layers to ensure state mutability
                 const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
-                for (const layer of newProject.layers) {
-                    const clip = layer.clips.find(c => c.id === clipId);
-                    if (clip) {
+                newProject.layers = newProject.layers.map(layer => {
+                    const clonedLayer = { ...layer, clips: [...layer.clips] };
+                    const clipIndex = clonedLayer.clips.findIndex(c => c.id === clipId);
+
+                    if (clipIndex !== -1) {
+                        const clip = { ...clonedLayer.clips[clipIndex] };
                         if (event.detail.bandIndex !== undefined) {
-                            if (!clip.bands) clip.bands = [];
+                            clip.bands = [...(clip.bands || [])];
                             if (clip.bands[event.detail.bandIndex]) {
-                                clip.bands[event.detail.bandIndex].imageId = assetId;
+                                clip.bands[event.detail.bandIndex] = {
+                                    ...clip.bands[event.detail.bandIndex],
+                                    imageId: assetId
+                                };
                             }
                         } else {
                             clip.assetId = assetId;
@@ -430,12 +438,17 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                             // Log duration update
                             console.log('GIF Duration updated:', clip.duration, 'ms', frameCount, 'frames');
                         }
-                        break;
+
+                        clonedLayer.clips[clipIndex] = clip;
                     }
-                }
+                    return clonedLayer;
+                });
 
                 setProject(newProject);
                 rendererRef.current.setProject(newProject);
+                if (typeof rendererRef.current.clearCache === 'function') {
+                    rendererRef.current.clearCache();
+                }
                 console.log('Image uploaded:', asset.width, 'x', asset.height, asset.frames.length, 'frames');
             } catch (err) {
                 console.error('Failed to upload image:', err);
@@ -589,8 +602,17 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     }, [project, history, redoStack, selectedClipIds, selectedLayerId, clipboard, isPlaying, audioFile, bookmarks]);
 
     useEffect(() => {
+        let frameCount = 0;
+        let lastFpsTime = performance.now();
         const loop = () => {
             animateRef.current?.();
+            frameCount++;
+            const now = performance.now();
+            if (now - lastFpsTime >= 1000) {
+                setFpsDisplay(Math.round(frameCount * 1000 / (now - lastFpsTime)));
+                frameCount = 0;
+                lastFpsTime = now;
+            }
             requestRef.current = requestAnimationFrame(loop);
         };
         requestRef.current = requestAnimationFrame(loop);
@@ -685,7 +707,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     const waveformData = await AudioWaveformManager.generateWaveform(file, pointsPerSecond);
                     project.waveform = {
                         peaks: waveformData.peaks,
-                        pointsPerSecond: pointsPerSecond
+                        pointsPerSecond: pointsPerSecond,
+                        spectrogram: waveformData.spectrogram,
+                        fftSampleRate: waveformData.fftSampleRate,
+                        fftSize: waveformData.fftSize
                     };
 
                     // Detect beats and reference bars
@@ -705,7 +730,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     console.error('Failed to generate waveform or beats:', err);
                 }
 
-                setProject(Object.assign(Object.create(Object.getPrototypeOf(project)), project));
+                const updatedProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                setProject(updatedProject);
+                if (rendererRef.current) {
+                    rendererRef.current.setProject(updatedProject);
+                    if (typeof rendererRef.current.clearCache === 'function') {
+                        rendererRef.current.clearCache();
+                    }
+                }
             });
         }
     };
@@ -749,6 +781,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         const snapshot = project.toJSON();
         setHistory(prev => [...prev.slice(-19), snapshot]);
         setRedoStack([]);
+        // Preserve waveform (including spectrogram) which toJSON() deliberately strips
+        if (project.waveform && !newState.waveform?.spectrogram) {
+            newState.waveform = project.waveform;
+        }
         setProject(newState);
         rendererRef.current.setProject(newState);
     };
@@ -760,6 +796,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setHistory(prev => prev.slice(0, -1));
 
         ProjectState.fromJSON(previous).then(loaded => {
+            // Preserve waveform spectrogram (stripped by toJSON)
+            if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
+                loaded.waveform = project.waveform;
+            }
             setProject(loaded);
             rendererRef.current.setProject(loaded);
         });
@@ -772,6 +812,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setRedoStack(prev => prev.slice(0, -1));
 
         ProjectState.fromJSON(next).then(loaded => {
+            // Preserve waveform spectrogram (stripped by toJSON)
+            if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
+                loaded.waveform = project.waveform;
+            }
             setProject(loaded);
             rendererRef.current.setProject(loaded);
         });
@@ -792,6 +836,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setRedoStack([]);
 
         ProjectState.fromJSON(snapshot).then(loaded => {
+            // Preserve waveform spectrogram (stripped by toJSON)
+            if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
+                loaded.waveform = project.waveform;
+            }
             setProject(loaded);
             rendererRef.current.setProject(loaded);
             console.log('Snapshot restored');
@@ -1606,33 +1654,45 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     }
 
                     // 4. Automatic Re-analysis if missing
-                    if (!loadedProject.waveform || !loadedProject.analysis?.beat_times) {
-                        console.log('Missing waveform or beat data, starting automatic re-analysis...');
+                    if (!loadedProject.waveform || !loadedProject.waveform.spectrogram || !loadedProject.analysis?.beat_times) {
+                        console.log('Missing waveform, spectrogram, or beat data, starting automatic re-analysis...');
                         try {
-                            const pointsPerSecond = 20;
+                            const pointsPerSecond = loadedProject.waveform?.pointsPerSecond || 100;
                             const waveformData = await AudioWaveformManager.generateWaveform(audioFileObj, pointsPerSecond);
                             loadedProject.waveform = {
                                 peaks: waveformData.peaks,
-                                pointsPerSecond: pointsPerSecond
+                                pointsPerSecond: pointsPerSecond,
+                                spectrogram: waveformData.spectrogram,
+                                fftSampleRate: waveformData.fftSampleRate,
+                                fftSize: waveformData.fftSize
                             };
 
-                            const beatData = AudioWaveformManager.detectBeats(waveformData.peaks, pointsPerSecond);
-                            loadedProject.analysis = {
-                                ...(loadedProject.analysis || {}),
-                                beat_times: beatData.beatTimes,
-                                reference_beats: beatData.referenceBeats,
-                                bpm: beatData.bpm,
-                                offset: beatData.offset
-                            };
+                            if (!loadedProject.analysis?.beat_times) {
+                                const beatData = AudioWaveformManager.detectBeats(waveformData.peaks, pointsPerSecond);
+                                loadedProject.analysis = {
+                                    ...(loadedProject.analysis || {}),
+                                    beat_times: beatData.beatTimes,
+                                    reference_beats: beatData.referenceBeats,
+                                    bpm: beatData.bpm,
+                                    offset: beatData.offset
+                                };
 
-                            // Update global BPM if detected
-                            if (beatData.bpm && beatData.bpm > 0) {
-                                setBpm(beatData.bpm);
+                                // Update global BPM if detected
+                                if (beatData.bpm && beatData.bpm > 0) {
+                                    setBpm(beatData.bpm);
+                                }
                             }
 
                             // Update project state after analysis
-                            setProject(Object.assign(Object.create(Object.getPrototypeOf(loadedProject)), loadedProject));
-                            console.log('Automatic re-analysis completed', beatData);
+                            const updatedProject = Object.assign(Object.create(Object.getPrototypeOf(loadedProject)), loadedProject);
+                            setProject(updatedProject);
+                            if (rendererRef.current) {
+                                rendererRef.current.setProject(updatedProject);
+                                if (typeof rendererRef.current.clearCache === 'function') {
+                                    rendererRef.current.clearCache();
+                                }
+                            }
+                            console.log('Automatic re-analysis completed');
                         } catch (reErr) {
                             console.error('Auto re-analysis failed:', reErr);
                         }
@@ -1830,7 +1890,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             </header>
 
             <div className="editor-main">
-                <div className="preview-panel">
+                <div className="preview-panel" style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', top: 4, left: 8, background: 'rgba(0,0,0,0.7)', color: '#0f0', fontSize: '11px', fontFamily: 'monospace', padding: '2px 6px', borderRadius: '3px', zIndex: 20, pointerEvents: 'none' }}>
+                        {fpsDisplay} FPS
+                    </div>
                     <MatrixPreview2D
                         matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
                         rows={matrixConfig.rows}

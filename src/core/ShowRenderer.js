@@ -1002,95 +1002,131 @@ export class ShowRenderer {
 
         // Check if we are in the transition zone and the transition type is active
         if (transType !== 'none' && timeInFrame >= transitionStart && transOverlap > 0) {
-            const nextFrameIndex = ((rawFrameIndex < 0 ? 0 : rawFrameIndex) + 1) % assetFrameCount;
-            const currentImageData = asset.frames[frameIndex];
-            const nextImageData = asset.frames[nextFrameIndex];
+            const absFrameIndex = rawFrameIndex < 0 ? 0 : rawFrameIndex;
+            const nextAbsFrameIndex = absFrameIndex + 1;
 
-            // Progress through the transition: 0.0 (start) → 1.0 (end)
-            const transitionDuration = frameDuration * transOverlap;
-            const progress = Math.min(1.0, (timeInFrame - transitionStart) / transitionDuration);
+            // Check if the next frame would wrap back to 0
+            // If so and we're near the end of clip duration, don't transition
+            const nextFrameIdx = ((rawFrameIndex < 0 ? 0 : rawFrameIndex) + 1) % assetFrameCount;
+            const wouldWrap = (nextFrameIdx <= frameIndex); // wraps back to start
+            const nextFrameStartTime = ((rawFrameIndex < 0 ? 0 : rawFrameIndex) + 1) * frameDuration;
+            const isLastPlayableFrame = wouldWrap && (nextFrameStartTime >= clip.duration - 1);
 
-            // Get pixel from current frame
-            const getPixel = (imgData, aRow, aCol, gs) => {
-                let iR, iC;
-                if (gs.rows > 1 || gs.cols > 1) {
-                    iR = Math.floor((aRow / gs.rows) * imgData.height);
-                    iC = Math.floor((aCol / gs.cols) * imgData.width);
-                } else {
-                    iR = Math.floor(imgData.height / 2);
-                    iC = Math.floor(imgData.width / 2);
+            if (isLastPlayableFrame) {
+                // Last frame — just hold, don't transition back to frame 0
+                const currentImageData = asset.frames[frameIndex];
+                const adjustedRow = row - (clip.offsetY || 0);
+                const adjustedCol = col - (clip.offsetX || 0);
+                if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) return;
+                const getPixelSimple = (imgData, aRow, aCol, gs) => {
+                    let iR, iC;
+                    if (gs.rows > 1 || gs.cols > 1) { iR = Math.floor((aRow / gs.rows) * imgData.height); iC = Math.floor((aCol / gs.cols) * imgData.width); }
+                    else { iR = Math.floor(imgData.height / 2); iC = Math.floor(imgData.width / 2); }
+                    iR = Math.max(0, Math.min(iR, imgData.height - 1)); iC = Math.max(0, Math.min(iC, imgData.width - 1));
+                    const idx = (iR * imgData.width + iC) * 4;
+                    return [imgData.data[idx], imgData.data[idx + 1], imgData.data[idx + 2], imgData.data[idx + 3]];
+                };
+                [r, g, b, a] = getPixelSimple(currentImageData, adjustedRow, adjustedCol, gridSize);
+            } else {
+                const nextFrameIndex = nextAbsFrameIndex % assetFrameCount;
+                const currentImageData = asset.frames[frameIndex];
+                const nextImageData = asset.frames[nextFrameIndex];
+
+                // Progress through the transition: 0.0 (start) → 1.0 (end)
+                const transitionDuration = frameDuration * transOverlap;
+                const progress = Math.min(1.0, (timeInFrame - transitionStart) / transitionDuration);
+
+                // Get pixel from current frame
+                const getPixel = (imgData, aRow, aCol, gs) => {
+                    let iR, iC;
+                    if (gs.rows > 1 || gs.cols > 1) {
+                        iR = Math.floor((aRow / gs.rows) * imgData.height);
+                        iC = Math.floor((aCol / gs.cols) * imgData.width);
+                    } else {
+                        iR = Math.floor(imgData.height / 2);
+                        iC = Math.floor(imgData.width / 2);
+                    }
+                    iR = Math.max(0, Math.min(iR, imgData.height - 1));
+                    iC = Math.max(0, Math.min(iC, imgData.width - 1));
+                    const idx = (iR * imgData.width + iC) * 4;
+                    return [imgData.data[idx], imgData.data[idx + 1], imgData.data[idx + 2], imgData.data[idx + 3]];
+                };
+
+                const adjustedRow = row - (clip.offsetY || 0);
+                const adjustedCol = col - (clip.offsetX || 0);
+
+                if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
+                    return;
                 }
-                iR = Math.max(0, Math.min(iR, imgData.height - 1));
-                iC = Math.max(0, Math.min(iC, imgData.width - 1));
-                const idx = (iR * imgData.width + iC) * 4;
-                return [imgData.data[idx], imgData.data[idx + 1], imgData.data[idx + 2], imgData.data[idx + 3]];
-            };
 
-            const adjustedRow = row - (clip.offsetY || 0);
-            const adjustedCol = col - (clip.offsetX || 0);
+                const [cr, cg, cb, ca] = getPixel(currentImageData, adjustedRow, adjustedCol, gridSize);
+                const [nr, ng, nb, na] = getPixel(nextImageData, adjustedRow, adjustedCol, gridSize);
 
-            if (adjustedRow < 0 || adjustedRow >= gridSize.rows || adjustedCol < 0 || adjustedCol >= gridSize.cols) {
-                return;
-            }
-
-            const [cr, cg, cb, ca] = getPixel(currentImageData, adjustedRow, adjustedCol, gridSize);
-            const [nr, ng, nb, na] = getPixel(nextImageData, adjustedRow, adjustedCol, gridSize);
-
-            if (transType === 'dissolve') {
-                // Crossfade: linear blend
-                const inv = 1.0 - progress;
-                r = Math.round(cr * inv + nr * progress);
-                g = Math.round(cg * inv + ng * progress);
-                b = Math.round(cb * inv + nb * progress);
-                a = Math.round(ca * inv + na * progress);
-            } else if (transType.startsWith('wipe-')) {
-                // Wipe: hard-cut sweep based on normalized grid position
-                let normPos;
-                if (transType === 'wipe-right') {
-                    normPos = gridSize.cols > 1 ? adjustedCol / (gridSize.cols - 1) : 0.5;
-                } else if (transType === 'wipe-left') {
-                    normPos = gridSize.cols > 1 ? 1.0 - adjustedCol / (gridSize.cols - 1) : 0.5;
-                } else if (transType === 'wipe-down') {
-                    normPos = gridSize.rows > 1 ? adjustedRow / (gridSize.rows - 1) : 0.5;
-                } else { // wipe-up
-                    normPos = gridSize.rows > 1 ? 1.0 - adjustedRow / (gridSize.rows - 1) : 0.5;
-                }
-                if (normPos < progress) {
-                    r = nr; g = ng; b = nb; a = na;
+                if (transType === 'dissolve') {
+                    // Noisy spatial dithering with temporal variation
+                    // Uses bit-mixing hash for high-quality pseudo-random distribution
+                    // Temporal step changes the noise pattern during transition for organic feel
+                    const temporalStep = Math.floor(clipTime / 20); // shifts pattern every 20ms
+                    let seed = adjustedRow * 374761 + adjustedCol * 668265 + rawFrameIndex * 93481 + temporalStep * 27183;
+                    // Bit-mixing (xorshift-like) for maximum noise quality
+                    seed = ((seed >>> 16) ^ seed) * 0x45d9f3b;
+                    seed = ((seed >>> 16) ^ seed) * 0x45d9f3b;
+                    seed = (seed >>> 16) ^ seed;
+                    const hash = (seed & 0x7fffffff) / 0x7fffffff;
+                    if (hash < progress) {
+                        r = nr; g = ng; b = nb; a = na;
+                    } else {
+                        r = cr; g = cg; b = cb; a = ca;
+                    }
+                } else if (transType.startsWith('wipe-')) {
+                    // Wipe: hard-cut sweep based on normalized grid position
+                    let normPos;
+                    if (transType === 'wipe-right') {
+                        normPos = gridSize.cols > 1 ? adjustedCol / (gridSize.cols - 1) : 0.5;
+                    } else if (transType === 'wipe-left') {
+                        normPos = gridSize.cols > 1 ? 1.0 - adjustedCol / (gridSize.cols - 1) : 0.5;
+                    } else if (transType === 'wipe-down') {
+                        normPos = gridSize.rows > 1 ? adjustedRow / (gridSize.rows - 1) : 0.5;
+                    } else { // wipe-up
+                        normPos = gridSize.rows > 1 ? 1.0 - adjustedRow / (gridSize.rows - 1) : 0.5;
+                    }
+                    if (normPos < progress) {
+                        r = nr; g = ng; b = nb; a = na;
+                    } else {
+                        r = cr; g = cg; b = cb; a = ca;
+                    }
+                } else if (transType.startsWith('push-')) {
+                    // Push: both frames slide in the specified direction
+                    const totalCols = gridSize.cols;
+                    const shiftAmount = Math.floor(progress * totalCols);
+                    let srcCol;
+                    if (transType === 'push-right') {
+                        srcCol = adjustedCol - shiftAmount;
+                        if (srcCol < 0) {
+                            // This pixel now shows the next frame, wrapped from the other side
+                            const wrappedCol = totalCols + srcCol;
+                            const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
+                            r = pr; g = pg; b = pb; a = pa;
+                        } else {
+                            const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
+                            r = pr; g = pg; b = pb; a = pa;
+                        }
+                    } else { // push-left
+                        srcCol = adjustedCol + shiftAmount;
+                        if (srcCol >= totalCols) {
+                            const wrappedCol = srcCol - totalCols;
+                            const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
+                            r = pr; g = pg; b = pb; a = pa;
+                        } else {
+                            const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
+                            r = pr; g = pg; b = pb; a = pa;
+                        }
+                    }
                 } else {
+                    // Fallback to no transition
                     r = cr; g = cg; b = cb; a = ca;
                 }
-            } else if (transType.startsWith('push-')) {
-                // Push: both frames slide in the specified direction
-                const totalCols = gridSize.cols;
-                const shiftAmount = Math.floor(progress * totalCols);
-                let srcCol;
-                if (transType === 'push-right') {
-                    srcCol = adjustedCol - shiftAmount;
-                    if (srcCol < 0) {
-                        // This pixel now shows the next frame, wrapped from the other side
-                        const wrappedCol = totalCols + srcCol;
-                        const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
-                        r = pr; g = pg; b = pb; a = pa;
-                    } else {
-                        const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
-                        r = pr; g = pg; b = pb; a = pa;
-                    }
-                } else { // push-left
-                    srcCol = adjustedCol + shiftAmount;
-                    if (srcCol >= totalCols) {
-                        const wrappedCol = srcCol - totalCols;
-                        const [pr, pg, pb, pa] = getPixel(nextImageData, adjustedRow, wrappedCol, gridSize);
-                        r = pr; g = pg; b = pb; a = pa;
-                    } else {
-                        const [pr, pg, pb, pa] = getPixel(currentImageData, adjustedRow, srcCol, gridSize);
-                        r = pr; g = pg; b = pb; a = pa;
-                    }
-                }
-            } else {
-                // Fallback to no transition
-                r = cr; g = cg; b = cb; a = ca;
-            }
+            } // end !isLastPlayableFrame
         } else {
             // No transition — use current frame normally
             const imageData = asset.frames[frameIndex];

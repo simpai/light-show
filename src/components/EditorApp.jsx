@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2, ChevronUp, ChevronDown, Activity } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -403,7 +403,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 for (const layer of newProject.layers) {
                     const clip = layer.clips.find(c => c.id === clipId);
                     if (clip) {
-                        clip.assetId = assetId;
+                        if (event.detail.bandIndex !== undefined) {
+                            if (!clip.bands) clip.bands = [];
+                            if (clip.bands[event.detail.bandIndex]) {
+                                clip.bands[event.detail.bandIndex].imageId = assetId;
+                            }
+                        } else {
+                            clip.assetId = assetId;
+                        }
                         clip.fps = asset.fps;
 
                         // Recalculate duration for GIF
@@ -1095,6 +1102,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         bpm: 120,
                         beatsPerFrame: 1,
                         repetitions: 1
+                    }),
+                    ...(type === 'eq' && {
+                        bandCount: 1,
+                        bands: [{ minFreq: 20, maxFreq: 20000, maxScale: 1.0, minCutoff: 0, imageId: null }],
+                        peakHold: false,
+                        decay: 0.1
                     })
                 };
 
@@ -2065,6 +2078,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         </button>
                         <button onClick={() => handleAddClip('effect')} className="btn-icon" title="Add Effect at Cursor" style={{ color: '#e82020' }}>
                             <Zap size={20} /> Effect
+                        </button>
+                        <button onClick={() => handleAddClip('eq')} className="btn-icon" title="Add Equalizer at Cursor" style={{ color: '#6366f1' }}>
+                            <Activity size={20} /> EQ
                         </button>
                         <button onClick={() => handleAddClip('gif')} className="btn-icon" title="Add GIF at Cursor" style={{ color: '#4a90e2' }}>
                             <ImageIcon size={20} /> GIF

@@ -366,11 +366,9 @@ export class ShowRenderer {
                 const adjustedTime = timeMs + timeOffset + jitterOffset;
                 const clipTime = adjustedTime - clip.startTime;
 
-                // Only render if within clip duration (or if inverted effect, which needs to render "background")
-                const isInRange = clipTime >= 0 && clipTime < clip.duration;
                 if (isInRange || (clip.type === 'effect' && clip.patternInvert)) {
                     // Write directly to frameData, no intermediate alloc
-                    this.renderClip(clip, clipTime, frameData, row, col, gridSize, layer);
+                    this.renderClip(clip, clipTime, frameData, row, col, gridSize, layer, adjustedTime);
                 }
             }
         }
@@ -863,13 +861,13 @@ export class ShowRenderer {
 
         for (const clip of activeClips) {
             const clipTime = timeMs - clip.startTime;
-            this.renderClip(clip, clipTime, frame, null, null, null, layer);
+            this.renderClip(clip, clipTime, frame, null, null, null, layer, timeMs);
         }
 
         return frame;
     }
 
-    renderClip(clip, clipTime, frame, row = null, col = null, gridSize = null, layer = null) {
+    renderClip(clip, clipTime, frame, row = null, col = null, gridSize = null, layer = null, globalTimeMs = null) {
         // Tesla Ramping Magic Values (0-255)
         const RAMP_ON_VALUES = { 0: 255, 500: 178, 1000: 204, 2000: 229 };
         const RAMP_OFF_VALUES = { 0: 0, 500: 25, 1000: 51, 2000: 76 };
@@ -915,6 +913,129 @@ export class ShowRenderer {
             const gs = gridSize !== null ? gridSize : { rows: 1, cols: 1 };
             // GIFs bypass ramping/fade calculations and use full intensity
             this.renderPatternForPosition(clip, clipTime, 1.0, frame, r, c, gs, layer);
+        } else if (clip.type === 'eq') {
+            const r = row !== null ? row : 0;
+            const c = col !== null ? col : 0;
+            const gs = gridSize !== null ? gridSize : { rows: 1, cols: 1 };
+            const time = globalTimeMs !== null ? globalTimeMs : (clip.startTime + clipTime);
+            this.renderEq(clip, clipTime, time, frame, r, c, gs, layer);
+        }
+    }
+
+    renderEq(clip, clipTime, timeMs, frame, row, col, gridSize, layer) {
+        if (!this.project || !this.project.waveform || !this.project.waveform.spectrogram) return;
+
+        const spec = this.project.waveform.spectrogram;
+        const steps = spec.length;
+        if (steps === 0) return;
+
+        const audioDuration = this.project.waveform.duration || this.project.duration;
+        const pointsPerSecond = steps / (audioDuration / 1000);
+        const index = Math.min(steps - 1, Math.max(0, Math.floor((timeMs / 1000) * pointsPerSecond)));
+
+        const currentSpec = spec[index];
+        if (!currentSpec) return;
+
+        const maxFreqBin = this.project.waveform.fftSampleRate ? this.project.waveform.fftSampleRate / 2 : 22050; // Nyquist
+        const numBins = currentSpec.length;
+        const hzPerBin = maxFreqBin / numBins;
+
+        const bands = clip.bands || [];
+        for (let i = 0; i < (clip.bandCount || 1); i++) {
+            const band = bands[i];
+            if (!band) continue;
+
+            const minFreq = band.minFreq || 0;
+            const maxFreq = band.maxFreq || 20000;
+            const startBin = Math.floor(minFreq / hzPerBin);
+            const endBin = Math.min(numBins - 1, Math.ceil(maxFreq / hzPerBin));
+
+            let sum = 0;
+            let count = 0;
+            for (let b = startBin; b <= endBin; b++) {
+                sum += currentSpec[b];
+                count++;
+            }
+            let avgVol = count > 0 ? (sum / count) : 0;
+
+            const scale = band.maxScale || 1.0;
+            const cutOff = band.minCutoff || 0;
+
+            // Raw STFT magnitudes vary. This base multiplier assumes a reasonably normalized signal.
+            avgVol = avgVol * scale * 5.0;
+
+            if (avgVol < cutOff) avgVol = 0;
+
+            if (clip.decay && clip.decay > 0) {
+                const lookbackMs = 500;
+                const framesToLookBack = Math.floor((lookbackMs / 1000) * pointsPerSecond);
+                let currentPeak = avgVol;
+
+                for (let prev = 1; prev <= framesToLookBack; prev++) {
+                    const pastIndex = index - prev;
+                    if (pastIndex >= 0 && spec[pastIndex]) {
+                        let pSum = 0;
+                        for (let b = startBin; b <= endBin; b++) {
+                            pSum += spec[pastIndex][b];
+                        }
+                        let pVol = (pSum / count) * scale * 5.0;
+                        if (pVol < cutOff) pVol = 0;
+
+                        // Decay ranges typically 0 to 1. A decay of 0.1 means it loses 10% per frame.
+                        const decayFactor = Math.pow(1 - clip.decay, prev);
+                        const decayedPastVol = pVol * decayFactor;
+                        if (decayedPastVol > currentPeak) {
+                            currentPeak = decayedPastVol;
+                        }
+                    }
+                }
+                avgVol = currentPeak;
+            } else if (clip.peakHold) {
+                const framesToLookBack = Math.floor(2.0 * pointsPerSecond);
+                let highest = avgVol;
+                for (let prev = 1; prev <= framesToLookBack; prev++) {
+                    const pastIndex = index - prev;
+                    if (pastIndex >= 0 && spec[pastIndex]) {
+                        let pSum = 0;
+                        for (let b = startBin; b <= endBin; b++) {
+                            pSum += spec[pastIndex][b];
+                        }
+                        let pVol = (pSum / count) * scale * 5.0;
+                        if (pVol < cutOff) pVol = 0;
+                        if (pVol > highest) highest = pVol;
+                    }
+                }
+                avgVol = highest;
+            }
+
+            let intensity = Math.min(1.0, Math.max(0, avgVol));
+
+            if (band.imageId && this.project.assets[band.imageId]) {
+                const asset = this.project.assets[band.imageId];
+                if (asset.frames && asset.frames.length > 0) {
+                    const imageData = asset.frames[0];
+                    const r_idx = Math.floor((row / gridSize.rows) * imageData.height);
+                    const c_idx = Math.floor((col / gridSize.cols) * imageData.width);
+                    const safeR = Math.max(0, Math.min(r_idx, imageData.height - 1));
+                    const safeC = Math.max(0, Math.min(c_idx, imageData.width - 1));
+
+                    const pixIdx = (safeR * imageData.width + safeC) * 4;
+                    const rCol = imageData.data[pixIdx];
+                    const gCol = imageData.data[pixIdx + 1];
+                    const bCol = imageData.data[pixIdx + 2];
+                    const aCol = imageData.data[pixIdx + 3];
+
+                    const luminance = (0.299 * rCol + 0.587 * gCol + 0.114 * bCol) * (aCol / 255);
+                    const pixelSensitivity = luminance / 255;
+
+                    intensity = intensity * pixelSensitivity;
+                }
+            }
+
+            if (intensity > 0) {
+                const targets = this.resolveTargetChannels(clip);
+                this.applyToChannels(targets, Math.floor(255 * intensity), frame);
+            }
         }
     }
 

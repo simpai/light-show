@@ -1,9 +1,11 @@
+import { FFT } from './FFT.js';
+
 export class AudioWaveformManager {
     /**
      * Decode audio file and generate waveform peaks.
      * @param {File} file The audio file to process.
      * @param {number} pointsPerSecond Resolution of the waveform.
-     * @returns {Promise<{peaks: number[], duration: number}>}
+     * @returns {Promise<{peaks: number[], duration: number, spectrogram: Float32Array[], fftSampleRate: number, fftSize: number}>}
      */
     static async generateWaveform(file, pointsPerSecond = 20) {
         return new Promise((resolve, reject) => {
@@ -21,21 +23,53 @@ export class AudioWaveformManager {
 
                     const leftChannel = audioBuffer.getChannelData(0);
                     const peaks = new Float32Array(totalPoints);
+                    // Create spectrogram storage. 
+                    // Let's use an FFT size of 4096 samples 
+                    const fftSize = 4096;
+                    const spectrogram = [];
 
                     for (let i = 0; i < totalPoints; i++) {
                         const start = i * samplesPerPoint;
                         const end = start + samplesPerPoint;
+
+                        // Waveform Peak
                         let max = 0;
                         for (let j = start; j < end; j++) {
                             const val = Math.abs(leftChannel[j]);
                             if (val > max) max = val;
                         }
                         peaks[i] = max;
+
+                        // Spectrogram Data (STFT)
+                        // Take fftSize chunk centered on this point (or starting from this point)
+                        const stftStart = Math.min(Math.max(0, start + Math.floor(samplesPerPoint / 2) - fftSize / 2), leftChannel.length - fftSize);
+                        let cChunk;
+                        if (stftStart >= 0) {
+                            cChunk = leftChannel.slice(stftStart, stftStart + fftSize);
+                        } else {
+                            cChunk = new Float32Array(fftSize);
+                            cChunk.set(leftChannel.slice(0, fftSize));
+                        }
+
+                        if (cChunk.length === fftSize) {
+                            const windowed = FFT.applyWindow(cChunk);
+                            const imag = new Float32Array(fftSize);
+                            FFT.transform(windowed, imag);
+                            const magnitudes = FFT.getMagnitudes(windowed, imag);
+
+                            // Keep in memory
+                            spectrogram[i] = magnitudes;
+                        } else {
+                            spectrogram[i] = new Float32Array(fftSize / 2);
+                        }
                     }
 
                     resolve({
                         peaks: Array.from(peaks),
-                        duration: duration * 1000 // Convert to ms
+                        duration: duration * 1000, // Convert to ms
+                        spectrogram: spectrogram,
+                        fftSampleRate: sampleRate,
+                        fftSize: fftSize
                     });
                 } catch (err) {
                     reject(err);

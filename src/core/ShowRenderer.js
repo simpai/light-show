@@ -102,8 +102,11 @@ export class ShowRenderer {
         const centerOffsetRow = Math.floor((gridRows - imgH) / 2);
 
         // Map grid position to image pixel (1:1) with offset
-        let imgCol = gridCol - centerOffsetCol + Math.round(offsetX);
-        let imgRow = gridRow - centerOffsetRow + Math.round(offsetY);
+        // Subtracting offset ensures:
+        // -X moves Left, +X moves Right
+        // -Y moves Up, +Y moves Down
+        let imgCol = gridCol - centerOffsetCol - Math.round(offsetX);
+        let imgRow = gridRow - centerOffsetRow - Math.round(offsetY);
 
         // Tiling: wrap around using modulo
         imgCol = ((imgCol % imgW) + imgW) % imgW;
@@ -980,7 +983,7 @@ export class ShowRenderer {
             const c = col !== null ? col : 0;
             const gs = gridSize !== null ? gridSize : { rows: 1, cols: 1 };
             // GIFs bypass ramping/fade calculations and use full intensity
-            this.renderPatternForPosition(clip, clipTime, 1.0, frame, r, c, gs, layer);
+            this.renderPatternForPosition(clip, clipTime, 1.0, frame, r, c, gs, layer, globalTimeMs);
         } else if (clip.type === 'eq') {
             const r = row !== null ? row : 0;
             const c = col !== null ? col : 0;
@@ -997,9 +1000,12 @@ export class ShowRenderer {
         const steps = spec.length;
         if (steps === 0) return;
 
+        const updateInterval = clip.updateInterval || 20;
+        const effectiveTimeMs = Math.floor(timeMs / updateInterval) * updateInterval;
+
         const audioDuration = this.project.waveform.duration || this.project.duration;
         const pointsPerSecond = steps / (audioDuration / 1000);
-        const index = Math.min(steps - 1, Math.max(0, Math.floor((timeMs / 1000) * pointsPerSecond)));
+        const index = Math.min(steps - 1, Math.max(0, Math.floor((effectiveTimeMs / 1000) * pointsPerSecond)));
 
         const currentSpec = spec[index];
         if (!currentSpec) return;
@@ -1179,7 +1185,7 @@ export class ShowRenderer {
     /**
      * Render pattern for a specific grid position
      */
-    renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize, layer) {
+    renderPatternForPosition(clip, clipTime, intensity, frame, row, col, gridSize, layer, globalTimeMs = null) {
         if (!clip.assetId || !this.project?.assets[clip.assetId]) return;
 
         const asset = this.project.assets[clip.assetId];
@@ -1191,8 +1197,9 @@ export class ShowRenderer {
         const rawFrameIndex = Math.floor(clipTime / frameDuration);
         const frameIndex = (rawFrameIndex < 0) ? 0 : (rawFrameIndex % assetFrameCount);
 
-        // Get animated offset for current clip time
-        const offset = this.getAnimatedOffset(clip, clipTime);
+        // Get animated offset for current clip time uniformly across the grid
+        const baseClipTime = globalTimeMs !== null ? (globalTimeMs - clip.startTime) : clipTime;
+        const offset = this.getAnimatedOffset(clip, baseClipTime);
 
         // --- Transition blending logic ---
         const transType = clip.transitionType || 'none';

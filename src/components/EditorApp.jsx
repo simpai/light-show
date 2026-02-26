@@ -1155,7 +1155,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         bandCount: 1,
                         bands: [{ minFreq: 20, maxFreq: 20000, maxScale: 1.0, minCutoff: 0, imageId: null }],
                         peakHold: false,
-                        decay: 0.1
+                        decay: 0.1,
+                        updateInterval: 20
                     })
                 };
 

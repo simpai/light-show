@@ -125,6 +125,7 @@ export class ProjectState {
                 bands: clipConf.bands || [{ minFreq: 20, maxFreq: 20000, maxScale: 1.0, minCutoff: 0, imageId: null }],
                 peakHold: clipConf.peakHold || false,
                 decay: clipConf.decay !== undefined ? clipConf.decay : 0.1,
+                updateInterval: clipConf.updateInterval !== undefined ? clipConf.updateInterval : 20,
                 ...clipConf
             };
             layer.clips.push(newClip);

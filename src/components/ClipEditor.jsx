@@ -154,15 +154,13 @@ const CustomNumberInput = ({ value, onChange, label, step = 1, min = null, max =
 };
 
 export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}, lightGroups = {}, carGroups = [], allCarsThumbnail = null }) {
-    if (clips.length === 0) return <div className="p-4 text-gray-500">No clips selected</div>;
-
     const isMulti = clips.length > 1;
     const firstClip = clips[0];
-    const allSameType = clips.every(c => c.type === firstClip.type);
+    const allSameType = clips.length > 0 ? clips.every(c => c.type === firstClip.type) : true;
 
     // Derived clip that represents the shared state
     const mergedClip = React.useMemo(() => {
-        if (!isMulti) return firstClip;
+        if (!isMulti || clips.length === 0) return firstClip || {};
 
         const merged = { ...firstClip };
         const fields = Object.keys(firstClip);
@@ -175,7 +173,11 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
             }
         });
         return merged;
-    }, [clips]);
+    }, [clips, isMulti, firstClip]);
+
+    const importInputRef = React.useRef(null);
+
+    if (clips.length === 0) return <div className="p-4 text-gray-500">No clips selected</div>;
 
     if (!allSameType) {
         return (
@@ -258,7 +260,6 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
         };
 
     const clip = mergedClip;
-    const importInputRef = React.useRef(null);
 
     const handleExportClip = () => {
         const exportData = { ...firstClip };
@@ -432,6 +433,56 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             ))}
                         </select>
                     </div>
+                    {(() => {
+                        const totalFrames = Math.floor((clip.duration || 0) / 20);
+                        if (totalFrames <= 0) return null;
+                        const startX = clip.startOffsetX ?? clip.offsetX ?? 0;
+                        const startY = clip.startOffsetY ?? clip.offsetY ?? 0;
+                        const endX = clip.endOffsetX ?? startX;
+                        const endY = clip.endOffsetY ?? startY;
+
+                        // Find nearest end value that gives integer px/frame
+                        const findBestEnd = (start, end) => {
+                            const delta = end - start;
+                            if (delta === 0) return start;
+                            const sign = delta > 0 ? 1 : -1;
+                            const absDelta = Math.abs(delta);
+                            // Collect all divisors of totalFrames + multiples near absDelta
+                            const candidates = [];
+                            for (let d = 1; d * d <= totalFrames; d++) {
+                                if (totalFrames % d === 0) {
+                                    candidates.push(d);
+                                    candidates.push(totalFrames / d);
+                                }
+                            }
+                            // Also add multiples of totalFrames near the target
+                            const nearMult = Math.round(absDelta / totalFrames);
+                            for (let m = Math.max(1, nearMult - 2); m <= nearMult + 2; m++) {
+                                candidates.push(m * totalFrames);
+                            }
+                            // Find closest candidate to absDelta
+                            let best = candidates[0];
+                            for (const c of candidates) {
+                                if (Math.abs(c - absDelta) < Math.abs(best - absDelta)) best = c;
+                            }
+                            return start + best * sign;
+                        };
+
+                        const recEndX = findBestEnd(startX, endX);
+                        const recEndY = findBestEnd(startY, endY);
+                        const recStepX = totalFrames > 0 ? (recEndX - startX) / totalFrames : 0;
+                        const recStepY = totalFrames > 0 ? (recEndY - startY) / totalFrames : 0;
+                        const curStepX = totalFrames > 0 ? (endX - startX) / totalFrames : 0;
+                        const curStepY = totalFrames > 0 ? (endY - startY) / totalFrames : 0;
+
+                        return (
+                            <div style={{ fontSize: '9px', color: '#f87171', marginTop: '4px', lineHeight: '1.5' }}>
+                                {totalFrames}f | X:{curStepX.toFixed(2)}px/f Y:{curStepY.toFixed(2)}px/f
+                                <br />
+                                → End X:{recEndX} ({recStepX}px/f) Y:{recEndY} ({recStepY}px/f)
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
@@ -828,14 +879,29 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             <label htmlFor="peak-hold-toggle" className="section-title-inline">Peak Hold</label>
                         </div>
                     </div>
-                    <div className="form-group">
-                        <label className="compact-label" style={{ minWidth: '80px' }}>Decay Rate</label>
-                        <CustomNumberInput
-                            value={clip.decay === '__mixed__' ? '' : (clip.decay !== undefined ? clip.decay : 0.1)}
-                            step={0.01} min={0} max={1.0}
-                            onChange={val => handleChange('decay', val)}
-                            className="timing-input"
-                        />
+                    <div className="form-group grid-2">
+                        <div>
+                            <label className="compact-label" style={{ minWidth: '80px', display: 'block', marginBottom: '4px' }}>Decay Rate</label>
+                            <CustomNumberInput
+                                value={clip.decay === '__mixed__' ? '' : (clip.decay !== undefined ? clip.decay : 0.1)}
+                                step={0.01} min={0} max={1.0}
+                                onChange={val => handleChange('decay', val)}
+                                className="timing-input"
+                            />
+                        </div>
+                        <div>
+                            <label className="compact-label" style={{ minWidth: '80px', display: 'block', marginBottom: '4px' }}>Update (ms)</label>
+                            <select
+                                value={clip.updateInterval === '__mixed__' ? '' : (clip.updateInterval || 20)}
+                                onChange={e => handleChange('updateInterval', parseInt(e.target.value))}
+                                className="select-input"
+                                style={{ width: '100%' }}
+                            >
+                                {clip.updateInterval === '__mixed__' && <option value="">(Mixed)</option>}
+                                <option value={20}>20ms (50fps)</option>
+                                <option value={40}>40ms (25fps)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             )}
@@ -934,9 +1000,39 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     <div className="section-container content-box">
                         <label className="section-title">Preview</label>
                         {clip.assetId && assets[clip.assetId] ? (
-                            <GifPreview asset={assets[clip.assetId]} fps={clip.fps || 15} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
+                                <GifPreview asset={assets[clip.assetId]} fps={clip.fps || 15} />
+                                <label className="action-btn" style={{ cursor: 'pointer', margin: 0, padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            const event = new CustomEvent('imageUpload', {
+                                                detail: { clipId: clip.id, file: e.target.files[0] }
+                                            });
+                                            window.dispatchEvent(event);
+                                        }
+                                        e.target.value = '';
+                                    }} />
+                                    <Upload size={14} />
+                                    Change Image
+                                </label>
+                            </div>
                         ) : (
-                            <div className="text-gray-500 text-sm p-2">No asset loaded</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
+                                <div className="text-gray-500 text-sm p-2">No asset loaded</div>
+                                <label className="action-btn" style={{ cursor: 'pointer', margin: 0, padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            const event = new CustomEvent('imageUpload', {
+                                                detail: { clipId: clip.id, file: e.target.files[0] }
+                                            });
+                                            window.dispatchEvent(event);
+                                        }
+                                        e.target.value = '';
+                                    }} />
+                                    <Upload size={14} />
+                                    Upload Image
+                                </label>
+                            </div>
                         )}
                     </div>
                 )

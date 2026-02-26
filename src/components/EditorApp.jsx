@@ -1136,9 +1136,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     type: type, // 'effect' or 'gif'
                     effectType: type === 'effect' ? 'flash' : 'image',
                     channels: [],
-                    targetLightGroups: (type === 'gif' && layer?.lightMapping)
-                        ? Object.values(layer.lightMapping).filter(Boolean)
-                        : [],
+                    targetLightGroups: [],
                     fadeIn: 0,
                     fadeOut: 0,
                     pattern: 'uniform',

@@ -907,7 +907,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
             )}
 
             {
-                clip.type !== 'gif' && (
+                (
                     <div className="section-container content-box">
                         <label className="section-title">Target Light Groups</label>
                         <div className="channels-list">

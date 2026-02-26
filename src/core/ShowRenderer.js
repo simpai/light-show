@@ -1269,29 +1269,10 @@ export class ShowRenderer {
             [r, g, b, a] = this.getImagePixel1to1(imageData, row, col, gridSize, offset.x, offset.y);
         }
 
-        if (layer && layer.lightMapping && this.project.lightGroups) {
-            const mapping = layer.lightMapping;
-            const groups = this.project.lightGroups;
-            const getGroupChs = (mappingKey) => {
-                const groupName = mapping[mappingKey];
-                if (!groupName) return [];
-                const group = groups[groupName];
-                if (!group) return [];
-                return Array.isArray(group) ? group : (group.channels || []);
-            };
-            const chsR = getGroupChs('R');
-            const chsG = getGroupChs('G');
-            const chsB = getGroupChs('B');
-            const mult = (a / 255) * intensity;
-            this.applyToChannels(chsR, Math.floor(r * mult), frame);
-            this.applyToChannels(chsG, Math.floor(g * mult), frame);
-            this.applyToChannels(chsB, Math.floor(b * mult), frame);
-        } else {
-            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) * (a / 255);
-            const val = Math.floor(luminance * intensity);
-            const targets = this.resolveTargetChannels(clip);
-            this.applyToChannels(targets, val, frame);
-        }
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) * (a / 255);
+        const val = Math.floor(luminance * intensity);
+        const targets = this.resolveTargetChannels(clip);
+        this.applyToChannels(targets, val, frame);
     }
 
     applyToChannels(channels, value, frame) {

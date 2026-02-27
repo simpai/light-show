@@ -114,10 +114,48 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         const handleWheelManual = (e) => {
             if (e.ctrlKey) {
                 e.preventDefault();
+                const container = e.currentTarget; // ruler or lanes
+                if (!container) return;
+
+                const rect = container.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+
+                // Track header width is fixed at 180px in Timeline
+                const headerWidth = 180;
+                let scrollOffset = container.scrollLeft;
+                let scrollAreaX = mouseX;
+
+                // Adjust if interacting with lanes which has a sticky header
+                if (container === lanesScrollRef.current) {
+                    if (mouseX < headerWidth) return; // Ignore zoom over header
+                    scrollAreaX = mouseX - headerWidth;
+                }
+
+                // Calculate time at mouse cursor before zoom
+                const timeAtCursor = (scrollOffset + scrollAreaX) / zoom;
+
                 // Zoom logic
                 const zoomAmount = e.deltaY > 0 ? 0.9 : 1.1;
                 const newZoom = Math.max(10, Math.min(200, zoom * zoomAmount));
-                if (onZoomChange) onZoomChange(newZoom);
+
+                if (newZoom !== zoom) {
+                    if (onZoomChange) {
+                        onZoomChange(newZoom);
+
+                        // We need to wait for the DOM to update with the new width
+                        // before setting the scroll position to keep the cursor pinned.
+                        // React state updates will trigger re-render of child width.
+                        setTimeout(() => {
+                            if (lanesScrollRef.current) {
+                                lanesScrollRef.current.scrollLeft = (timeAtCursor * newZoom) - scrollAreaX;
+                            }
+                            if (rulerScrollRef.current) {
+                                rulerScrollRef.current.scrollLeft = (timeAtCursor * newZoom) - scrollAreaX;
+                            }
+                        }, 0);
+                    }
+                }
+
             } else if (e.shiftKey) {
                 e.preventDefault();
                 // Horizontal scroll logic
@@ -409,8 +447,20 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
         setDraggingClips(draggingClipsWithMode);
         setDragOffset(xInClipMs);
 
+        const initialClientX = e.clientX;
+        const dragThresholdPx = 5;
+        let isDraggingStarted = false;
+
         const handleMouseMove = (moveEvent) => {
             if (!lanesScrollRef.current) return;
+
+            // Check threshold before starting drag
+            if (!isDraggingStarted) {
+                const moveDist = Math.abs(moveEvent.clientX - initialClientX);
+                if (moveDist < dragThresholdPx) return;
+                isDraggingStarted = true;
+            }
+
             const laneRect = lanesScrollRef.current.getBoundingClientRect();
             const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
             const currentTimeMs = (xInLanePx / pixelsPerSecond) * 1000;
@@ -1079,7 +1129,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     position: absolute;
                     top: 0;
                     bottom: 0;
-                    width: 8px;
+                    width: 4px;
                     background: rgba(34, 197, 94, 0.4);
                     cursor: ew-resize !important;
                     display: none;
@@ -1089,7 +1139,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 .clip:hover .resize-handle { display: block; }
                 .resize-handle:hover { 
                     background: #22c55e !important;
-                    width: 10px;
+                    width: 5px;
                     box-shadow: 0 0 8px rgba(34, 197, 94, 1);
                 }
                 .track-lanes canvas {

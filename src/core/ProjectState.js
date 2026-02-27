@@ -8,11 +8,6 @@ export class ProjectState {
                 name: 'Main Track',
                 muted: false,
                 clips: [],
-                lightMapping: {
-                    R: 'Red',
-                    G: 'MainWhite',
-                    B: 'Yellow'
-                },
                 isMidi: false,
                 midiData: null,
                 midiMappings: {}
@@ -51,11 +46,6 @@ export class ProjectState {
             name,
             muted: false,
             clips: [],
-            lightMapping: {
-                R: 'Red',
-                G: 'MainWhite',
-                B: 'Yellow'
-            },
             isMidi: false,
             midiData: null,
             midiMappings: {}
@@ -79,11 +69,6 @@ export class ProjectState {
                 startOffset: 0,
                 duration: maxTime
             }],
-            lightMapping: {
-                R: 'Red',
-                G: 'MainWhite',
-                B: 'Yellow'
-            },
             isMidi: true,
             midiData: midiData,
             midiMappings: {},
@@ -192,15 +177,7 @@ export class ProjectState {
         const project = new ProjectState();
         project.layers = JSON.parse(JSON.stringify(data.layers)); // Deep copy layers/clips
 
-        // Migration: Ensure all layers have default light mapping
         project.layers.forEach(layer => {
-            if (!layer.lightMapping) {
-                layer.lightMapping = {
-                    R: 'Red',
-                    G: 'MainWhite',
-                    B: 'Yellow'
-                };
-            }
             if (layer.isMidi === undefined) {
                 layer.isMidi = false;
                 layer.midiData = null;

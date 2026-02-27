@@ -2893,17 +2893,6 @@ function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carG
 
     if (!layer) return null;
 
-    const handleUpdateMapping = (color, groupName) => {
-        const updatedLayer = {
-            ...layer,
-            lightMapping: {
-                ...layer.lightMapping,
-                [color]: groupName
-            }
-        };
-        onUpdate(updatedLayer);
-    };
-
     return (
         <div className="track-properties" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div className="form-group mb-6">
@@ -2915,38 +2904,6 @@ function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carG
                     placeholder="Enter track name..."
                 />
             </div>
-
-            {(!layer.isMidi) && (
-                <div className="mapping-section">
-                    <h4>RGB Pixel Mapping</h4>
-                    <p className="section-desc">Map the Red, Green, and Blue channels of your images/GIFs to light groups.</p>
-                    <div className="mapping-grid">
-                        {['R', 'G', 'B'].map(color => {
-                            const labels = { R: 'Red Pixels', G: 'Green Pixels', B: 'Blue Pixels' };
-                            const dotColors = { R: '#ef4444', G: '#10b981', B: '#3b82f6' };
-                            return (
-                                <div key={color} className="mapping-item">
-                                    <div className="mapping-label">
-                                        <div className="channel-indicator" style={{ backgroundColor: dotColors[color] }}></div>
-                                        <span>{labels[color]}</span>
-                                    </div>
-                                    <div className="mapping-select-wrapper">
-                                        <select
-                                            value={layer.lightMapping?.[color] || ''}
-                                            onChange={(e) => handleUpdateMapping(color, e.target.value)}
-                                        >
-                                            <option value="">(Not Mapped)</option>
-                                            {Object.keys(lightGroups).map(groupName => (
-                                                <option key={groupName} value={groupName}>{groupName}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
 
             {layer.isMidi && layer.midiData && (() => {
                 const handleExportMidiMapping = () => {

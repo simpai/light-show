@@ -1269,7 +1269,9 @@ export class ShowRenderer {
             [r, g, b, a] = this.getImagePixel1to1(imageData, row, col, gridSize, offset.x, offset.y);
         }
 
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) * (a / 255);
+        let baseLuminance = (0.299 * r + 0.587 * g + 0.114 * b);
+        if (clip.invertImage) baseLuminance = 255 - baseLuminance;
+        const luminance = baseLuminance * (a / 255);
         const val = Math.floor(luminance * intensity);
         const targets = this.resolveTargetChannels(clip);
         this.applyToChannels(targets, val, frame);

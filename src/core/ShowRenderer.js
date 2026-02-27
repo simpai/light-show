@@ -87,11 +87,11 @@ export class ShowRenderer {
     }
 
     /**
-     * Get pixel from image using 1:1 mapping, centered on the grid, with tiling.
+     * Get pixel from image using 1:1 mapping, centered on the grid, with optional tiling.
      * Each grid cell maps to exactly one image pixel (no stretch/resize).
-     * Image is centered on the grid; out-of-bounds pixels wrap (tile).
+     * Image is centered on the grid; out-of-bounds pixels wrap (tile) by default or return transparent if disabled.
      */
-    getImagePixel1to1(imageData, gridRow, gridCol, gridSize, offsetX = 0, offsetY = 0) {
+    getImagePixel1to1(imageData, gridRow, gridCol, gridSize, offsetX = 0, offsetY = 0, disableTiling = false) {
         const imgW = imageData.width;
         const imgH = imageData.height;
         const gridRows = gridSize.rows;
@@ -102,15 +102,18 @@ export class ShowRenderer {
         const centerOffsetRow = Math.floor((gridRows - imgH) / 2);
 
         // Map grid position to image pixel (1:1) with offset
-        // Subtracting offset ensures:
-        // -X moves Left, +X moves Right
-        // -Y moves Up, +Y moves Down
         let imgCol = gridCol - centerOffsetCol - Math.round(offsetX);
         let imgRow = gridRow - centerOffsetRow - Math.round(offsetY);
 
-        // Tiling: wrap around using modulo
-        imgCol = ((imgCol % imgW) + imgW) % imgW;
-        imgRow = ((imgRow % imgH) + imgH) % imgH;
+        if (disableTiling) {
+            if (imgCol < 0 || imgCol >= imgW || imgRow < 0 || imgRow >= imgH) {
+                return [0, 0, 0, 0];
+            }
+        } else {
+            // Tiling: wrap around using modulo
+            imgCol = ((imgCol % imgW) + imgW) % imgW;
+            imgRow = ((imgRow % imgH) + imgH) % imgH;
+        }
 
         const pixIdx = (imgRow * imgW + imgCol) * 4;
         return [
@@ -1093,8 +1096,9 @@ export class ShowRenderer {
                 const targetRow = row !== null ? row : 0;
                 const targetCol = col !== null ? col : 0;
                 const gs = { rows: gridSize?.rows || 10, cols: gridSize?.cols || 10 };
+                const disableTiling = clip.disableTiling || false;
 
-                const [rCol, gCol, bCol, aCol] = this.getImagePixel1to1(imageData, targetRow, targetCol, gs, 0, 0);
+                const [rCol, gCol, bCol, aCol] = this.getImagePixel1to1(imageData, targetRow, targetCol, gs, 0, 0, disableTiling);
 
                 const luminance = (0.299 * rCol + 0.587 * gCol + 0.114 * bCol) * (aCol / 255);
                 pixelSensitivity = luminance / 255;
@@ -1208,6 +1212,7 @@ export class ShowRenderer {
         const transitionStart = frameDuration * (1.0 - transOverlap);
 
         let r, g, b, a;
+        const disableTiling = clip.disableTiling || false;
 
         if (transType !== 'none' && timeInFrame >= transitionStart && transOverlap > 0) {
             const absFrameIndex = rawFrameIndex < 0 ? 0 : rawFrameIndex;
@@ -1219,7 +1224,7 @@ export class ShowRenderer {
 
             if (isLastPlayableFrame) {
                 const currentImageData = asset.frames[frameIndex];
-                [r, g, b, a] = this.getImagePixel1to1(currentImageData, row, col, gridSize, offset.x, offset.y);
+                [r, g, b, a] = this.getImagePixel1to1(currentImageData, row, col, gridSize, offset.x, offset.y, disableTiling);
             } else {
                 const nextFrameIndex = nextAbsFrameIndex % assetFrameCount;
                 const currentImageData = asset.frames[frameIndex];
@@ -1227,9 +1232,10 @@ export class ShowRenderer {
                 const transitionDuration = frameDuration * transOverlap;
                 const progress = Math.min(1.0, (timeInFrame - transitionStart) / transitionDuration);
 
-                const [cr, cg, cb, ca] = this.getImagePixel1to1(currentImageData, row, col, gridSize, offset.x, offset.y);
-                const [nr, ng, nb, na] = this.getImagePixel1to1(nextImageData, row, col, gridSize, offset.x, offset.y);
+                const [cr, cg, cb, ca] = this.getImagePixel1to1(currentImageData, row, col, gridSize, offset.x, offset.y, disableTiling);
+                const [nr, ng, nb, na] = this.getImagePixel1to1(nextImageData, row, col, gridSize, offset.x, offset.y, disableTiling);
 
+                // ... rest of transition logic ...
                 if (transType === 'dissolve') {
                     const temporalStep = Math.floor(clipTime / 20);
                     let seed = row * 374761 + col * 668265 + rawFrameIndex * 93481 + temporalStep * 27183;
@@ -1252,21 +1258,21 @@ export class ShowRenderer {
                     const shiftAmount = Math.floor(progress * totalCols);
                     if (transType === 'push-right') {
                         const srcCol = col - shiftAmount;
-                        if (srcCol < 0) [r, g, b, a] = this.getImagePixel1to1(nextImageData, row, totalCols + srcCol, gridSize, offset.x, offset.y);
-                        else[r, g, b, a] = this.getImagePixel1to1(currentImageData, row, srcCol, gridSize, offset.x, offset.y);
+                        if (srcCol < 0) [r, g, b, a] = this.getImagePixel1to1(nextImageData, row, totalCols + srcCol, gridSize, offset.x, offset.y, disableTiling);
+                        else[r, g, b, a] = this.getImagePixel1to1(currentImageData, row, srcCol, gridSize, offset.x, offset.y, disableTiling);
                     } else {
                         const srcCol = col + shiftAmount;
-                        if (srcCol >= totalCols) [r, g, b, a] = this.getImagePixel1to1(nextImageData, row, srcCol - totalCols, gridSize, offset.x, offset.y);
-                        else[r, g, b, a] = this.getImagePixel1to1(currentImageData, row, srcCol, gridSize, offset.x, offset.y);
+                        if (srcCol >= totalCols) [r, g, b, a] = this.getImagePixel1to1(nextImageData, row, srcCol - totalCols, gridSize, offset.x, offset.y, disableTiling);
+                        else[r, g, b, a] = this.getImagePixel1to1(currentImageData, row, srcCol, gridSize, offset.x, offset.y, disableTiling);
                     }
                 } else {
                     r = cr; g = cg; b = cb; a = ca;
                 }
             }
         } else {
-            // No transition — use current frame with 1:1 centered tiling
+            // No transition — use current frame
             const imageData = asset.frames[frameIndex];
-            [r, g, b, a] = this.getImagePixel1to1(imageData, row, col, gridSize, offset.x, offset.y);
+            [r, g, b, a] = this.getImagePixel1to1(imageData, row, col, gridSize, offset.x, offset.y, disableTiling);
         }
 
         let baseLuminance = (0.299 * r + 0.587 * g + 0.114 * b);

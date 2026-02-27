@@ -110,6 +110,13 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
     const beatMarkers = analysis?.beat_times || []; // Still useful for snapping if needed, but not drawing red bars
     const onsetMarkers = analysis?.onset_times || [];
 
+    const zoomRef = useRef(zoom);
+    const targetScrollLeftRef = useRef(null);
+
+    useEffect(() => {
+        zoomRef.current = zoom;
+    }, [zoom]);
+
     useEffect(() => {
         const handleWheelManual = (e) => {
             if (e.ctrlKey) {
@@ -122,7 +129,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
 
                 // Track header width is fixed at 180px in Timeline
                 const headerWidth = 180;
-                let scrollOffset = container.scrollLeft;
+                let scrollOffset = targetScrollLeftRef.current !== null ? targetScrollLeftRef.current : container.scrollLeft;
                 let scrollAreaX = mouseX;
 
                 // Adjust if interacting with lanes which has a sticky header
@@ -131,27 +138,33 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                     scrollAreaX = mouseX - headerWidth;
                 }
 
+                const currentZoom = zoomRef.current;
                 // Calculate time at mouse cursor before zoom
-                const timeAtCursor = (scrollOffset + scrollAreaX) / zoom;
+                const timeAtCursor = (scrollOffset + scrollAreaX) / currentZoom;
 
                 // Zoom logic
-                const zoomAmount = e.deltaY > 0 ? 0.9 : 1.1;
-                const newZoom = Math.max(10, Math.min(200, zoom * zoomAmount));
+                const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1; // Reduced sensitivity
+                const newZoom = Math.max(10, Math.min(200, currentZoom * zoomFactor));
 
-                if (newZoom !== zoom) {
+                if (newZoom !== currentZoom) {
+                    zoomRef.current = newZoom;
                     if (onZoomChange) {
                         onZoomChange(newZoom);
+
+                        const newScrollLeft = (timeAtCursor * newZoom) - scrollAreaX;
+                        targetScrollLeftRef.current = newScrollLeft;
 
                         // We need to wait for the DOM to update with the new width
                         // before setting the scroll position to keep the cursor pinned.
                         // React state updates will trigger re-render of child width.
                         setTimeout(() => {
                             if (lanesScrollRef.current) {
-                                lanesScrollRef.current.scrollLeft = (timeAtCursor * newZoom) - scrollAreaX;
+                                lanesScrollRef.current.scrollLeft = newScrollLeft;
                             }
                             if (rulerScrollRef.current) {
-                                rulerScrollRef.current.scrollLeft = (timeAtCursor * newZoom) - scrollAreaX;
+                                rulerScrollRef.current.scrollLeft = newScrollLeft;
                             }
+                            targetScrollLeftRef.current = null;
                         }, 0);
                     }
                 }

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2, ChevronUp, ChevronDown, Activity } from 'lucide-react';
+import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2, ChevronUp, ChevronDown, Activity, Volume2, VolumeX } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -88,6 +88,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [zoom, setZoom] = useState(() => parseFloat(localStorage.getItem('ls_editor_zoom')) || 50);
     const [snapMode, setSnapMode] = useState(() => localStorage.getItem('ls_editor_snap') || '1/4');
     const [bpm, setBpm] = useState(() => parseFloat(localStorage.getItem('ls_editor_bpm')) || 120);
+    const [volume, setVolume] = useState(() => {
+        const stored = localStorage.getItem('ls_editor_volume');
+        return stored !== null ? parseFloat(stored) : 1;
+    });
     const [clipboard, setClipboard] = useState(null);
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
@@ -108,6 +112,13 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     useEffect(() => {
         localStorage.setItem('ls_editor_bpm', bpm);
     }, [bpm]);
+
+    useEffect(() => {
+        localStorage.setItem('ls_editor_volume', volume);
+        if (audioRef.current) {
+            audioRef.current.volume = volume;
+        }
+    }, [volume]);
 
     // Layout system state
     const [layoutData, setLayoutData] = useState(null);
@@ -1154,7 +1165,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                         bands: [{ minFreq: 20, maxFreq: 20000, maxScale: 1.0, minCutoff: 0, imageId: null }],
                         peakHold: false,
                         decay: 0.1,
-                        updateInterval: 20
+                        updateInterval: 40
                     })
                 };
 
@@ -1955,6 +1966,23 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     <button onClick={handleReset} className="btn-icon" title="Reset to Start">
                         <SkipBack size={24} />
                     </button>
+
+                    <div className="volume-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '10px', background: '#222', padding: '2px 8px', borderRadius: '15px', border: '1px solid #333' }}>
+                        <button onClick={() => setVolume(v => v > 0 ? 0 : 1)} className="btn-icon" style={{ padding: '2px', color: volume === 0 ? '#888' : '#e2e8f0' }} title="Mute/Unmute">
+                            {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                        </button>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={volume}
+                            onChange={(e) => setVolume(parseFloat(e.target.value))}
+                            style={{ width: '60px', height: '4px' }}
+                            title="Volume"
+                        />
+                    </div>
+
                     <div className="history-controls" style={{ display: 'flex', gap: '5px', marginLeft: '10px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
                         <button onClick={handleUndo} disabled={history.length === 0} className="btn-icon" title="Undo (Ctrl+Z)">
                             <Undo size={18} />

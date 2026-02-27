@@ -398,10 +398,8 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             }}
                         />
                         <CustomNumberInput
-                            label="Beats/Frm"
+                            label="Beat/Frm"
                             value={clip.beatsPerFrame === '__mixed__' ? '' : (clip.beatsPerFrame || 1)}
-                            step={0.125}
-                            min={0.125}
                             onChange={beatsPerFrame => {
                                 const updatedClip = { ...clip, beatsPerFrame, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
@@ -521,7 +519,29 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
 
             {clip.type === 'gif' && (
                 <div className="section-container">
-                    <label className="section-title">Transition</label>
+                    <label className="section-title">Options</label>
+                    <div className="form-group grid-2">
+                        <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', color: '#a5b4fc' }}>
+                            <input
+                                type="checkbox"
+                                checked={clip.invertImage === '__mixed__' ? false : (clip.invertImage || false)}
+                                ref={el => el && (el.indeterminate = clip.invertImage === '__mixed__')}
+                                onChange={e => handleChange('invertImage', e.target.checked)}
+                            />
+                            Invert Image
+                        </label>
+                        <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', color: '#fcd34d' }}>
+                            <input
+                                type="checkbox"
+                                checked={clip.disableTiling === '__mixed__' ? false : (clip.disableTiling || false)}
+                                ref={el => el && (el.indeterminate = clip.disableTiling === '__mixed__')}
+                                onChange={e => handleChange('disableTiling', e.target.checked)}
+                            />
+                            Disable Tiling
+                        </label>
+                    </div>
+
+                    <label className="section-title" style={{ marginTop: '12px' }}>Transition</label>
                     <div className="form-group">
                         <label className="compact-label" style={{ minWidth: '80px' }}>Type</label>
                         <select
@@ -933,6 +953,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 {clip.updateInterval === '__mixed__' && <option value="">(Mixed)</option>}
                                 <option value={20}>20ms (50fps)</option>
                                 <option value={40}>40ms (25fps)</option>
+                                <option value={80}>80ms (12.5fps)</option>
                             </select>
                         </div>
                     </div>
@@ -1028,25 +1049,6 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                 )
             }
 
-            {
-                clip.type === 'gif' && (
-                    <div className="section-container content-box">
-                        <label className="section-title">Image Settings</label>
-                        <div className="form-group">
-                            <label className="compact-label" style={{ minWidth: '80px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={clip.invertImage === '__mixed__' ? false : (clip.invertImage || false)}
-                                    ref={el => el && (el.indeterminate = clip.invertImage === '__mixed__')}
-                                    onChange={e => handleChange('invertImage', e.target.checked)}
-                                    style={{ marginRight: '6px' }}
-                                />
-                                Invert Image
-                            </label>
-                        </div>
-                    </div>
-                )
-            }
 
             {
                 !isMulti && clip.type === 'gif' && (
@@ -1222,7 +1224,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                     background: #2a2a2a;
                     border: 1px solid #444;
                     border-radius: 6px;
-                    padding: 6px 8px;
+                    padding: 2px 2px;
                     color: white;
                     font-size: 13px;
                     outline: none;

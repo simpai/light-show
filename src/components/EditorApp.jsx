@@ -1936,6 +1936,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 <div className="properties-panel">
                     {(selectedClips.length > 0 || selectedPaletteClip) ? (
                         <ClipEditor
+                            key={selectedPaletteClip ? selectedPaletteClipId : selectedClipIds.join(',')}
                             clips={selectedPaletteClip ? [selectedPaletteClip] : selectedClips}
                             onChange={handleClipUpdate}
                             onDelete={handleDelete}

@@ -106,9 +106,9 @@ export class ShowRenderer {
         let imgRow = gridRow - centerOffsetRow - Math.round(offsetY);
 
         if (disableTiling) {
-            if (imgCol < 0 || imgCol >= imgW || imgRow < 0 || imgRow >= imgH) {
-                return [0, 0, 0, 0];
-            }
+            // Clamp to nearest edge pixel
+            imgCol = Math.max(0, Math.min(imgW - 1, imgCol));
+            imgRow = Math.max(0, Math.min(imgH - 1, imgRow));
         } else {
             // Tiling: wrap around using modulo
             imgCol = ((imgCol % imgW) + imgW) % imgW;

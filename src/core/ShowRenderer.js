@@ -1092,7 +1092,16 @@ export class ShowRenderer {
             let pixelSensitivity = 0;
 
             if (hasImage && this.project.assets[band.imageId].frames?.length > 0) {
-                const imageData = this.project.assets[band.imageId].frames[0];
+                const asset = this.project.assets[band.imageId];
+                const totalFrames = asset.frames.length;
+
+                // Multi-frame: select frame based on volume intensity
+                let frameIndex = 0;
+                if (totalFrames > 1) {
+                    frameIndex = Math.min(totalFrames - 1, Math.floor(intensity * totalFrames));
+                }
+
+                const imageData = asset.frames[frameIndex];
                 const targetRow = row !== null ? row : 0;
                 const targetCol = col !== null ? col : 0;
                 const gs = { rows: gridSize?.rows || 10, cols: gridSize?.cols || 10 };

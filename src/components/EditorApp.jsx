@@ -3329,7 +3329,8 @@ function TrackProperties({ layer, lightGroups, clipboard, onUpdate, assets, carG
 }
 
 function CarGroupManager({ carGroups = [], onUpdate, onSelect }) {
-    const fileInputRef = useRef(null);
+    const appendInputRef = useRef(null);
+    const replaceInputRef = useRef(null);
 
     const handleDelete = (id) => {
         if (confirm('Delete this car group?')) {
@@ -3348,7 +3349,7 @@ function CarGroupManager({ carGroups = [], onUpdate, onSelect }) {
         URL.revokeObjectURL(url);
     };
 
-    const handleImport = (e) => {
+    const handleImport = (e, mode) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -3357,18 +3358,18 @@ function CarGroupManager({ carGroups = [], onUpdate, onSelect }) {
             try {
                 const imported = JSON.parse(event.target.result);
                 if (Array.isArray(imported)) {
-                    // Merge or replace? Let's append with new IDs to avoid collisions
-                    const merged = [...carGroups];
-                    imported.forEach(g => {
-                        if (g.name && g.selection) {
-                            merged.push({
-                                ...g,
-                                id: crypto.randomUUID()
-                            });
-                        }
-                    });
-                    onUpdate(merged);
-                    alert(`Imported ${imported.length} groups`);
+                    const validGroups = imported.filter(g => g.name && g.selection).map(g => ({
+                        ...g,
+                        id: crypto.randomUUID()
+                    }));
+
+                    if (mode === 'replace') {
+                        onUpdate(validGroups);
+                        alert(`Replaced with ${validGroups.length} groups`);
+                    } else {
+                        onUpdate([...carGroups, ...validGroups]);
+                        alert(`Appended ${validGroups.length} groups`);
+                    }
                 }
             } catch (err) {
                 alert('Failed to parse car groups file');
@@ -3381,20 +3382,27 @@ function CarGroupManager({ carGroups = [], onUpdate, onSelect }) {
         <div className="car-group-manager">
             <div className="manager-toolbar mb-4">
                 <button className="btn-tesla-sm" onClick={handleExport}>
-                    <Download size={18} style={{ marginRight: 6 }} /> Export Groups
+                    <Download size={18} style={{ marginRight: 6 }} /> Export
                 </button>
-                <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ marginLeft: 8 }}>
-                    <Upload size={18} style={{ marginRight: 6 }} /> Import Groups
+                <button className="btn-secondary" onClick={() => appendInputRef.current?.click()} style={{ marginLeft: 8 }}>
+                    <Upload size={18} style={{ marginRight: 6 }} /> Import (Append)
+                </button>
+                <button className="btn-secondary" onClick={() => replaceInputRef.current?.click()} style={{ marginLeft: 4, color: '#fbbf24', borderColor: '#fbbf24' }}>
+                    <Upload size={18} style={{ marginRight: 6 }} /> Import (Replace)
                 </button>
                 <input
-                    ref={fileInputRef}
+                    ref={appendInputRef}
                     type="file"
                     accept=".json"
                     style={{ display: 'none' }}
-                    onChange={(e) => {
-                        handleImport(e);
-                        e.target.value = ''; // Reset
-                    }}
+                    onChange={(e) => { handleImport(e, 'append'); e.target.value = ''; }}
+                />
+                <input
+                    ref={replaceInputRef}
+                    type="file"
+                    accept=".json"
+                    style={{ display: 'none' }}
+                    onChange={(e) => { handleImport(e, 'replace'); e.target.value = ''; }}
                 />
             </div>
 

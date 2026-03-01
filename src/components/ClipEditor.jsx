@@ -540,6 +540,26 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             Disable Tiling
                         </label>
                     </div>
+                    <div className="form-group grid-2" style={{ marginTop: '4px' }}>
+                        <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', color: '#86efac' }}>
+                            <input
+                                type="checkbox"
+                                checked={clip.flipHorizontal === '__mixed__' ? false : (clip.flipHorizontal || false)}
+                                ref={el => el && (el.indeterminate = clip.flipHorizontal === '__mixed__')}
+                                onChange={e => handleChange('flipHorizontal', e.target.checked)}
+                            />
+                            Flip H
+                        </label>
+                        <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', color: '#86efac' }}>
+                            <input
+                                type="checkbox"
+                                checked={clip.flipVertical === '__mixed__' ? false : (clip.flipVertical || false)}
+                                ref={el => el && (el.indeterminate = clip.flipVertical === '__mixed__')}
+                                onChange={e => handleChange('flipVertical', e.target.checked)}
+                            />
+                            Flip V
+                        </label>
+                    </div>
 
                     <label className="section-title" style={{ marginTop: '12px' }}>Transition</label>
                     <div className="form-group">
@@ -956,6 +976,15 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 <option value={80}>80ms (12.5fps)</option>
                             </select>
                         </div>
+                    </div>
+                    <div className="form-group" style={{ marginTop: '8px' }}>
+                        <CustomNumberInput
+                            label="Time Offset (ms)"
+                            value={clip.eqTimeOffset === '__mixed__' ? '' : (clip.eqTimeOffset || 0)}
+                            step={10}
+                            onChange={val => handleChange('eqTimeOffset', val)}
+                            className="timing-input"
+                        />
                     </div>
                 </div>
             )}

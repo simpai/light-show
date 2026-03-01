@@ -1445,6 +1445,19 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             const zip = new JSZip();
             let hasFiles = false;
 
+            // Count total cars to process
+            let totalCars = 0;
+            for (let r = 0; r < gridSize.rows; r++) {
+                for (let c = 0; c < gridSize.cols; c++) {
+                    const cell = layoutData?.layout?.[r]?.[c];
+                    if (layoutData && cell && !cell.exists) continue;
+                    totalCars++;
+                }
+            }
+            console.log(`[FSEQ Export] Starting: ${totalCars} cars, ${frameCount} frames (${(durationMs / 1000).toFixed(1)}s), ${gridSize.rows}×${gridSize.cols} grid`);
+            const exportStartTime = performance.now();
+            let carIndex = 0;
+
             // Process each car in the grid
             for (let r = 0; r < gridSize.rows; r++) {
                 for (let c = 0; c < gridSize.cols; c++) {
@@ -1452,6 +1465,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     const cell = layoutData?.layout?.[r]?.[c];
                     if (layoutData && cell && !cell.exists) continue;
 
+                    const carStartTime = performance.now();
                     const frames = [];
                     for (let f = 0; f < frameCount; f++) {
                         const timeMs = f * 20;
@@ -1465,6 +1479,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     const arrayBuffer = await blob.arrayBuffer(); // Convert to ArrayBuffer for JSZip
                     zip.file(`${carName}.fseq`, arrayBuffer);
                     hasFiles = true;
+                    carIndex++;
+                    const carElapsed = (performance.now() - carStartTime).toFixed(0);
+                    const pct = ((carIndex / totalCars) * 100).toFixed(1);
+                    console.log(`[FSEQ Export] ${pct}% (${carIndex}/${totalCars}) ${carName} - ${carElapsed}ms`);
                 }
             }
 
@@ -1473,11 +1491,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 return;
             }
 
+            console.log(`[FSEQ Export] Generating ZIP...`);
             const content = await zip.generateAsync({
                 type: 'blob',
                 compression: "DEFLATE",
                 compressionOptions: { level: 9 }
             });
+            const totalElapsed = ((performance.now() - exportStartTime) / 1000).toFixed(1);
+            console.log(`[FSEQ Export] Complete in ${totalElapsed}s`);
             const url = URL.createObjectURL(content);
             const a = document.createElement('a');
             a.href = url;
@@ -1553,6 +1574,47 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
             } catch (err) {
                 console.error('Timeline import failed:', err);
                 alert('Failed to import timeline data: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleAppendTimeline = (file) => {
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                if (!data.layers || !data.version?.includes('timeline')) {
+                    alert('Invalid timeline data file.');
+                    return;
+                }
+
+                const newProject = ProjectState.fromJSONSync(project.toJSON(false));
+                newProject.assets = { ...project.assets };
+
+                // Deserialize and merge new assets
+                if (data.assets) {
+                    const importedAssets = await ProjectState.deserializeAssets(data.assets);
+                    newProject.assets = { ...newProject.assets, ...importedAssets };
+                }
+
+                // Append layers instead of replacing
+                newProject.layers = [...newProject.layers, ...data.layers];
+
+                // Extend duration if imported data is longer
+                if (data.duration && data.duration > newProject.duration) {
+                    newProject.duration = data.duration;
+                }
+
+                saveToHistory(newProject);
+                alert(`Appended ${data.layers.length} tracks to timeline!`);
+
+            } catch (err) {
+                console.error('Timeline append failed:', err);
+                alert('Failed to append timeline data: ' + err.message);
             }
         };
         reader.readAsText(file);
@@ -2026,6 +2088,20 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                                 onChange={(e) => {
                                     if (e.target.files[0]) {
                                         handleImportTimeline(e.target.files[0]);
+                                    }
+                                    e.target.value = '';
+                                }}
+                                style={{ display: 'none' }}
+                            />
+                        </label>
+                        <label className="btn-icon" title="Append To Timeline Data" style={{ marginLeft: '5px', color: '#ffaa44', cursor: 'pointer' }}>
+                            <Plus size={18} />
+                            <input
+                                type="file"
+                                accept=".json"
+                                onChange={(e) => {
+                                    if (e.target.files[0]) {
+                                        handleAppendTimeline(e.target.files[0]);
                                     }
                                     e.target.value = '';
                                 }}

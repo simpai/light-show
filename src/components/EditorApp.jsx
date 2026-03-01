@@ -789,7 +789,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     };
 
     const saveToHistory = (newState) => {
-        const snapshot = project.toJSON();
+        // toJSON(false) skips expensive asset serialization (base64 PNG encoding)
+        const snapshot = project.toJSON(false);
         setHistory(prev => [...prev.slice(-19), snapshot]);
         setRedoStack([]);
         // Preserve waveform (including spectrogram) which toJSON() deliberately strips
@@ -803,33 +804,35 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const handleUndo = () => {
         if (history.length === 0) return;
         const previous = history[history.length - 1];
-        setRedoStack(prev => [...prev, project.toJSON()]);
+        setRedoStack(prev => [...prev, project.toJSON(false)]);
         setHistory(prev => prev.slice(0, -1));
 
-        ProjectState.fromJSON(previous).then(loaded => {
-            // Preserve waveform spectrogram (stripped by toJSON)
-            if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
-                loaded.waveform = project.waveform;
-            }
-            setProject(loaded);
-            rendererRef.current.setProject(loaded);
-        });
+        const loaded = ProjectState.fromJSONSync(previous);
+        // Preserve assets (not stored in lightweight history snapshots)
+        loaded.assets = project.assets;
+        // Preserve waveform spectrogram (stripped by toJSON)
+        if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
+            loaded.waveform = project.waveform;
+        }
+        setProject(loaded);
+        rendererRef.current.setProject(loaded);
     };
 
     const handleRedo = () => {
         if (redoStack.length === 0) return;
         const next = redoStack[redoStack.length - 1];
-        setHistory(prev => [...prev, project.toJSON()]);
+        setHistory(prev => [...prev, project.toJSON(false)]);
         setRedoStack(prev => prev.slice(0, -1));
 
-        ProjectState.fromJSON(next).then(loaded => {
-            // Preserve waveform spectrogram (stripped by toJSON)
-            if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
-                loaded.waveform = project.waveform;
-            }
-            setProject(loaded);
-            rendererRef.current.setProject(loaded);
-        });
+        const loaded = ProjectState.fromJSONSync(next);
+        // Preserve assets (not stored in lightweight history snapshots)
+        loaded.assets = project.assets;
+        // Preserve waveform spectrogram (stripped by toJSON)
+        if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
+            loaded.waveform = project.waveform;
+        }
+        setProject(loaded);
+        rendererRef.current.setProject(loaded);
     };
 
     const handleTakeSnapshot = () => {

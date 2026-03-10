@@ -7,7 +7,8 @@ export default function ClipPalette({
     clipboard,
     onClipSelect,
     selectedClipId,
-    assets
+    assets,
+    onCollapse
 }) {
     const handlePasteToSlot = (slotIndex) => {
         if (!clipboard || !Array.isArray(clipboard)) return;
@@ -47,9 +48,16 @@ export default function ClipPalette({
         <div className="clip-palette">
             <div className="palette-header">
                 <label className="section-title">Clip Palette</label>
-                <button className="add-slot-btn" onClick={handleAddSlot} title="Add Slot">
-                    <Plus size={16} />
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="add-slot-btn" onClick={handleAddSlot} title="Add Slot">
+                        <Plus size={16} />
+                    </button>
+                    {onCollapse && (
+                        <button className="add-slot-btn" onClick={onCollapse} title="Collapse Palette (Hide)">
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="palette-slots">

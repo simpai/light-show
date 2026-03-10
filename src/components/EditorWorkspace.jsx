@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MatrixPreview2D from './MatrixPreview2D';
 import ClipPalette from './ClipPalette';
 import ClipEditor from './ClipEditor';
@@ -25,6 +25,8 @@ export function EditorWorkspace({
     allCarsThumbnail,
     selectedLayerId
 }) {
+    const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+
     return (
         <div className="editor-main">
             <div className="preview-panel" style={{ position: 'relative' }}>
@@ -44,20 +46,31 @@ export function EditorWorkspace({
                 />
             </div>
 
-            <div className="palette-panel">
-                <ClipPalette
-                    palette={project.palette}
-                    clipboard={clipboard}
-                    assets={project.assets}
-                    selectedClipId={selectedPaletteClipId}
-                    onClipSelect={handlePaletteClipSelect}
-                    onPaletteChange={(newPalette) => {
-                        const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
-                        newProject.palette = newPalette;
-                        setProject(newProject);
-                    }}
-                />
-            </div>
+            {paletteCollapsed ? (
+                <div
+                    className="palette-panel-collapsed"
+                    onClick={() => setPaletteCollapsed(false)}
+                    title="Expand Clip Palette"
+                >
+                    <span className="palette-collapsed-label">CLIP PALETTE</span>
+                </div>
+            ) : (
+                <div className="palette-panel">
+                    <ClipPalette
+                        palette={project.palette}
+                        clipboard={clipboard}
+                        assets={project.assets}
+                        selectedClipId={selectedPaletteClipId}
+                        onClipSelect={handlePaletteClipSelect}
+                        onPaletteChange={(newPalette) => {
+                            const newProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
+                            newProject.palette = newPalette;
+                            setProject(newProject);
+                        }}
+                        onCollapse={() => setPaletteCollapsed(true)}
+                    />
+                </div>
+            )}
 
             <div className="properties-panel">
                 {(selectedClips.length > 0 || selectedPaletteClip) ? (

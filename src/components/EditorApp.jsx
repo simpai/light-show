@@ -66,6 +66,30 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const selectedPaletteClipId = useStore(state => state.selectedPaletteClipId);
     const setSelectedPaletteClipId = useStore(state => state.setSelectedPaletteClipId);
 
+    const [timelineHeight, setTimelineHeight] = useState(350);
+    const resizingTimelineRef = useRef(false);
+
+    useEffect(() => {
+        const handleGlobalMouseMove = (e) => {
+            if (!resizingTimelineRef.current) return;
+            const newHeight = Math.max(100, Math.min(window.innerHeight - e.clientY, window.innerHeight * 0.8));
+            setTimelineHeight(newHeight);
+        };
+        const handleGlobalMouseUp = () => {
+            if (resizingTimelineRef.current) {
+                resizingTimelineRef.current = false;
+                document.body.style.cursor = 'default';
+                document.body.style.userSelect = 'auto';
+            }
+        };
+        window.addEventListener('mousemove', handleGlobalMouseMove);
+        window.addEventListener('mouseup', handleGlobalMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleGlobalMouseMove);
+            window.removeEventListener('mouseup', handleGlobalMouseUp);
+        };
+    }, []);
+
     // Sync UI settings to localStorage is now handled by Zustand store actions
     useEffect(() => {
         if (audioRef.current) {
@@ -630,7 +654,15 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 selectedLayerId={selectedLayerId}
             />
 
-            <div className="timeline-panel">
+            <div 
+                className="timeline-resizer" 
+                onMouseDown={() => {
+                    resizingTimelineRef.current = true;
+                    document.body.style.cursor = 'row-resize';
+                    document.body.style.userSelect = 'none';
+                }}
+            />
+            <div className="timeline-panel" style={{ height: timelineHeight }}>
                 <TimelineControls
                     isPlaying={isPlaying} togglePlay={togglePlay}
                     bookmarks={bookmarks} handlePlayFromBookmark={handlePlayFromBookmark}
@@ -880,8 +912,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .editor-main { flex: 1; display: flex; overflow: hidden; margin: 0; padding: 0; }
         .preview-panel { flex: 1 1 auto; min-width: 400px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; padding: 0; margin: 0; }
         .palette-panel { flex: 0 0 280px; min-width: 230px; max-width: 350px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
+        .palette-panel-collapsed { flex: 0 0 32px; background: #1a1a1a; border-left: 1px solid #333; cursor: pointer; display: flex; flex-direction: column; align-items: center; padding-top: 15px; transition: all 0.2s; overflow: hidden; }
+        .palette-panel-collapsed:hover { background: #222; border-left-color: #e82020; }
+        .palette-collapsed-label { writing-mode: vertical-rl; text-orientation: mixed; color: #666; font-size: 11px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; user-select: none; }
+        .palette-panel-collapsed:hover .palette-collapsed-label { color: #e82020; }
         .properties-panel { flex: 0 0 350px; min-width: 280px; max-width: 400px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
-        .timeline-panel { height: 350px; background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; margin: 0; padding: 0; }
+        .timeline-resizer { height: 6px; cursor: row-resize; background: transparent; transition: background 0.2s; z-index: 100; margin-bottom: -6px; position: relative; }
+        .timeline-resizer:hover { background: rgba(232, 32, 32, 0.4); }
+        .timeline-panel { background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; margin: 0; padding: 0; }
         .timeline-controls { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }
         .timeline-tracks-container { flex: 1; display: flex; flex-direction: column; position: relative; min-height: 0; }
         .btn-tesla-sm { background: #e82020; color: white; border: none; padding: 5px 15px; border-radius: 4px; display: flex; align-items: center; gap: 5px; cursor: pointer; }

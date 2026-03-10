@@ -163,16 +163,8 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
                 const rect = container.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
 
-                // Track header width is fixed at 180px in Timeline
-                const headerWidth = 180;
                 let scrollOffset = targetScrollLeftRef.current !== null ? targetScrollLeftRef.current : container.scrollLeft;
                 let scrollAreaX = mouseX;
-
-                // Adjust if interacting with lanes which has a sticky header
-                if (container === lanesScrollRef.current) {
-                    if (mouseX < headerWidth) return; // Ignore zoom over header
-                    scrollAreaX = mouseX - headerWidth;
-                }
 
                 const currentZoom = zoomRef.current;
                 // Calculate time at mouse cursor before zoom
@@ -401,7 +393,7 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
 
         const seek = (moveEvent) => {
             if (!rect || !lanesScrollRef.current) return;
-            const x = moveEvent.clientX - rect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
+            const x = moveEvent.clientX - rect.left + lanesScrollRef.current.scrollLeft;
             const timeInMs = (x / pixelsPerSecond) * 1000;
             const snappedTimeMs = getSnappedTime(timeInMs);
 
@@ -511,7 +503,7 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
             }
 
             const laneRect = lanesScrollRef.current.getBoundingClientRect();
-            const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft - trackHeaderWidth;
+            const xInLanePx = moveEvent.clientX - laneRect.left + lanesScrollRef.current.scrollLeft;
             const currentTimeMs = (xInLanePx / pixelsPerSecond) * 1000;
 
             setDraggingClips(prev => {

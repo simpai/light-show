@@ -1017,19 +1017,39 @@ export class ShowRenderer {
         const currentSpec = spec[index];
         if (!currentSpec) return;
 
-        const maxFreqBin = this.project.waveform.fftSampleRate ? this.project.waveform.fftSampleRate / 2 : 22050; // Nyquist
         const numBins = currentSpec.length;
-        const hzPerBin = maxFreqBin / numBins;
 
         const bands = clip.bands || [];
         for (let i = 0; i < (clip.bandCount || 1); i++) {
             const band = bands[i];
             if (!band) continue;
 
-            const minFreq = band.minFreq || 0;
-            const maxFreq = band.maxFreq || 20000;
-            const startBin = Math.floor(minFreq / hzPerBin);
-            const endBin = Math.min(numBins - 1, Math.ceil(maxFreq / hzPerBin));
+            let startBin = 0;
+            let endBin = numBins - 1;
+
+            if (band.minBin !== undefined && band.maxBin !== undefined) {
+                // New direct bin targeting (0-31)
+                startBin = Math.max(0, Math.min(numBins - 1, band.minBin));
+                endBin = Math.max(0, Math.min(numBins - 1, band.maxBin));
+            } else {
+                // Legacy fallback for old projects with Hz values
+                const maxFreqBin = this.project.waveform.fftSampleRate ? this.project.waveform.fftSampleRate / 2 : 22050;
+                const hzPerBin = maxFreqBin / numBins;
+                const minFreq = band.minFreq || 0;
+                const maxFreq = band.maxFreq || 20000;
+
+                // Approximate legacy mapping onto the new 32-bin log scale is tough, 
+                // so we do a simple linear fallback here just to not crash
+                startBin = Math.floor(minFreq / hzPerBin);
+                endBin = Math.min(numBins - 1, Math.ceil(maxFreq / hzPerBin));
+            }
+
+            // Ensure start <= end
+            if (startBin > endBin) {
+                const temp = startBin;
+                startBin = endBin;
+                endBin = temp;
+            }
 
             let sum = 0;
             let count = 0;
@@ -1044,9 +1064,10 @@ export class ShowRenderer {
 
             // Raw STFT magnitudes vary. Downsampled bins often average out peaks.
             // We increase the base multiplier to 15.0 so we actually see some volume.
-            avgVol = avgVol * scale * 15.0;
-
-            if (avgVol < cutOff) avgVol = 0;
+            let baseVol = avgVol * 15.0;
+            baseVol = baseVol - cutOff;
+            if (baseVol < 0) baseVol = 0;
+            avgVol = baseVol * scale;
 
             if (clip.decay && clip.decay > 0) {
                 const lookbackMs = 500;
@@ -1060,8 +1081,9 @@ export class ShowRenderer {
                         for (let b = startBin; b <= endBin; b++) {
                             pSum += spec[pastIndex][b];
                         }
-                        let pVol = (pSum / count) * scale * 15.0;
-                        if (pVol < cutOff) pVol = 0;
+                        let pBase = (pSum / count) * 15.0 - cutOff;
+                        if (pBase < 0) pBase = 0;
+                        let pVol = pBase * scale;
 
                         // Decay ranges typically 0 to 1. A decay of 0.1 means it loses 10% per frame.
                         const decayFactor = Math.pow(1 - clip.decay, prev);
@@ -1082,8 +1104,9 @@ export class ShowRenderer {
                         for (let b = startBin; b <= endBin; b++) {
                             pSum += spec[pastIndex][b];
                         }
-                        let pVol = (pSum / count) * scale * 15.0;
-                        if (pVol < cutOff) pVol = 0;
+                        let pBase = (pSum / count) * 15.0 - cutOff;
+                        if (pBase < 0) pBase = 0;
+                        let pVol = pBase * scale;
                         if (pVol > highest) highest = pVol;
                     }
                 }

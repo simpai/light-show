@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Trash2, Plus, Minus, Download, Upload } from 'lucide-react';
 import { EASING_TYPES } from '../utils/Easing.js';
 
@@ -182,6 +182,99 @@ const CustomNumberInput = ({ value, onChange, label, step = 1, min = null, max =
                     width: '100%', fontSize: '14px', background: '#1e293b', border: '1px solid #334155', borderRadius: '3px', color: '#e2e8f0', height: '24px'
                 }}
             />
+        </div>
+    );
+};
+
+const BinRangeSelector = ({ minBin = 0, maxBin = 31, onChange }) => {
+    const isDragging = useRef(false);
+    const startIndex = useRef(null);
+
+    const handleInput = (index) => {
+        if (!isDragging.current) return;
+        const newMin = Math.min(startIndex.current, index);
+        const newMax = Math.max(startIndex.current, index);
+        onChange(newMin, newMax);
+    };
+
+    const handlePointerDown = (index, e) => {
+        e.preventDefault();
+        isDragging.current = true;
+        startIndex.current = index;
+        onChange(index, index);
+        document.addEventListener('pointerup', handlePointerUp);
+    };
+
+    const handlePointerUp = () => {
+        isDragging.current = false;
+        document.removeEventListener('pointerup', handlePointerUp);
+    };
+
+    const bins = Array.from({ length: 32 }, (_, i) => i);
+
+    return (
+        <div style={{ marginTop: '8px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '10px', color: '#888' }}>Bin Selector</span>
+                <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold' }}>
+                    [{minBin} - {maxBin}]
+                </span>
+            </div>
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    gap: '1px',
+                    height: '32px',
+                    width: '100%',
+                    background: '#1a1a1a',
+                    padding: '4px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    touchAction: 'none'
+                }}
+                onPointerLeave={() => isDragging.current = false}
+            >
+                {bins.map(i => {
+                    const isActive = i >= minBin && i <= maxBin;
+                    const isEdge = i === minBin || i === maxBin;
+                    // Make it look like a logarithmic curve roughly
+                    const heightPct = 20 + Math.pow(i / 31, 0.5) * 80;
+
+                    return (
+                        <div
+                            key={i}
+                            onPointerDown={(e) => handlePointerDown(i, e)}
+                            onPointerEnter={() => handleInput(i)}
+                            style={{
+                                flex: 1,
+                                height: '100%',
+                                display: 'flex',
+                                alignItems: 'flex-end',
+                                cursor: 'crosshair',
+                                padding: '0 0.5px' // Tiny gap between bars visually but full width hitbox
+                            }}
+                            title={`Bin ${i}`}
+                        >
+                            <div
+                                style={{
+                                    width: '100%',
+                                    height: `${heightPct}%`,
+                                    background: isActive ? (isEdge ? '#34d399' : '#10b981') : '#333',
+                                    borderRadius: '1px',
+                                    transition: 'background-color 0.1s',
+                                    opacity: isActive ? 1 : 0.5
+                                }}
+                            />
+                        </div>
+                    );
+                })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '9px', color: '#666' }}>
+                <span>Low (20Hz)</span>
+                <span>Mid</span>
+                <span>High (12kHz)</span>
+            </div>
         </div>
     );
 };
@@ -839,14 +932,14 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 const currentBands = Array.isArray(clip.bands) ? [...clip.bands] : [];
 
                                 const BAND_PRESETS = {
-                                    1: [[20, 20000]],
-                                    2: [[20, 500], [500, 20000]],
-                                    3: [[20, 250], [250, 2000], [2000, 20000]],
-                                    4: [[20, 250], [250, 1000], [1000, 5000], [5000, 20000]],
-                                    5: [[20, 100], [100, 500], [500, 2000], [2000, 6000], [6000, 20000]],
-                                    6: [[20, 60], [60, 250], [250, 500], [500, 2000], [2000, 6000], [6000, 20000]],
-                                    7: [[20, 60], [60, 250], [250, 500], [500, 2000], [2000, 5000], [5000, 10000], [10000, 20000]],
-                                    8: [[20, 60], [60, 150], [150, 400], [400, 1000], [1000, 2500], [2500, 6000], [6000, 12000], [12000, 20000]]
+                                    1: [[0, 31]],
+                                    2: [[0, 8], [9, 31]],
+                                    3: [[0, 6], [7, 18], [19, 31]],
+                                    4: [[0, 4], [5, 12], [13, 22], [23, 31]],
+                                    5: [[0, 3], [4, 9], [10, 16], [17, 24], [25, 31]],
+                                    6: [[0, 2], [3, 7], [8, 13], [14, 19], [20, 25], [26, 31]],
+                                    7: [[0, 2], [3, 6], [7, 11], [12, 16], [17, 21], [22, 26], [27, 31]],
+                                    8: [[0, 1], [2, 4], [5, 8], [9, 13], [14, 18], [19, 23], [24, 27], [28, 31]]
                                 };
 
                                 const preset = BAND_PRESETS[newCount];
@@ -856,8 +949,8 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                     const existing = currentBands[i] || { maxScale: 1.0, minCutoff: 0, imageId: null };
                                     newBands.push({
                                         ...existing,
-                                        minFreq: preset[i][0],
-                                        maxFreq: preset[i][1]
+                                        minBin: preset[i][0],
+                                        maxBin: preset[i][1]
                                     });
                                 }
 
@@ -921,21 +1014,78 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             </label>
                         </div>
                     )}
-                    <div className="form-group grid-2">
-                        <CustomNumberInput label="Min Freq" value={band.minFreq} step={100} min={0} max={22000} onChange={val => {
-                            const newBands = [...clip.bands]; newBands[idx].minFreq = val; handleChange('bands', newBands);
-                        }} />
-                        <CustomNumberInput label="Max Freq" value={band.maxFreq} step={100} min={1} max={22000} onChange={val => {
-                            const newBands = [...clip.bands]; newBands[idx].maxFreq = val; handleChange('bands', newBands);
-                        }} />
-                    </div>
-                    <div className="form-group grid-2" style={{ marginTop: '8px' }}>
-                        <CustomNumberInput label="Scale" value={band.maxScale} step={0.1} min={0} max={10} onChange={val => {
-                            const newBands = [...clip.bands]; newBands[idx].maxScale = val; handleChange('bands', newBands);
-                        }} />
-                        <CustomNumberInput label="Cutoff" value={band.minCutoff} step={0.1} min={0} max={10} onChange={val => {
-                            const newBands = [...clip.bands]; newBands[idx].minCutoff = val; handleChange('bands', newBands);
-                        }} />
+                    <BinRangeSelector
+                        minBin={band.minBin !== undefined ? band.minBin : 0}
+                        maxBin={band.maxBin !== undefined ? band.maxBin : 31}
+                        onChange={(newMin, newMax) => {
+                            const newBands = [...clip.bands];
+                            newBands[idx].minBin = newMin;
+                            newBands[idx].maxBin = newMax;
+                            handleChange('bands', newBands);
+                        }}
+                    />
+                    <div style={{ marginTop: '12px', padding: '10px', background: '#1a1a1a', borderRadius: '6px', border: '1px solid #333' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '45px', fontSize: '11px', color: '#888', fontWeight: 'bold' }}>Scale</span>
+                                <input
+                                    type="range"
+                                    min="0.1"
+                                    max="10"
+                                    step="0.1"
+                                    value={band.maxScale !== undefined ? band.maxScale : 1.0}
+                                    style={{ flex: 1, accentColor: '#3b82f6' }}
+                                    onChange={e => {
+                                        const newBands = [...clip.bands];
+                                        newBands[idx].maxScale = parseFloat(e.target.value);
+                                        handleChange('bands', newBands);
+                                    }}
+                                />
+                                <span style={{ width: '30px', fontSize: '11px', color: '#fff', textAlign: 'right' }}>{(band.maxScale !== undefined ? band.maxScale : 1.0).toFixed(1)}</span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '45px', fontSize: '11px', color: '#888', fontWeight: 'bold' }}>Cutoff</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="5"
+                                    step="0.1"
+                                    value={band.minCutoff !== undefined ? band.minCutoff : 0.0}
+                                    style={{ flex: 1, accentColor: '#ef4444' }}
+                                    onChange={e => {
+                                        const newBands = [...clip.bands];
+                                        newBands[idx].minCutoff = parseFloat(e.target.value);
+                                        handleChange('bands', newBands);
+                                    }}
+                                />
+                                <span style={{ width: '30px', fontSize: '11px', color: '#fff', textAlign: 'right' }}>{(band.minCutoff !== undefined ? band.minCutoff : 0).toFixed(1)}</span>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            marginTop: '12px',
+                            padding: '6px',
+                            background: '#000',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            color: '#aaa',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontFamily: 'monospace'
+                        }}>
+                            <span>(</span>
+                            <span style={{ color: '#10b981' }}>Vol</span>
+                            <span style={{ margin: '0 4px', color: '#fff' }}>-</span>
+                            <span style={{ color: '#ef4444' }}>{Number(band.minCutoff !== undefined ? band.minCutoff : 0).toFixed(1)}</span>
+                            <span>)</span>
+                            <span>×</span>
+                            <span style={{ color: '#3b82f6' }}>{Number(band.maxScale !== undefined ? band.maxScale : 1.0).toFixed(1)}</span>
+                            <span style={{ margin: '0 4px' }}>→</span>
+                            <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>ON</span>
+                        </div>
                     </div>
                 </div>
             ))}

@@ -27,6 +27,47 @@ export class AudioWaveformManager {
                     // Let's use an FFT size of 4096 samples 
                     const fftSize = 4096;
                     const spectrogram = [];
+                    const targetBins = 32;
+
+                    // Pre-compute Logarithmic (Mel-like) Bin Mapping
+                    // Focus on 20Hz to 12,000Hz where musical energy lives
+                    const minFreq = 20;
+                    const maxFreq = 12000;
+                    const nyquist = sampleRate / 2;
+                    const freqsPerBin = nyquist / (fftSize / 2);
+
+                    // Calculate the log range
+                    const minLog = Math.log10(minFreq);
+                    const maxLog = Math.log10(maxFreq);
+                    const logRange = maxLog - minLog;
+
+                    // Pre-calculate which FFT bins belong to which of the 128 target bins
+                    const binMappings = Array.from({ length: targetBins }, () => []);
+
+                    for (let i = 0; i < (fftSize / 2); i++) {
+                        const freq = i * freqsPerBin;
+                        if (freq < minFreq || freq > maxFreq) continue;
+
+                        // Map frequency to a 0-1 range on log scale
+                        const normalizedLog = (Math.log10(freq) - minLog) / logRange;
+
+                        // Map to target bin (0 to 127)
+                        let targetBinIdx = Math.floor(normalizedLog * targetBins);
+                        targetBinIdx = Math.max(0, Math.min(targetBins - 1, targetBinIdx));
+
+                        binMappings[targetBinIdx].push(i);
+                    }
+
+                    // Some lower bins might be empty because FFT resolution (e.g. 10.7Hz) 
+                    // is not fine enough for the lowest log bins. Fill gaps from the nearest available.
+                    let lastValidBin = [0]; // fallback
+                    for (let b = 0; b < targetBins; b++) {
+                        if (binMappings[b].length === 0) {
+                            binMappings[b] = [...lastValidBin];
+                        } else {
+                            lastValidBin = binMappings[b];
+                        }
+                    }
 
                     for (let i = 0; i < totalPoints; i++) {
                         const start = i * samplesPerPoint;
@@ -57,24 +98,22 @@ export class AudioWaveformManager {
                             FFT.transform(windowed, imag);
                             const magnitudes = FFT.getMagnitudes(windowed, imag);
 
-                            // Downsample magnitudes to save memory (e.g., from 2048 to 64 bins)
-                            // This prevents Out-Of-Memory (OOM) crashes on large audio files
-                            const targetBins = 128;
+                            // Downsample using the pre-computed logarithmic bin mapping
                             const downsampled = new Float32Array(targetBins);
-                            const binsPerGroup = Math.floor(magnitudes.length / targetBins);
 
                             for (let b = 0; b < targetBins; b++) {
+                                const sourceBins = binMappings[b];
                                 let sumMag = 0;
-                                for (let k = 0; k < binsPerGroup; k++) {
-                                    sumMag += magnitudes[b * binsPerGroup + k];
+                                for (let k = 0; k < sourceBins.length; k++) {
+                                    sumMag += magnitudes[sourceBins[k]];
                                 }
-                                downsampled[b] = sumMag / binsPerGroup;
+                                downsampled[b] = sumMag / sourceBins.length;
                             }
 
                             // Keep in memory
                             spectrogram[i] = downsampled;
                         } else {
-                            spectrogram[i] = new Float32Array(128); // match targetBins
+                            spectrogram[i] = new Float32Array(targetBins);
                         }
                     }
 

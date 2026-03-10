@@ -728,11 +728,7 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
             </div>
 
             {/* Tracks area with scroll */}
-            <div
-                className="timeline-tracks-row"
-                ref={lanesScrollRef}
-                onScroll={handleLanesScroll}
-            >
+            <div className="timeline-tracks-row">
                 {/* Fixed track headers */}
                 <div className="track-headers-fixed" style={{ width: trackHeaderWidth }}>
                     {project.layers.map((layer, index) => (
@@ -812,6 +808,8 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
                 <div
                     className="timeline-tracks"
                     style={{ flex: 1, position: 'relative' }}
+                    ref={lanesScrollRef}
+                    onScroll={handleLanesScroll}
                 >
                     <div className="track-lanes" style={{ width: totalWidth }}>
                         {/* Grid lines */}
@@ -1082,18 +1080,26 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
             </div>
 
             <style>{`
-                .timeline-container { display: flex; flex-direction: column; height: 100%; background: #151515; user-select: none; }
-                .timeline-header-row { display: flex; border-bottom: 1px solid #333; flex-shrink: 0; }
-                .timeline-corner { background: #1f1f1f; border-right: 1px solid #333; flex-shrink: 0; }
-                .timeline-ruler-container { flex: 1; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
-                .timeline-ruler-container::-webkit-scrollbar { display: none; }
-                .ruler { height: 40px; position: relative; background: #1a1a1a; }
+                .timeline-container { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr; height: 100%; background: #151515; user-select: none; }
+                .timeline-header-row { display: contents; }
+                .timeline-corner { grid-column: 1; grid-row: 1; background: #1f1f1f; border-right: 1px solid #333; border-bottom: 1px solid #333; z-index: 20; display: flex; align-items: center; justify-content: center; }
+                .timeline-ruler-container { grid-column: 2; grid-row: 1; border-bottom: 1px solid #333; overflow-x: hidden; overflow-y: scroll; scrollbar-color: transparent transparent; }
+                .timeline-tracks { scrollbar-color: #444 #151515; }
+                
+                .timeline-tracks::-webkit-scrollbar,
+                .timeline-ruler-container::-webkit-scrollbar { width: 14px; height: 14px; }
+                .timeline-tracks::-webkit-scrollbar-track,
+                .timeline-ruler-container::-webkit-scrollbar-track { background: #151515; }
+                .timeline-tracks::-webkit-scrollbar-thumb { background: #444; border-radius: 7px; border: 3px solid #151515; }
+                .timeline-tracks::-webkit-scrollbar-thumb:hover { background: #666; }
+                .timeline-ruler-container::-webkit-scrollbar-thumb { background: transparent; border: none; }
+                .ruler { height: 40px; position: relative; background: #1a1a1a; overflow: hidden; }
                 .ruler-mark { position: absolute; top: 0; font-size: 10px; color: #eee; border-left: 1px solid #444; padding-left: 2px; height: 100%; z-index: 2; text-shadow: 1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black; font-weight: bold; }
                 .beat-marker { position: absolute; bottom: 0; width: 2px; height: 15px; background: #4a90e2; opacity: 0.6; }
                 .reference-beat-marker { position: absolute; bottom: 0; width: 3px; height: 25px; background: #ff0000; opacity: 1; z-index: 10; transform: translateX(-50%); }
                 .onset-marker { position: absolute; bottom: 0; width: 2px; height: 10px; background: #fbbf24; opacity: 0.7; }
-                .timeline-tracks-row { display: flex; flex: 1; overflow: auto; position: relative; }
-                .track-headers-fixed { flex-shrink: 0; border-right: 1px solid #333; position: sticky; left: 0; z-index: 15; background: #151515; }
+                .timeline-tracks-row { display: contents; }
+                .track-headers-fixed { grid-column: 1; grid-row: 2; background: #151515; border-right: 1px solid #333; z-index: 15; overflow-y: hidden; overflow-x: hidden; }
                 .track-header { height: 50px; background: #1f1f1f; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid #222; }
                 .track-header:hover { background: #2a2a2a; }
                 .track-header.selected { background: #451a1a; border-left: 3px solid #e82020; }
@@ -1121,9 +1127,7 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
                     background: #e82020;
                 }
                 .timeline-corner {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    /* Style overridden in grid mapping above, keeping class empty for inner JSX usage if any */
                 }
                 .global-visibility-btn, .track-visibility-btn {
                     background: transparent;
@@ -1147,8 +1151,8 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
                 .track-visibility-btn.muted {
                     color: #e82020;
                 }
-                .timeline-tracks { flex: 1; min-width: 0; }
-                .track-lanes { position: relative; min-height: 100%; }
+                .timeline-tracks { grid-column: 2; grid-row: 2; overflow-y: scroll; overflow-x: auto; position: relative; }
+                .track-lanes { position: relative; min-height: 100%; overflow: hidden; }
                 .track-lane { height: 50px; position: relative; background: #151515; border-bottom: 1px solid #222; cursor: crosshair; }
                 .track-lane.selected { background: #2a1515; }
                 .grid-line {

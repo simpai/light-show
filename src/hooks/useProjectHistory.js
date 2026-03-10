@@ -4,7 +4,6 @@ import { ProjectState } from '../core/ProjectState';
 export function useProjectHistory(project, setProject, rendererRef) {
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
-    const [snapshot, setSnapshot] = useState(null);
 
     const saveToHistory = (newState) => {
         // toJSON(false) skips expensive asset serialization (base64 PNG encoding)
@@ -53,39 +52,11 @@ export function useProjectHistory(project, setProject, rendererRef) {
         rendererRef.current.setProject(loaded);
     };
 
-    const handleTakeSnapshot = () => {
-        const currentData = project.toJSON(false);
-        setSnapshot(currentData);
-        console.log('Snapshot taken');
-    };
-
-    const handleRestoreSnapshot = () => {
-        if (!snapshot) return;
-
-        // Make the restore undoable
-        const currentData = project.toJSON(false);
-        setHistory(prev => [...prev.slice(-19), currentData]);
-        setRedoStack([]);
-
-        ProjectState.fromJSON(snapshot).then(loaded => {
-            // Preserve waveform spectrogram (stripped by toJSON)
-            if (project.waveform?.spectrogram && !loaded.waveform?.spectrogram) {
-                loaded.waveform = project.waveform;
-            }
-            setProject(loaded);
-            rendererRef.current.setProject(loaded);
-            console.log('Snapshot restored');
-        });
-    };
-
     return {
         history,
         redoStack,
-        snapshot,
         saveToHistory,
         handleUndo,
-        handleRedo,
-        handleTakeSnapshot,
-        handleRestoreSnapshot
+        handleRedo
     };
 }

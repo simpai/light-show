@@ -157,7 +157,7 @@ export function EditorToolbar({
                 </button>
 
                 <button
-                    className={`btn - icon ${showLayoutEditor ? 'active' : ''} `}
+                    className={`btn-icon ${showLayoutEditor ? 'active' : ''}`}
                     tabIndex={-1}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => {
@@ -171,7 +171,7 @@ export function EditorToolbar({
                 </button>
 
                 <button
-                    className={`btn - icon ${activeModal === 'lightGroups' ? 'active' : ''} `}
+                    className={`btn-icon ${activeModal === 'lightGroups' ? 'active' : ''}`}
                     tabIndex={-1}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => {
@@ -195,7 +195,7 @@ export function EditorToolbar({
                         <Plus size={20} />
                     </button>
                     <button
-                        className={`btn - icon ${activeModal === 'carGroups' ? 'active' : ''} `}
+                        className={`btn-icon ${activeModal === 'carGroups' ? 'active' : ''}`}
                         title="Manage Car Groups"
                         onClick={() => setActiveModal('carGroups')}
                     >

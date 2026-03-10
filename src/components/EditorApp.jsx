@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2, ChevronUp, ChevronDown, Activity, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, Save, FolderOpen, Undo, Redo, ZoomIn, ZoomOut, SkipBack, Zap, ImageIcon, Columns, HelpCircle, Magnet, Plus, Copy, RotateCcw, Camera, Scissors, Grid, Hand, AlignLeft, Music, Car, Layers, Settings, ClipboardPaste, Download, Upload, X, Trash2, ChevronUp, ChevronDown, Activity, Volume2, VolumeX, Heart } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 import { ProjectState } from '../core/ProjectState';
 import { ShowRenderer } from '../core/ShowRenderer';
@@ -136,9 +136,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const fileInputRef = useRef(null);
 
     const {
-        history, redoStack, snapshot,
-        saveToHistory, handleUndo, handleRedo,
-        handleTakeSnapshot, handleRestoreSnapshot
+        history, redoStack,
+        saveToHistory, handleUndo, handleRedo
     } = useProjectHistory(project, setProject, rendererRef);
 
     const {
@@ -639,7 +638,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     volume={volume} setVolume={setVolume}
                     history={history} handleUndo={handleUndo}
                     redoStack={redoStack} handleRedo={handleRedo}
-                    handleTakeSnapshot={handleTakeSnapshot} snapshot={snapshot} handleRestoreSnapshot={handleRestoreSnapshot}
                     selectedClipIds={selectedClipIds} handleRemoveGaps={handleRemoveGaps} handleAlignToSnap={handleAlignToSnap} snapMode={snapMode} handleAlignClips={handleAlignClips}
                     handleImportTimeline={handleImportTimeline} handleAppendTimeline={handleAppendTimeline} handleExportTimeline={handleExportTimeline}
                     zoom={zoom} setZoom={setZoom}
@@ -793,8 +791,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                                 <div className="help-section-header" style={{ marginTop: '20px', marginBottom: '10px', color: '#888', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>Quick Tools</div>
                                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><Camera size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#4a90e2' }} /> Snapshot</span>
-                                    <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><RotateCcw size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#e82020' }} /> Restore</span>
                                     <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><Magnet size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#ffbb00' }} /> Remove Gaps</span>
                                     <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><Grid size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#00ccff' }} /> Snap</span>
                                     <span style={{ fontSize: '12px', background: '#222', padding: '4px 8px', borderRadius: '4px', border: '1px solid #333' }}><AlignLeft size={12} style={{ verticalAlign: 'middle', marginRight: '4px', color: '#00ff88' }} /> Align Tracks</span>
@@ -887,7 +883,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .properties-panel { flex: 0 0 350px; min-width: 280px; max-width: 400px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }
         .timeline-panel { height: 350px; background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; margin: 0; padding: 0; }
         .timeline-controls { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }
-        .timeline-tracks-container { flex: 1; overflow-y: auto; position: relative; }
+        .timeline-tracks-container { flex: 1; display: flex; flex-direction: column; position: relative; min-height: 0; }
         .btn-tesla-sm { background: #e82020; color: white; border: none; padding: 5px 15px; border-radius: 4px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
         .btn-link-small { background: transparent; border: 1px solid #444; color: #aaa; cursor: pointer; border-radius: 4px; transition: all 0.2s; }
         .btn-link-small:hover { color: white; border-color: #e82020; background: rgba(232, 32, 32, 0.1); }

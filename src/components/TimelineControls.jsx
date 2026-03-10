@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
-import { Play, Pause, Undo, Redo, SkipBack, Zap, ImageIcon, HelpCircle, Magnet, Plus, RotateCcw, Camera, Grid, AlignLeft, Music, Layers, Download, Upload, ChevronUp, ChevronDown, Activity, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, Undo, Redo, SkipBack, Zap, ImageIcon, HelpCircle, Magnet, Plus, Grid, AlignLeft, Music, Layers, Download, Upload, ChevronUp, ChevronDown, Activity, Volume2, VolumeX } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
 
 function TimeDisplay() {
@@ -15,7 +15,6 @@ export function TimelineControls({
     volume, setVolume,
     history, handleUndo,
     redoStack, handleRedo,
-    handleTakeSnapshot, snapshot, handleRestoreSnapshot,
     selectedClipIds, handleRemoveGaps, handleAlignToSnap, snapMode, handleAlignClips,
     handleImportTimeline, handleAppendTimeline, handleExportTimeline,
     zoom, setZoom,
@@ -62,16 +61,7 @@ export function TimelineControls({
                     <Redo size={18} />
                 </button>
 
-                <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
 
-                <button onClick={handleTakeSnapshot} className="btn-icon" title="Take Snapshot" style={{ marginLeft: '5px', color: '#4a90e2' }}>
-                    <Camera size={18} />
-                </button>
-                <button onClick={handleRestoreSnapshot} disabled={!snapshot} className={`btn-icon ${!snapshot ? 'disabled' : ''}`} title="Restore Snapshot" style={{ color: '#e82020' }}>
-                    <RotateCcw size={18} />
-                </button>
-
-                <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
 
                 <button onClick={handleRemoveGaps} disabled={selectedClipIds.length < 2} className="btn-icon" title="Remove Gaps" style={{ marginLeft: '5px', color: '#ffbb00' }}>
                     <Magnet size={18} />

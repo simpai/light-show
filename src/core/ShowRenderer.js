@@ -45,6 +45,7 @@ export class ShowRenderer {
         this.matrixMode = false;
         this.matrixConfig = { rows: 10, cols: 10 };
         this.jitterSeed = Math.random();
+        this.eqVolCache = new Map();
         this.matrixBuffer = []; // Cache for matrix frames
         this.initMatrixBuffer();
     }
@@ -158,6 +159,7 @@ export class ShowRenderer {
      * @returns {Uint8Array} Array of channel values (0-255)
      */
     getFrame(timeMs) {
+        this.eqVolCache.clear();
         if (!this.project) return new Uint8Array(CHANNEL_COUNT).fill(0);
 
         // Initialize frame with zeros
@@ -187,6 +189,7 @@ export class ShowRenderer {
      * @returns {Array<Array<Uint8Array>>} 2D array of frame data [row][col]
      */
     getMatrixFrame(timeMs, config = null) {
+        this.eqVolCache.clear();
         // If config is provided and different, we might need a temp buffer or just re-init
         // For performance, we assume standard usage uses the set matrixConfig
         let rows, cols;
@@ -1051,65 +1054,58 @@ export class ShowRenderer {
                 endBin = temp;
             }
 
-            let sum = 0;
-            let count = 0;
-            for (let b = startBin; b <= endBin; b++) {
-                sum += currentSpec[b];
-                count++;
-            }
-            let avgVol = count > 0 ? (sum / count) / 255.0 : 0;
-
             const scale = band.maxScale || 1.0;
             const cutOff = band.minCutoff || 0;
+            const count = endBin - startBin + 1;
 
-            // Values are pre-normalized to 0-255, so divided by 255 they perfectly fit the 0.0-1.0 range.
-            let baseVol = avgVol;
-            baseVol = baseVol - cutOff;
-            if (baseVol < 0) baseVol = 0;
-            avgVol = baseVol * scale;
+            const cacheKey = `${clip.id}-${effectiveTimeMs}-${i}`;
+            let avgVol;
 
-            if (clip.decay && clip.decay > 0) {
-                const lookbackMs = 500;
-                const framesToLookBack = Math.floor((lookbackMs / 1000) * pointsPerSecond);
-                let currentPeak = avgVol;
+            if (this.eqVolCache.has(cacheKey)) {
+                avgVol = this.eqVolCache.get(cacheKey);
+            } else {
+                const getVolAt = (idx) => {
+                    const sp = spec[idx];
+                    if (!sp) return 0;
+                    let sum = 0;
+                    for (let b = startBin; b <= endBin; b++) sum += sp[b];
+                    let v = ((sum / count) / 255.0) - cutOff;
+                    return (v > 0 ? v : 0) * scale;
+                };
 
-                for (let prev = 1; prev <= framesToLookBack; prev++) {
-                    const pastIndex = index - prev;
-                    if (pastIndex >= 0 && spec[pastIndex]) {
-                        let pSum = 0;
-                        for (let b = startBin; b <= endBin; b++) {
-                            pSum += spec[pastIndex][b];
-                        }
-                        let pBase = ((pSum / count) / 255.0) - cutOff;
-                        if (pBase < 0) pBase = 0;
-                        let pVol = pBase * scale;
+                avgVol = getVolAt(index);
 
-                        // Decay ranges typically 0 to 1. A decay of 0.1 means it loses 10% per frame.
-                        const decayFactor = Math.pow(1 - clip.decay, prev);
-                        const decayedPastVol = pVol * decayFactor;
-                        if (decayedPastVol > currentPeak) {
-                            currentPeak = decayedPastVol;
+                if (clip.decay && clip.decay > 0) {
+                    const lookbackMs = 500;
+                    const framesToLookBack = Math.floor((lookbackMs / 1000) * pointsPerSecond);
+                    let currentPeak = avgVol;
+
+                    for (let prev = 1; prev <= framesToLookBack; prev++) {
+                        const pastIndex = index - prev;
+                        if (pastIndex >= 0) {
+                            const pVol = getVolAt(pastIndex);
+                            const decayFactor = Math.pow(1 - clip.decay, prev);
+                            const decayedPastVol = pVol * decayFactor;
+                            if (decayedPastVol > currentPeak) {
+                                currentPeak = decayedPastVol;
+                            }
                         }
                     }
-                }
-                avgVol = currentPeak;
-            } else if (clip.peakHold) {
-                const framesToLookBack = Math.floor(2.0 * pointsPerSecond);
-                let highest = avgVol;
-                for (let prev = 1; prev <= framesToLookBack; prev++) {
-                    const pastIndex = index - prev;
-                    if (pastIndex >= 0 && spec[pastIndex]) {
-                        let pSum = 0;
-                        for (let b = startBin; b <= endBin; b++) {
-                            pSum += spec[pastIndex][b];
+                    avgVol = currentPeak;
+                } else if (clip.peakHold) {
+                    const framesToLookBack = Math.floor(2.0 * pointsPerSecond);
+                    let highest = avgVol;
+                    for (let prev = 1; prev <= framesToLookBack; prev++) {
+                        const pastIndex = index - prev;
+                        if (pastIndex >= 0) {
+                            const pVol = getVolAt(pastIndex);
+                            if (pVol > highest) highest = pVol;
                         }
-                        let pBase = ((pSum / count) / 255.0) - cutOff;
-                        if (pBase < 0) pBase = 0;
-                        let pVol = pBase * scale;
-                        if (pVol > highest) highest = pVol;
                     }
+                    avgVol = highest;
                 }
-                avgVol = highest;
+
+                this.eqVolCache.set(cacheKey, avgVol);
             }
 
             let intensity = Math.min(1.0, Math.max(0, avgVol));

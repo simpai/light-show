@@ -118,7 +118,7 @@ export class AudioWaveformManager {
                     }
 
                     // 1. Find the maximum peak for each individual bin across the whole song
-                    const maxVals = new Array(targetBins).fill(0.0001); // Avoid division by zero
+                    const maxVals = new Array(targetBins).fill(0.1); // Avoid division by zero and noise floors
                     for (let i = 0; i < totalPoints; i++) {
                         for (let b = 0; b < targetBins; b++) {
                             if (spectrogram[i][b] > maxVals[b]) {

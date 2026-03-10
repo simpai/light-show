@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Save, FolderOpen, Grid, Car, Plus, Layers, Music } from 'lucide-react';
+import { getSpectrogramColor } from '../utils/colorUtils.js';
 
 const MiniSpectrogram = ({ project }) => {
     const barsRef = useRef([]);
@@ -46,7 +47,7 @@ const MiniSpectrogram = ({ project }) => {
                     style={{
                         width: '8px',
                         height: '5%',
-                        background: `hsl(${((i % 16) / 15) * 280}, 100%, 50%)`,
+                        background: getSpectrogramColor(i),
                         borderRadius: '2px 2px 0 0',
                         transition: 'height 10ms linear'
                     }}

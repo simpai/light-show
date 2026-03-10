@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Trash2, Plus, Minus, Download, Upload } from 'lucide-react';
 import { EASING_TYPES } from '../utils/Easing.js';
+import { getSpectrogramColor } from '../utils/colorUtils.js';
 
 const CHANNELS = {
     "Main Beams": [0, 1],
@@ -260,7 +261,7 @@ const BinRangeSelector = ({ minBin = 0, maxBin = 31, onChange }) => {
                                 style={{
                                     width: '100%',
                                     height: `${heightPct}%`,
-                                    background: isActive ? (isEdge ? `hsl(${((i % 16) / 15) * 280}, 100%, 65%)` : `hsl(${((i % 16) / 15) * 280}, 100%, 50%)`) : `hsl(${((i % 16) / 15) * 280}, 30%, 25%)`,
+                                    background: getSpectrogramColor(i, isActive, isEdge),
                                     borderRadius: '1px',
                                     transition: 'background-color 0.1s',
                                     opacity: isActive ? 1 : 0.5

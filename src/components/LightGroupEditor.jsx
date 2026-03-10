@@ -31,36 +31,6 @@ export function LightGroupEditor({ lightGroups, onUpdate }) {
         });
     };
 
-    const toggleChannelRange = (groupName, start, end) => {
-        const group = lightGroups[groupName];
-        const channels = new Set(group.channels || []);
-
-        // Determine if we should select all or deselect all
-        let allPresent = true;
-        for (let i = start; i <= end; i++) {
-            if (!channels.has(i)) {
-                allPresent = false;
-                break;
-            }
-        }
-
-        if (allPresent) {
-            // Deselect all in range
-            for (let i = start; i <= end; i++) {
-                channels.delete(i);
-            }
-        } else {
-            // Select all in range
-            for (let i = start; i <= end; i++) {
-                channels.add(i);
-            }
-        }
-
-        onUpdate({
-            ...lightGroups,
-            [groupName]: { ...group, channels: Array.from(channels).sort((a, b) => a - b) }
-        });
-    };
 
     const updateGroupColor = (name, color) => {
         onUpdate({
@@ -199,24 +169,6 @@ export function LightGroupEditor({ lightGroups, onUpdate }) {
                                     <span className="channel-count">{channels.length} channels</span>
                                 </div>
                                 <div className="group-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    {editingGroup === name && (
-                                        <>
-                                            <button
-                                                className="btn-tesla-outline-sm"
-                                                onClick={() => toggleChannelRange(name, 46, 75)}
-                                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                                            >
-                                                Left Lightbar
-                                            </button>
-                                            <button
-                                                className="btn-tesla-outline-sm"
-                                                onClick={() => toggleChannelRange(name, 76, 105)}
-                                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                                            >
-                                                Right Lightbar
-                                            </button>
-                                        </>
-                                    )}
                                     <button
                                         className={`btn-secondary ${editingGroup === name ? 'active' : ''}`}
                                         onClick={() => setEditingGroup(editingGroup === name ? null : name)}
@@ -232,7 +184,7 @@ export function LightGroupEditor({ lightGroups, onUpdate }) {
                             {editingGroup === name && (
                                 <div className="channels-grid-container">
                                     <div className="channels-grid">
-                                        {Array.from({ length: 200 }).map((_, i) => (
+                                        {Array.from({ length: 48 }).map((_, i) => (
                                             <button
                                                 key={i}
                                                 onClick={() => toggleChannel(name, i)}
@@ -266,22 +218,6 @@ export function LightGroupEditor({ lightGroups, onUpdate }) {
                     transition: background 0.2s;
                 }
                 .btn-tesla-sm:hover { background: #c01818; }
-                .btn-tesla-outline-sm {
-                    background: transparent;
-                    color: #e82020;
-                    border: 1px solid #e82020;
-                    border-radius: 4px;
-                    padding: 4px 10px;
-                    font-size: 13px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    font-weight: 500;
-                }
-                .btn-tesla-outline-sm:hover {
-                    background: rgba(232, 32, 32, 0.1);
-                    border-color: #ff2a2a;
-                    color: #ff2a2a;
-                }
                 .light-group-editor .editor-header {
                     display: flex;
                     justify-content: space-between;

@@ -117,6 +117,29 @@ export class AudioWaveformManager {
                         }
                     }
 
+                    // 1. Find the maximum peak for each individual bin across the whole song
+                    const maxVals = new Array(targetBins).fill(0.0001); // Avoid division by zero
+                    for (let i = 0; i < totalPoints; i++) {
+                        for (let b = 0; b < targetBins; b++) {
+                            if (spectrogram[i][b] > maxVals[b]) {
+                                maxVals[b] = spectrogram[i][b];
+                            }
+                        }
+                    }
+
+                    // 2. Normalize every bin to a 0-255 scale (Uint8Array)
+                    // This ensures even quiet high-frequency bins will peak at 255.
+                    for (let i = 0; i < totalPoints; i++) {
+                        const original = spectrogram[i];
+                        const normalized8 = new Uint8Array(targetBins);
+                        for (let b = 0; b < targetBins; b++) {
+                            const val = original[b];
+                            const normalizedFloat = (val / maxVals[b]) * 255.0;
+                            normalized8[b] = Math.min(255, Math.max(0, Math.round(normalizedFloat)));
+                        }
+                        spectrogram[i] = normalized8;
+                    }
+
                     resolve({
                         peaks: Array.from(peaks),
                         duration: duration * 1000, // Convert to ms

@@ -1057,14 +1057,13 @@ export class ShowRenderer {
                 sum += currentSpec[b];
                 count++;
             }
-            let avgVol = count > 0 ? (sum / count) : 0;
+            let avgVol = count > 0 ? (sum / count) / 255.0 : 0;
 
             const scale = band.maxScale || 1.0;
             const cutOff = band.minCutoff || 0;
 
-            // Raw STFT magnitudes vary. Downsampled bins often average out peaks.
-            // We increase the base multiplier to 15.0 so we actually see some volume.
-            let baseVol = avgVol * 15.0;
+            // Values are pre-normalized to 0-255, so divided by 255 they perfectly fit the 0.0-1.0 range.
+            let baseVol = avgVol;
             baseVol = baseVol - cutOff;
             if (baseVol < 0) baseVol = 0;
             avgVol = baseVol * scale;
@@ -1081,7 +1080,7 @@ export class ShowRenderer {
                         for (let b = startBin; b <= endBin; b++) {
                             pSum += spec[pastIndex][b];
                         }
-                        let pBase = (pSum / count) * 15.0 - cutOff;
+                        let pBase = ((pSum / count) / 255.0) - cutOff;
                         if (pBase < 0) pBase = 0;
                         let pVol = pBase * scale;
 
@@ -1104,7 +1103,7 @@ export class ShowRenderer {
                         for (let b = startBin; b <= endBin; b++) {
                             pSum += spec[pastIndex][b];
                         }
-                        let pBase = (pSum / count) * 15.0 - cutOff;
+                        let pBase = ((pSum / count) / 255.0) - cutOff;
                         if (pBase < 0) pBase = 0;
                         let pVol = pBase * scale;
                         if (pVol > highest) highest = pVol;

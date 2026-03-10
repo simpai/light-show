@@ -260,7 +260,7 @@ const BinRangeSelector = ({ minBin = 0, maxBin = 31, onChange }) => {
                                 style={{
                                     width: '100%',
                                     height: `${heightPct}%`,
-                                    background: isActive ? (isEdge ? '#34d399' : '#10b981') : '#333',
+                                    background: isActive ? (isEdge ? `hsl(${((i % 16) / 15) * 280}, 100%, 65%)` : `hsl(${((i % 16) / 15) * 280}, 100%, 50%)`) : `hsl(${((i % 16) / 15) * 280}, 30%, 25%)`,
                                     borderRadius: '1px',
                                     transition: 'background-color 0.1s',
                                     opacity: isActive ? 1 : 0.5
@@ -919,50 +919,9 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
             )
             }
 
-            {clip.type === 'eq' && (
-                <div className="section-container content-box">
-                    <label className="section-title">Equalizer Bands</label>
-                    <div className="form-group grid-2">
-                        <CustomNumberInput
-                            label="Bands"
-                            value={clip.bandCount === '__mixed__' ? '' : (clip.bandCount || 1)}
-                            step={1} min={1} max={8}
-                            onChange={val => {
-                                const newCount = Math.min(8, Math.max(1, val));
-                                const currentBands = Array.isArray(clip.bands) ? [...clip.bands] : [];
 
-                                const BAND_PRESETS = {
-                                    1: [[0, 31]],
-                                    2: [[0, 8], [9, 31]],
-                                    3: [[0, 6], [7, 18], [19, 31]],
-                                    4: [[0, 4], [5, 12], [13, 22], [23, 31]],
-                                    5: [[0, 3], [4, 9], [10, 16], [17, 24], [25, 31]],
-                                    6: [[0, 2], [3, 7], [8, 13], [14, 19], [20, 25], [26, 31]],
-                                    7: [[0, 2], [3, 6], [7, 11], [12, 16], [17, 21], [22, 26], [27, 31]],
-                                    8: [[0, 1], [2, 4], [5, 8], [9, 13], [14, 18], [19, 23], [24, 27], [28, 31]]
-                                };
 
-                                const preset = BAND_PRESETS[newCount];
-
-                                const newBands = [];
-                                for (let i = 0; i < newCount; i++) {
-                                    const existing = currentBands[i] || { maxScale: 1.0, minCutoff: 0, imageId: null };
-                                    newBands.push({
-                                        ...existing,
-                                        minBin: preset[i][0],
-                                        maxBin: preset[i][1]
-                                    });
-                                }
-
-                                handleChanges({ bandCount: newCount, bands: newBands });
-                            }}
-                            className="timing-input"
-                        />
-                    </div>
-                </div>
-            )}
-
-            {clip.type === 'eq' && !isMulti && Array.isArray(clip.bands) && clip.bands.slice(0, clip.bandCount || 1).map((band, idx) => (
+            {clip.type === 'eq' && !isMulti && Array.isArray(clip.bands) && clip.bands.slice(0, 1).map((band, idx) => (
                 <div key={idx} className="section-container content-box eq-band-card" style={{ padding: '8px', borderLeft: '3px solid #6366f1', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
                         <strong style={{ fontSize: '13px', color: '#a5b4fc', margin: 0 }}>Band {idx + 1}</strong>
@@ -1049,8 +1008,8 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                 <input
                                     type="range"
                                     min="0"
-                                    max="5"
-                                    step="0.1"
+                                    max="1"
+                                    step="0.01"
                                     value={band.minCutoff !== undefined ? band.minCutoff : 0.0}
                                     style={{ flex: 1, accentColor: '#ef4444' }}
                                     onChange={e => {
@@ -1059,7 +1018,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                                         handleChange('bands', newBands);
                                     }}
                                 />
-                                <span style={{ width: '30px', fontSize: '11px', color: '#fff', textAlign: 'right' }}>{(band.minCutoff !== undefined ? band.minCutoff : 0).toFixed(1)}</span>
+                                <span style={{ width: '30px', fontSize: '11px', color: '#fff', textAlign: 'right' }}>{(band.minCutoff !== undefined ? band.minCutoff : 0).toFixed(2)}</span>
                             </div>
                         </div>
 
@@ -1079,7 +1038,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
                             <span>(</span>
                             <span style={{ color: '#10b981' }}>Vol</span>
                             <span style={{ margin: '0 4px', color: '#fff' }}>-</span>
-                            <span style={{ color: '#ef4444' }}>{Number(band.minCutoff !== undefined ? band.minCutoff : 0).toFixed(1)}</span>
+                            <span style={{ color: '#ef4444' }}>{Number(band.minCutoff !== undefined ? band.minCutoff : 0).toFixed(2)}</span>
                             <span>)</span>
                             <span>×</span>
                             <span style={{ color: '#3b82f6' }}>{Number(band.maxScale !== undefined ? band.maxScale : 1.0).toFixed(1)}</span>
@@ -1167,7 +1126,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}
             }
 
             {
-                clip.type !== 'gif' && (
+                !['gif', 'eq'].includes(clip.type) && (
                     <div className="section-container content-box">
                         <div className="ramping-header-row">
                             <div className="toggle-group-inline">

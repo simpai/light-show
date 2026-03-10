@@ -309,13 +309,13 @@ export function useFileOperations({
                 const totalPoints = specArray.length;
                 if (totalPoints > 0) {
                     const binsPerPoint = specArray[0].length;
-                    // Flatten array of Float32Array into a single Float32Array
-                    const flatSpec = new Float32Array(totalPoints * binsPerPoint);
+                    // Compression: Arrays are already normalized to Uint8 (0-255)
+                    const flatSpec8 = new Uint8Array(totalPoints * binsPerPoint);
                     for (let i = 0; i < totalPoints; i++) {
-                        flatSpec.set(specArray[i], i * binsPerPoint);
+                        flatSpec8.set(specArray[i], i * binsPerPoint);
                     }
-                    // Save as binary buffer
-                    zip.file("spectrogram.bin", flatSpec.buffer);
+                    // Save as compressed 8-bit binary buffer
+                    zip.file("spectrogram.bin", flatSpec8.buffer);
                 }
             }
 
@@ -392,13 +392,16 @@ export function useFileOperations({
                     if (specFile && loadedProject.waveform) {
                         try {
                             const specBuffer = await specFile.async("arraybuffer");
-                            const flatSpec = new Float32Array(specBuffer);
+
+                            // Load directly as an 8-bit unsigned integer array
+                            const flatSpec8 = new Uint8Array(specBuffer);
+
                             const totalPoints = loadedProject.waveform.peaks.length;
-                            const binsPerPoint = flatSpec.length / totalPoints;
+                            const binsPerPoint = flatSpec8.length / totalPoints;
 
                             const spectrogram = [];
                             for (let i = 0; i < totalPoints; i++) {
-                                spectrogram[i] = flatSpec.slice(i * binsPerPoint, (i + 1) * binsPerPoint);
+                                spectrogram[i] = new Uint8Array(flatSpec8.buffer, flatSpec8.byteOffset + i * binsPerPoint, binsPerPoint);
                             }
 
                             loadedProject.waveform.spectrogram = spectrogram;

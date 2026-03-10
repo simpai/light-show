@@ -19,7 +19,7 @@ const MiniSpectrogram = ({ project }) => {
 
             if (currentSpec && barsRef.current.length === 32) {
                 for (let i = 0; i < 32; i++) {
-                    const height = Math.max(5, Math.min(100, currentSpec[i] * 15 * 100));
+                    const height = Math.max(5, Math.min(100, (currentSpec[i] / 255.0) * 100));
                     if (barsRef.current[i]) {
                         barsRef.current[i].style.height = `${height}% `;
                     }
@@ -46,7 +46,7 @@ const MiniSpectrogram = ({ project }) => {
                     style={{
                         width: '8px',
                         height: '5%',
-                        background: '#10b981',
+                        background: `hsl(${((i % 16) / 15) * 280}, 100%, 50%)`,
                         borderRadius: '2px 2px 0 0',
                         transition: 'height 10ms linear'
                     }}

@@ -23,6 +23,7 @@ import { useFileOperations } from '../hooks/useFileOperations';
 import MatrixPreview2D from './MatrixPreview2D';
 import LayoutGridEditor, { createDefaultGridData } from './LayoutGridEditor';
 import { Midi } from '@tonejs/midi';
+import { useStore } from '../store/useStore';
 
 const CHANNEL_NAMES = {
     0: "Left Outer Main Beam",
@@ -84,50 +85,58 @@ const modKey = isMac ? '⌘' : 'Ctrl';
 
 
 export default function EditorApp({ audioFile: initialAudioFile, analysis: initialAnalysis, bundledData, onExit, onChangeMode }) {
-    const [project, setProject] = useState(new ProjectState());
-    const [selectedClipIds, setSelectedClipIds] = useState([]);
-    const [selectedLayerId, setSelectedLayerId] = useState(null);
-    const [matrixConfig, setMatrixConfig] = useState({ cols: 63, rows: 16 });
-    const [zoom, setZoom] = useState(() => parseFloat(localStorage.getItem('ls_editor_zoom')) || 50);
-    const [snapMode, setSnapMode] = useState(() => localStorage.getItem('ls_editor_snap') || '1/4');
-    const [bpm, setBpm] = useState(() => parseFloat(localStorage.getItem('ls_editor_bpm')) || 120);
-    const [volume, setVolume] = useState(() => {
-        const stored = localStorage.getItem('ls_editor_volume');
-        return stored !== null ? parseFloat(stored) : 1;
-    });
-    const [clipboard, setClipboard] = useState(null);
-    const [bookmarks, setBookmarks] = useState([]);
-    const [showHelpModal, setShowHelpModal] = useState(false);
-    const [selectedPaletteClipId, setSelectedPaletteClipId] = useState(null);
+    const project = useStore(state => state.project);
+    const setProject = useStore(state => state.setProject);
+    const selectedClipIds = useStore(state => state.selectedClipIds);
+    const setSelectedClipIds = useStore(state => state.setSelectedClipIds);
+    const selectedLayerId = useStore(state => state.selectedLayerId);
+    const setSelectedLayerId = useStore(state => state.setSelectedLayerId);
+    const matrixConfig = useStore(state => state.matrixConfig);
+    const setMatrixConfig = useStore(state => state.setMatrixConfig);
+    const zoom = useStore(state => state.zoom);
+    const setZoom = useStore(state => state.setZoom);
+    const snapMode = useStore(state => state.snapMode);
+    const setSnapMode = useStore(state => state.setSnapMode);
+    const bpm = useStore(state => state.bpm);
+    const setBpm = useStore(state => state.setBpm);
+    const volume = useStore(state => state.volume);
+    const setVolume = useStore(state => state.setVolume);
+    const isPlaying = useStore(state => state.isPlaying);
+    const audioFile = useStore(state => state.audioFile);
+    const setAudioFile = useStore(state => state.setAudioFile);
+    const audioFileName = useStore(state => state.audioFileName);
+    const setAudioFileName = useStore(state => state.setAudioFileName);
+    const clipboard = useStore(state => state.clipboard);
+    const setClipboard = useStore(state => state.setClipboard);
+    const bookmarks = useStore(state => state.bookmarks);
+    const setBookmarks = useStore(state => state.setBookmarks);
+    const showHelpModal = useStore(state => state.showHelpModal);
+    const setShowHelpModal = useStore(state => state.setShowHelpModal);
+    const selectedPaletteClipId = useStore(state => state.selectedPaletteClipId);
+    const setSelectedPaletteClipId = useStore(state => state.setSelectedPaletteClipId);
 
-    // Sync UI settings to localStorage
+    // Sync UI settings to localStorage is now handled by Zustand store actions
     useEffect(() => {
-        localStorage.setItem('ls_editor_zoom', zoom);
-    }, [zoom]);
-
-    useEffect(() => {
-        localStorage.setItem('ls_editor_snap', snapMode);
-    }, [snapMode]);
-
-    useEffect(() => {
-        localStorage.setItem('ls_editor_bpm', bpm);
-    }, [bpm]);
-
-    useEffect(() => {
-        localStorage.setItem('ls_editor_volume', volume);
         if (audioRef.current) {
             audioRef.current.volume = volume;
         }
     }, [volume]);
 
     // Layout system state
-    const [layoutData, setLayoutData] = useState(null);
-    const [showGroundLight, setShowGroundLight] = useState(true);
-    const [activeModal, setActiveModal] = useState(null); // 'lightGroups', 'trackProperties', 'carGroups'
-    const [selectedCars, setSelectedCars] = useState(new Set());
-    const [fitTrigger2D, setFitTrigger2D] = useState(0);
-    const [showLayoutEditor, setShowLayoutEditor] = useState(false);
-    const [gridLayoutData, setGridLayoutData] = useState(null);
+    const layoutData = useStore(state => state.layoutData);
+    const setLayoutData = useStore(state => state.setLayoutData);
+    const showGroundLight = useStore(state => state.showGroundLight);
+    const setShowGroundLight = useStore(state => state.setShowGroundLight);
+    const activeModal = useStore(state => state.activeModal);
+    const setActiveModal = useStore(state => state.setActiveModal);
+    const selectedCars = useStore(state => state.selectedCars);
+    const setSelectedCars = useStore(state => state.setSelectedCars);
+    const fitTrigger2D = useStore(state => state.fitTrigger2D);
+    const setFitTrigger2D = useStore(state => state.setFitTrigger2D);
+    const showLayoutEditor = useStore(state => state.showLayoutEditor);
+    const setShowLayoutEditor = useStore(state => state.setShowLayoutEditor);
+    const gridLayoutData = useStore(state => state.gridLayoutData);
+    const setGridLayoutData = useStore(state => state.setGridLayoutData);
 
     // Convert grid layout data to the existing layoutData format used by MatrixPreview2D and exports
     const gridDataToLayoutData = (gd) => {
@@ -182,15 +191,10 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     } = useProjectHistory(project, setProject, rendererRef);
 
     const {
-        isPlaying, setIsPlaying,
-        currentTime, setCurrentTime,
-        audioFile, setAudioFile,
-        audioFileName, setAudioFileName,
         fpsDisplay,
         isAnalyzing,
         audioRef,
         audioUrlRef,
-        currentTimeRef,
         togglePlay,
         handleSeek,
         handleReset,
@@ -245,7 +249,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
         // Find the latest bookmark before or at current time, or just the first one
         let targetTime = bookmarks[0];
-        const currentMs = currentTimeRef.current; // Use ref for live time
+        const currentMs = useStore.getState().currentTime;
 
         const pastBookmarks = bookmarks.filter(b => b <= currentMs + 50); // small buffer
         if (pastBookmarks.length > 0) {
@@ -305,7 +309,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                             // Calculate global offset relative to earliest clip
                             const earliestStart = Math.min(...clipboard.map(c => c.startTime));
-                            const offset = currentTimeRef.current - earliestStart;
+                            const offset = useStore.getState().currentTime - earliestStart;
 
                             const newPastedIds = [];
                             clipboard.forEach(clip => {
@@ -778,7 +782,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 const newClip = {
                     ...clip,
                     id: crypto.randomUUID(),
-                    startTime: currentTimeRef.current + relativeOffset
+                    startTime: useStore.getState().currentTime + relativeOffset
                 };
                 layer.clips.push(newClip);
                 newPastedIds.push(newClip.id);
@@ -854,14 +858,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             if (layer) {
                 // Smart placement logic: check for overlaps at currentTime
-                let startTime = currentTimeRef.current;
+                let startTime = useStore.getState().currentTime;
 
                 // Sort clips by startTime to find the right gap
                 const sortedClips = [...layer.clips].sort((a, b) => a.startTime - b.startTime);
 
                 // Find if currentTime is inside any clip
                 const overlappingClip = sortedClips.find(c =>
-                    currentTimeRef.current >= c.startTime && currentTimeRef.current < (c.startTime + c.duration)
+                    useStore.getState().currentTime >= c.startTime && useStore.getState().currentTime < (c.startTime + c.duration)
                 );
 
                 if (overlappingClip) {
@@ -1145,12 +1149,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 handleExportXsq={handleExportXsq}
                 handleExportMatrix={handleExportMatrix}
                 project={project}
-                currentTime={currentTime}
             />
 
             <EditorWorkspace
                 fpsDisplay={fpsDisplay}
-                matrixData={rendererRef.current.getMatrixFrame(currentTime, matrixConfig)}
+                rendererRef={rendererRef}
                 matrixConfig={matrixConfig}
                 layoutData={layoutData}
                 showGroundLight={showGroundLight}
@@ -1158,7 +1161,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 selectedCars={selectedCars}
                 setSelectedCars={setSelectedCars}
                 fitTrigger2D={fitTrigger2D}
-                currentTime={currentTime}
                 clipboard={clipboard}
                 selectedPaletteClipId={selectedPaletteClipId}
                 handlePaletteClipSelect={handlePaletteClipSelect}
@@ -1183,7 +1185,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     handleTakeSnapshot={handleTakeSnapshot} snapshot={snapshot} handleRestoreSnapshot={handleRestoreSnapshot}
                     selectedClipIds={selectedClipIds} handleRemoveGaps={handleRemoveGaps} handleAlignToSnap={handleAlignToSnap} snapMode={snapMode} handleAlignClips={handleAlignClips}
                     handleImportTimeline={handleImportTimeline} handleAppendTimeline={handleAppendTimeline} handleExportTimeline={handleExportTimeline}
-                    currentTime={currentTime}
                     zoom={zoom} setZoom={setZoom}
                     setSnapMode={setSnapMode}
                     bpm={bpm} setBpm={setBpm} handleBpmChange={handleBpmChange}
@@ -1194,21 +1195,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                 <div className="timeline-tracks-container">
                     <Timeline
-                        project={project}
-                        currentTime={currentTime}
-                        duration={project.duration || 60000}
-                        zoom={zoom}
-                        snapMode={snapMode}
-                        bpm={bpm}
                         onZoomChange={setZoom}
-                        selectedClipIds={selectedClipIds}
-                        selectedLayerId={selectedLayerId}
                         onClipSelect={handleClipSelect}
                         onLayerSelect={setSelectedLayerId}
                         onLayerDoubleClick={() => setActiveModal('trackProperties')}
                         onSeek={handleSeek}
                         onProjectChange={saveToHistory}
-                        bookmarks={bookmarks}
                         onToggleBookmark={handleToggleBookmark}
                         onBookmarkMove={handleBookmarkMove}
                     />

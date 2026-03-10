@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Trash2, Plus, Minus, Download, Upload } from 'lucide-react';
+import { useStore } from '../store/useStore';
 import { EASING_TYPES } from '../utils/Easing.js';
 import { getSpectrogramColor } from '../utils/colorUtils.js';
 
@@ -280,7 +281,11 @@ const BinRangeSelector = ({ minBin = 0, maxBin = 31, onChange }) => {
     );
 };
 
-export default function ClipEditor({ clips = [], onChange, onDelete, assets = {}, lightGroups = {}, carGroups = [], allCarsThumbnail = null }) {
+export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThumbnail = null }) {
+    const project = useStore(state => state.project);
+    const assets = project?.assets || {};
+    const lightGroups = project?.lightGroups || {};
+    const carGroups = project?.carGroups || [];
     const isMulti = clips.length > 1;
     const firstClip = clips[0];
     const allSameType = clips.length > 0 ? clips.every(c => c.type === firstClip.type) : true;

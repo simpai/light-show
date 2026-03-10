@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProjectState } from '../core/ProjectState';
 import { Settings, Eye, EyeOff, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
 const WaveformTile = ({ peaks, startIndex, widthPerPoint, height, pixelsPerSecond, tileOffset }) => {
     const canvasRef = useRef(null);
@@ -69,7 +70,18 @@ const WaveformCanvas = ({ waveform, pixelsPerSecond, totalWidth, height = 40 }) 
     );
 };
 
-export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, onClipSelect, selectedClipIds = [], selectedLayerId, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, bookmarks = [], onToggleBookmark, onBookmarkMove }) {
+export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSeek, onProjectChange, onZoomChange, onToggleBookmark, onBookmarkMove }) {
+    const project = useStore(state => state.project);
+    // DO NOT subscribe to currentTime here to prevent 60fps DOM rebuilds.
+    // We use a ref and requestAnimationFrame to update the playhead specifically.
+    const zoom = useStore(state => state.zoom);
+    const snapMode = useStore(state => state.snapMode);
+    const bpm = useStore(state => state.bpm);
+    const selectedClipIds = useStore(state => state.selectedClipIds);
+    const selectedLayerId = useStore(state => state.selectedLayerId);
+    const bookmarks = useStore(state => state.bookmarks);
+    const duration = project ? project.duration : 60000;
+
     const pixelsPerSecond = zoom || 50;
     const totalWidth = (duration / 1000) * pixelsPerSecond;
     const trackHeaderWidth = 150;
@@ -116,6 +128,30 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
     useEffect(() => {
         zoomRef.current = zoom;
     }, [zoom]);
+
+    // High performance playhead continuous rendering independent of React renders
+    const playheadRef = useRef(null);
+    const trackPlayheadRef = useRef(null);
+    useEffect(() => {
+        let animationFrameId;
+
+        const updatePlayhead = () => {
+            const currentTime = useStore.getState().currentTime;
+            const zoomFactor = zoomRef.current || 50;
+            const targetX = (currentTime / 1000) * zoomFactor;
+
+            if (playheadRef.current) {
+                playheadRef.current.style.left = `${targetX}px`;
+            }
+            if (trackPlayheadRef.current) {
+                trackPlayheadRef.current.style.left = `${targetX}px`;
+            }
+            animationFrameId = requestAnimationFrame(updatePlayhead);
+        };
+
+        updatePlayhead();
+        return () => cancelAnimationFrame(animationFrameId);
+    }, []);
 
     useEffect(() => {
         const handleWheelManual = (e) => {
@@ -686,7 +722,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                         )}
 
                         {/* Playhead in Ruler */}
-                        <div className="playhead ruler-playhead" style={{ left: (currentTime / 1000) * pixelsPerSecond }} />
+                        <div className="playhead ruler-playhead" ref={playheadRef} />
                     </div>
                 </div>
             </div>
@@ -1040,7 +1076,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                         )}
 
                         {/* Playhead in Tracks */}
-                        <div className="playhead track-playhead" style={{ left: (currentTime / 1000) * pixelsPerSecond }} />
+                        <div className="playhead track-playhead" ref={trackPlayheadRef} />
                     </div>
                 </div>
             </div>

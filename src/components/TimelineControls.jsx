@@ -1,6 +1,12 @@
 import React from 'react';
+import { useStore } from '../store/useStore';
 import { Play, Pause, Undo, Redo, SkipBack, Zap, ImageIcon, HelpCircle, Magnet, Plus, RotateCcw, Camera, Grid, AlignLeft, Music, Layers, Download, Upload, ChevronUp, ChevronDown, Activity, Volume2, VolumeX } from 'lucide-react';
 import { PlayFromBookmarkIcon } from './PlayFromBookmarkIcon';
+
+function TimeDisplay() {
+    const currentTime = useStore(state => state.currentTime);
+    return <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>;
+}
 
 export function TimelineControls({
     isPlaying, togglePlay,
@@ -12,7 +18,6 @@ export function TimelineControls({
     handleTakeSnapshot, snapshot, handleRestoreSnapshot,
     selectedClipIds, handleRemoveGaps, handleAlignToSnap, snapMode, handleAlignClips,
     handleImportTimeline, handleAppendTimeline, handleExportTimeline,
-    currentTime,
     zoom, setZoom,
     setSnapMode,
     bpm, setBpm, handleBpmChange,
@@ -20,6 +25,7 @@ export function TimelineControls({
     selectedLayerId,
     handleAddTrack, handleAddMidiTrack, handleAddClip, setShowHelpModal
 }) {
+
     return (
         <div className="timeline-controls">
             <button onClick={togglePlay} className="btn-icon">
@@ -113,7 +119,7 @@ export function TimelineControls({
 
                 <div style={{ width: '1px', height: '20px', background: '#444', margin: '0 5px', alignSelf: 'center' }} />
             </div>
-            <span className="time-display">{(currentTime / 1000).toFixed(2)}s</span>
+            <TimeDisplay />
 
             <div className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '0px' }}>
                 <span style={{ fontSize: '12px', color: '#666' }}>Zoom:</span>

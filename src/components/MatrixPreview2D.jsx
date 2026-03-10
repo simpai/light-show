@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useStore } from '../store/useStore';
 import { Maximize2 } from 'lucide-react';
 
 /**
@@ -69,7 +70,7 @@ for (let i = 0; i < 200; i++) {
 }
 
 export default function MatrixPreview2D({
-    matrixData,
+    rendererRef,
     cols = 63,
     rows = 16,
     layoutData = null,
@@ -77,9 +78,11 @@ export default function MatrixPreview2D({
     lightGroups = {},
     selectedCars = new Set(), // Set of "r,c" strings
     onSelectionChange,
-    fitTrigger = 0,
-    updateTrigger = 0
+    fitTrigger = 0
 }) {
+    // DO NOT subscribe to currentTime which causes 60fps React render spam
+    // Read from the store directly via requestAnimationFrame loop instead.
+
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const [dragStart, setDragStart] = useState(null);
@@ -155,174 +158,220 @@ export default function MatrixPreview2D({
         return () => container.removeEventListener('wheel', handleWheel);
     }, []);
 
+    // Background rendering cycle detached from React state
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas || !matrixData) return;
+        if (!canvas) return;
+        let animationFrameId;
 
-        const ctx = canvas.getContext('2d');
+        const renderFrame = () => {
+            const now = performance.now();
+            const timeSpan = window.__lightShowTime || useStore.getState().currentTime;
+            const matrixData = rendererRef?.current?.getMatrixFrame(timeSpan, { rows, cols });
 
-        // Set canvas internal dimensions (with 1px margin on all sides)
+            if (!matrixData) {
+                animationFrameId = requestAnimationFrame(renderFrame);
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+
+            // clear background
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const colorBatches = new Map();
+            const addRectToBatch = (color, x, y, w, h) => {
+                let list = colorBatches.get(color);
+                if (!list) {
+                    list = [];
+                    colorBatches.set(color, list);
+                }
+                list.push({ x, y, w, h });
+            };
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const carY = r * cellH + 1; // 1px margin
+                    const carX = c * cellW + 1; // 1px margin
+
+                    let carExists = true;
+                    let rotation = 0;
+
+                    if (layoutData && layoutData.layout && layoutData.layout[r]?.[c]) {
+                        const cell = layoutData.layout[r][c];
+                        carExists = cell.exists;
+                        rotation = cell.rotation || 0;
+                    }
+
+                    if (!carExists) continue;
+
+                    // Determine if car is flipped (near 180 degrees)
+                    const normRot = ((rotation % 360) + 360) % 360;
+                    const isFlipped = normRot > 90 && normRot < 270;
+
+                    // Base car body (Dark Gray)
+                    addRectToBatch('#111', carX, carY, carW, carH);
+
+                    if (matrixData[r]?.[c]) {
+                        const lights = matrixData[r][c];
+
+                        // 1. Ground Light Logic
+                        if (showGroundLight) {
+                            // Left Headlight Ground (Ch 0)
+                            if (lights[0] > 0) {
+                                const gColor = hexToRgba('#ffffff', (lights[0] / 255) * 0.5);
+                                const bColor = hexToRgba('#000', 0.5);
+                                const groundY = isFlipped ? carY - carH : carY + carH;
+
+                                if (isFlipped) {
+                                    addRectToBatch(gColor, carX - 1, groundY - 2, 4, carH + 2);
+                                    addRectToBatch(bColor, carX + 2, groundY + carH, 1, -carH * 0.4);
+                                    addRectToBatch(bColor, carX + 2, groundY + carH, 1, -carH);
+                                    addRectToBatch(bColor, carX - 1, groundY + carH, 1, -carH * 0.4);
+                                    addRectToBatch(bColor, carX - 1, groundY + carH, 1, -carH);
+                                } else {
+                                    addRectToBatch(gColor, carX + carW - 3, groundY, 4, carH + 2);
+                                    addRectToBatch(bColor, carX + 2, groundY, 1, carH * 0.4);
+                                    addRectToBatch(bColor, carX + 2, groundY, 1, carH);
+                                    addRectToBatch(bColor, carX + 5, groundY, 1, carH * 0.4);
+                                    addRectToBatch(bColor, carX + 5, groundY, 1, carH);
+                                }
+                            }
+                            // Right Headlight Ground (Ch 1)
+                            if (lights[1] > 0) {
+                                const gColor = hexToRgba('#ffffff', (lights[1] / 255) * 0.5);
+                                const bColor = hexToRgba('#000', 0.5);
+                                const groundY = isFlipped ? carY - carH : carY + carH;
+
+                                if (isFlipped) {
+                                    addRectToBatch(gColor, carX + carW - 3, groundY - 2, 4, carH + 2);
+                                    addRectToBatch(bColor, carX + 2, groundY + carH, 1, -carH * 0.4);
+                                    addRectToBatch(bColor, carX + 2, groundY + carH, 1, -carH);
+                                    addRectToBatch(bColor, carX + 5, groundY + carH, 1, -carH * 0.4);
+                                    addRectToBatch(bColor, carX + 5, groundY + carH, 1, -carH);
+                                } else {
+                                    addRectToBatch(gColor, carX - 1, groundY, 4, carH + 2);
+                                    addRectToBatch(bColor, carX + 2, groundY, 1, carH * 0.4);
+                                    addRectToBatch(bColor, carX + 2, groundY, 1, carH);
+                                    addRectToBatch(bColor, carX - 1, groundY, 1, carH * 0.4);
+                                    addRectToBatch(bColor, carX - 1, groundY, 1, carH);
+                                }
+                            }
+                            // 2. Brake Lights (Ch 24) - 2x2 red at rear corners
+                            if (lights[24] > 0) {
+                                const rColor = hexToRgba('#ff0000', (lights[24] / 255) * 0.5);
+                                if (isFlipped) {
+                                    addRectToBatch(rColor, carX - 1, carY + carH - 1, 7, 2);
+                                } else {
+                                    addRectToBatch(rColor, carX - 1, carY - 1, 7, 2);
+                                }
+                            }
+                        }
+
+                        // 3. Individual Light Points
+                        for (let ch = 0; ch < 48; ch++) {
+                            const val = lights[ch];
+                            if (val > 0) {
+                                const coords = LIGHT_COORDINATES[ch];
+                                const points = Array.isArray(coords) ? coords : [coords];
+
+                                points.forEach(coord => {
+                                    let dx = coord.x;
+                                    let dy = coord.y;
+
+                                    if (isFlipped) {
+                                        dx = (carW - 1) - dx;
+                                        dy = (carH - 1) - dy;
+                                    }
+
+                                    const ptColor = hexToRgba(coord.color, val / 255);
+                                    addRectToBatch(ptColor, carX + dx, carY + dy, 1, 1);
+                                });
+                            }
+                        }
+                    }
+
+                    // Selection Overlay
+                    const key = `${r},${c}`;
+                    let isActuallySelected = selectedCars.has(key);
+                    let visualOverlay = null;
+
+                    if (dragStart && dragEnd) {
+                        const isMarked = tempSelection.has(key);
+                        if (selectionMode === 'add') {
+                            if (isActuallySelected || isMarked) visualOverlay = 'green';
+                        } else if (selectionMode === 'subtract') {
+                            if (isActuallySelected) {
+                                visualOverlay = isMarked ? 'red' : 'green';
+                            }
+                        } else {
+                            if (isMarked) visualOverlay = 'green';
+                        }
+                    } else if (isActuallySelected) {
+                        visualOverlay = 'green';
+                    }
+
+                    if (visualOverlay === 'green') {
+                        addRectToBatch('rgba(0, 255, 0, 0.6)', carX, carY, carW, carH);
+                    } else if (visualOverlay === 'red') {
+                        addRectToBatch('rgba(255, 0, 0, 0.4)', carX, carY, carW, carH);
+                    }
+                }
+            }
+
+            // DRAW BATCHES
+            // To ensure correct z-index, draw car body (#111) first
+            if (colorBatches.has('#111')) {
+                ctx.fillStyle = '#111';
+                const rects = colorBatches.get('#111');
+                ctx.beginPath();
+                for (let i = 0; i < rects.length; i++) {
+                    const { x, y, w, h } = rects[i];
+                    ctx.rect(x, y, w, h);
+                }
+                ctx.fill();
+                colorBatches.delete('#111');
+            }
+
+            for (const [color, rects] of colorBatches.entries()) {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                for (let i = 0; i < rects.length; i++) {
+                    const { x, y, w, h } = rects[i];
+                    ctx.rect(x, y, w, h);
+                }
+                ctx.fill();
+            }
+
+            // Marquee Draw
+            if (dragStart && dragEnd) {
+                const isSub = selectionMode === 'subtract';
+                ctx.fillStyle = isSub ? 'rgba(255, 0, 0, 0.1)' : 'rgba(0, 255, 0, 0.1)';
+                ctx.strokeStyle = isSub ? '#f00' : '#0f0';
+                ctx.lineWidth = 1;
+                const x = Math.min(dragStart.x, dragEnd.x);
+                const y = Math.min(dragStart.y, dragEnd.y);
+                const w = Math.abs(dragStart.x - dragEnd.x);
+                const h = Math.abs(dragStart.y - dragEnd.y);
+                ctx.fillRect(x, y, w, h);
+                ctx.strokeRect(x, y, w, h);
+            }
+
+            animationFrameId = requestAnimationFrame(renderFrame);
+        };
+
+        // Initialize canvas internal dimensions
         canvas.width = cols * cellW + 2;
         canvas.height = rows * cellH + 2;
 
-        // Clear background
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // start loop
+        renderFrame();
 
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const carY = r * cellH + 1; // 1px margin
-                const carX = c * cellW + 1; // 1px margin
-
-                let carExists = true;
-                let rotation = 0;
-
-                if (layoutData && layoutData.layout && layoutData.layout[r]?.[c]) {
-                    const cell = layoutData.layout[r][c];
-                    carExists = cell.exists;
-                    rotation = cell.rotation || 0;
-                }
-
-                if (!carExists) continue;
-
-                // Determine if car is flipped (near 180 degrees)
-                const normRot = ((rotation % 360) + 360) % 360;
-                const isFlipped = normRot > 90 && normRot < 270;
-
-                // Base car body (Dark Gray)
-                ctx.fillStyle = '#111';
-                ctx.fillRect(carX, carY, carW, carH);
-
-                if (matrixData[r]?.[c]) {
-                    const lights = matrixData[r][c];
-
-                    // 1. Ground Light Logic
-                    if (showGroundLight) {
-                        // Left Headlight Ground (Ch 0)
-                        if (lights[0] > 0) {
-                            ctx.fillStyle = hexToRgba('#ffffff', (lights[0] / 255) * 0.5);
-                            const groundY = isFlipped ? carY - carH : carY + carH;
-                            if (isFlipped)
-                                ctx.fillRect(carX - 1, groundY - 2, 4, carH + 2);
-                            else
-                                ctx.fillRect(carX + carW - 3, groundY, 4, carH + 2);
-
-                            ctx.fillStyle = hexToRgba('#000', 0.5);
-                            if (isFlipped) {
-                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH * 0.4);
-                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH);
-                                ctx.fillRect(carX - 1, groundY + carH, 1, -carH * 0.4);
-                                ctx.fillRect(carX - 1, groundY + carH, 1, -carH);
-                            }
-                            else {
-                                ctx.fillRect(carX + 2, groundY, 1, carH * 0.4);
-                                ctx.fillRect(carX + 2, groundY, 1, carH);
-                                ctx.fillRect(carX + 5, groundY, 1, carH * 0.4);
-                                ctx.fillRect(carX + 5, groundY, 1, carH);
-                            }
-                        }
-                        // Right Headlight Ground (Ch 1)
-                        if (lights[1] > 0) {
-                            ctx.fillStyle = hexToRgba('#ffffff', (lights[1] / 255) * 0.5);
-                            const groundY = isFlipped ? carY - carH : carY + carH;
-                            if (isFlipped)
-                                ctx.fillRect(carX + carW - 3, groundY - 2, 4, carH + 2);
-                            else
-                                ctx.fillRect(carX - 1, groundY, 4, carH + 2);
-                            ctx.fillStyle = hexToRgba('#000', 0.5);
-                            if (isFlipped) {
-                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH * 0.4);
-                                ctx.fillRect(carX + 2, groundY + carH, 1, -carH);
-                                ctx.fillRect(carX + 5, groundY + carH, 1, -carH * 0.4);
-                                ctx.fillRect(carX + 5, groundY + carH, 1, -carH);
-                            }
-                            else {
-                                ctx.fillRect(carX + 2, groundY, 1, carH * 0.4);
-                                ctx.fillRect(carX + 2, groundY, 1, carH);
-                                ctx.fillRect(carX - 1, groundY, 1, carH * 0.4);
-                                ctx.fillRect(carX - 1, groundY, 1, carH);
-                            }
-                        }
-                        // 2. Brake Lights (Ch 24) - 2x2 red at rear corners
-                        if (lights[24] > 0) {
-                            ctx.fillStyle = hexToRgba('#ff0000', (lights[24] / 255) * 0.5);
-                            if (isFlipped) {
-                                // Rear is at bottom
-                                ctx.fillRect(carX - 1, carY + carH - 1, 7, 2);
-                            } else {
-                                // Rear is at top
-                                ctx.fillRect(carX - 1, carY - 1, 7, 2);
-                            }
-                        }
-                    }
-
-                    // 3. Individual Light Points
-                    for (let ch = 0; ch < 48; ch++) {
-                        const val = lights[ch];
-                        if (val > 0) {
-                            const coords = LIGHT_COORDINATES[ch];
-                            const points = Array.isArray(coords) ? coords : [coords];
-
-                            points.forEach(coord => {
-                                let dx = coord.x;
-                                let dy = coord.y;
-
-                                if (isFlipped) {
-                                    dx = (carW - 1) - dx;
-                                    dy = (carH - 1) - dy;
-                                }
-
-                                ctx.fillStyle = hexToRgba(coord.color, val / 255);
-                                ctx.fillRect(carX + dx, carY + dy, 1, 1);
-                            });
-                        }
-                    }
-                }
-
-                // Selection Overlay
-                const key = `${r},${c}`;
-                let isActuallySelected = selectedCars.has(key);
-                let visualOverlay = null;
-
-                if (dragStart && dragEnd) {
-                    const isMarked = tempSelection.has(key);
-                    if (selectionMode === 'add') {
-                        if (isActuallySelected || isMarked) visualOverlay = 'green';
-                    } else if (selectionMode === 'subtract') {
-                        if (isActuallySelected) {
-                            visualOverlay = isMarked ? 'red' : 'green';
-                        }
-                    } else {
-                        if (isMarked) visualOverlay = 'green';
-                    }
-                } else if (isActuallySelected) {
-                    visualOverlay = 'green';
-                }
-
-                if (visualOverlay === 'green') {
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
-                    ctx.fillRect(carX, carY, carW, carH);
-                } else if (visualOverlay === 'red') {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
-                    ctx.fillRect(carX, carY, carW, carH);
-                }
-            }
-        }
-
-        // Marquee Draw
-        if (dragStart && dragEnd) {
-            const isSub = selectionMode === 'subtract';
-            ctx.fillStyle = isSub ? 'rgba(255, 0, 0, 0.1)' : 'rgba(0, 255, 0, 0.1)';
-            ctx.strokeStyle = isSub ? '#f00' : '#0f0';
-            ctx.lineWidth = 1;
-            const x = Math.min(dragStart.x, dragEnd.x);
-            const y = Math.min(dragStart.y, dragEnd.y);
-            const w = Math.abs(dragStart.x - dragEnd.x);
-            const h = Math.abs(dragStart.y - dragEnd.y);
-            ctx.fillRect(x, y, w, h);
-            ctx.strokeRect(x, y, w, h);
-        }
-    }, [matrixData, rows, cols, layoutData, showGroundLight, lightGroups, selectedCars, dragStart, dragEnd, tempSelection, selectionMode, updateTrigger]);
+        return () => {
+            cancelAnimationFrame(animationFrameId);
+        };
+    }, [rendererRef, rows, cols, layoutData, showGroundLight, lightGroups, selectedCars, dragStart, dragEnd, tempSelection, selectionMode]);
 
     const getCoord = (e) => {
         const canvas = canvasRef.current;
@@ -537,7 +586,14 @@ export default function MatrixPreview2D({
     );
 }
 
+const rgbaCache = new Map();
+
 function hexToRgba(hex, alpha = 1.0) {
+    const alphaKey = Math.round(alpha * 255);
+    const key = `${hex}-${alphaKey}`;
+    const cached = rgbaCache.get(key);
+    if (cached) return cached;
+
     let r = 255, g = 255, b = 255, a = 1.0;
     if (hex.startsWith('#')) {
         const hexVal = hex.substring(1);
@@ -561,5 +617,7 @@ function hexToRgba(hex, alpha = 1.0) {
             a = parseInt(hexVal.substring(6, 8), 16) / 255;
         }
     }
-    return `rgba(${r}, ${g}, ${b}, ${a * alpha})`;
+    const result = `rgba(${r}, ${g}, ${b}, ${a * alpha})`;
+    rgbaCache.set(key, result);
+    return result;
 }

@@ -1,11 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { AudioWaveformManager } from '../utils/AudioWaveformManager';
+import { useStore } from '../store/useStore';
 
 export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrigger2D) {
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [audioFile, setAudioFile] = useState(null);
-    const [audioFileName, setAudioFileName] = useState('');
+    const isPlaying = useStore(state => state.isPlaying);
+    const setIsPlaying = useStore(state => state.setIsPlaying);
+    const setCurrentTime = useStore(state => state.setCurrentTime);
+    const audioFile = useStore(state => state.audioFile);
+    const setAudioFile = useStore(state => state.setAudioFile);
+    const audioFileName = useStore(state => state.audioFileName);
+    const setAudioFileName = useStore(state => state.setAudioFileName);
+
+    // Keep some minor local states local if they don't need to be global
+    // Actually, fpsDisplay and isAnalyzing could be local or store, let's keep them in the Store or here.
     const [fpsDisplay, setFpsDisplay] = useState(0);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -15,41 +22,47 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
     const isPlayingRef = useRef(false);
     const audioFileRef = useRef(null);
     const projectRef = useRef(project);
-    const currentTimeRef = useRef(currentTime);
     const animateRef = useRef();
     const requestRef = useRef();
 
     useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
     useEffect(() => { audioFileRef.current = audioFile; }, [audioFile]);
     useEffect(() => { projectRef.current = project; }, [project]);
-    useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+
+    const lastStoreUpdateRef = useRef(0);
 
     const animate = () => {
         if (isPlayingRef.current) {
             const currentAudioFile = audioFileRef.current;
             const currentAudio = audioRef.current;
+            const now = performance.now();
 
             if (currentAudioFile && currentAudio && !currentAudio.paused && !currentAudio.seeking) {
                 const time = currentAudio.currentTime * 1000;
-                if (Math.abs(time - currentTimeRef.current) > 1) {
-                    setCurrentTime(time);
-                }
                 window.__lightShowTime = time;
+                // Throttle React store updates to ~4fps (250ms) - canvas renderers use window.__lightShowTime directly
+                if (now - lastStoreUpdateRef.current > 250) {
+                    setCurrentTime(time);
+                    lastStoreUpdateRef.current = now;
+                }
             } else if (!currentAudioFile) {
-                const now = performance.now();
                 const delta = now - lastTickRef.current;
                 lastTickRef.current = now;
 
-                setCurrentTime(prev => {
-                    const next = prev + delta;
-                    if (next >= projectRef.current.duration) {
-                        setIsPlaying(false);
-                        window.__lightShowTime = projectRef.current.duration;
-                        return projectRef.current.duration;
-                    }
+                const prev = useStore.getState().currentTime;
+                const next = prev + delta;
+                if (next >= projectRef.current.duration) {
+                    setIsPlaying(false);
+                    window.__lightShowTime = projectRef.current.duration;
+                    setCurrentTime(projectRef.current.duration);
+                } else {
                     window.__lightShowTime = next;
-                    return next;
-                });
+                    // Throttle React store updates to ~4fps
+                    if (now - lastStoreUpdateRef.current > 250) {
+                        setCurrentTime(next);
+                        lastStoreUpdateRef.current = now;
+                    }
+                }
             }
         }
     };
@@ -91,13 +104,13 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
         } else {
             lastTickRef.current = performance.now();
 
-            if (currentTimeRef.current >= projectRef.current.duration) {
+            if (useStore.getState().currentTime >= projectRef.current.duration) {
                 handleSeek(0);
             }
 
             if (audioFile) {
                 if (audioRef.current) {
-                    audioRef.current.currentTime = currentTimeRef.current / 1000;
+                    audioRef.current.currentTime = useStore.getState().currentTime / 1000;
                     audioRef.current.play()
                         .then(() => {
                             console.log('Audio playing successfully');
@@ -130,7 +143,6 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
             audioRef.current.currentTime = timeMs / 1000;
         }
         setCurrentTime(timeMs);
-        currentTimeRef.current = timeMs;
     };
 
     const handleReset = () => {
@@ -139,7 +151,6 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
             audioRef.current.currentTime = 0;
         }
         setCurrentTime(0);
-        currentTimeRef.current = 0;
         setIsPlaying(false);
         setFitTrigger2D(Date.now());
     };
@@ -225,15 +236,10 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
     };
 
     return {
-        isPlaying, setIsPlaying,
-        currentTime, setCurrentTime,
-        audioFile, setAudioFile,
-        audioFileName, setAudioFileName,
         fpsDisplay,
         isAnalyzing,
         audioRef,
         audioUrlRef,
-        currentTimeRef,
         isPlayingRef,
         togglePlay,
         handleSeek,

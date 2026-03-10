@@ -246,51 +246,22 @@ export class ShowRenderer {
 
         // Check if any clip uses position-based patterns or is a gif type
         let hasPositionPattern = false;
+        const precomputedLayerClips = [];
+
         for (const layer of this.project.layers) {
             if (layer.muted) continue;
 
-            let activeClips = [];
-            if (layer.isMidi && layer.midiData) {
-                const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
-                if (regionClip) {
-                    const localTimeMs = timeMs - regionClip.startTime + (regionClip.startOffset || 0);
-                    for (const note of layer.midiData) {
-                        if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
-                            const mappedFxData = layer.midiMappings?.[note.midi];
-                            if (mappedFxData) {
-                                let mappedFx = mappedFxData;
-                                if (Array.isArray(mappedFxData) && mappedFxData.length > 0) {
-                                    const hash = Math.abs(Math.sin(note.time * 12.9898 + note.midi * 78.233)) * 10000;
-                                    const selectedIdx = Math.floor(hash) % mappedFxData.length;
-                                    mappedFx = mappedFxData[selectedIdx];
-                                }
+            const activeClips = this.getActiveClipsForLayer(layer, timeMs);
+            precomputedLayerClips.push({ layer, activeClips });
 
-                                // Clamp the visual start time of the FX to the region's start time if the note began before the region was cropped in.
-                                // This prevents animations from starting with deep negative timestamps which causes clumping bugs.
-                                const rawStartTime = regionClip.startTime + note.time - (regionClip.startOffset || 0);
-                                const clampedStartTime = Math.max(regionClip.startTime, rawStartTime);
-
-                                activeClips.push({
-                                    ...mappedFx,
-                                    startTime: clampedStartTime,
-                                    duration: note.duration - (clampedStartTime - rawStartTime), // Reduce duration if we clamped
-                                    id: `midi-${note.midi}-${note.time}`
-                                });
-                            }
-                        }
+            if (!hasPositionPattern) {
+                for (const clip of activeClips) {
+                    if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif' || clip.type === 'eq' || clip.carGroupId) {
+                        hasPositionPattern = true;
+                        break;
                     }
                 }
-            } else {
-                activeClips = layer.clips.filter(clip => timeMs >= clip.startTime && timeMs < (clip.startTime + clip.duration));
             }
-
-            for (const clip of activeClips) {
-                if ((clip.pattern && clip.pattern !== 'uniform') || clip.type === 'gif' || clip.type === 'eq' || clip.carGroupId) {
-                    hasPositionPattern = true;
-                    break;
-                }
-            }
-            if (hasPositionPattern) break;
         }
 
         if (!hasPositionPattern) {
@@ -308,7 +279,7 @@ export class ShowRenderer {
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     // Pass the buffer cell to be written to
-                    this.getFrameForPosition(timeMs, r, c, { rows, cols }, grid[r][c]);
+                    this.getFrameForPosition(timeMs, r, c, { rows, cols }, grid[r][c], precomputedLayerClips);
                 }
             }
         }
@@ -320,63 +291,21 @@ export class ShowRenderer {
      * Get frame data for a specific position in the grid
      * @param {Uint8Array} outFrame Optional buffer to write to. If null, a new one is allocated.
      */
-    getFrameForPosition(timeMs, row, col, gridSize, outFrame = null) {
+    getFrameForPosition(timeMs, row, col, gridSize, outFrame = null, precomputedLayerClips = null) {
         if (!this.project) return outFrame || new Uint8Array(CHANNEL_COUNT).fill(0);
 
         const frameData = outFrame || new Uint8Array(CHANNEL_COUNT).fill(0);
-        // If outFrame was passed, it should already be clear (or we expect caller to handle it)
-        // logic in getMatrixFrame clears it first.
-        // If called individually without clear, we might want frameData.fill(0) here, usually safe.
 
-        for (const layer of this.project.layers) {
-            if (layer.muted) continue;
+        const layersToProcess = precomputedLayerClips || this.project.layers
+            .filter(l => !l.muted)
+            .map(layer => ({ layer, activeClips: this.getActiveClipsForLayer(layer, timeMs) }));
 
-            // Find active clips at this time
-            let activeClips = [];
-            if (layer.isMidi && layer.midiData) {
-                const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
-                if (regionClip) {
-                    const localTimeMs = timeMs - regionClip.startTime + (regionClip.startOffset || 0);
-                    for (const note of layer.midiData) {
-                        if (localTimeMs >= note.time && localTimeMs < (note.time + note.duration)) {
-                            const mappedFxData = layer.midiMappings?.[note.midi];
-                            if (mappedFxData) {
-                                let mappedFx = mappedFxData;
-                                if (Array.isArray(mappedFxData) && mappedFxData.length > 0) {
-                                    const hash = Math.abs(Math.sin(note.time * 12.9898 + note.midi * 78.233)) * 10000;
-                                    const selectedIdx = Math.floor(hash) % mappedFxData.length;
-                                    mappedFx = mappedFxData[selectedIdx];
-                                }
-
-                                const rawStartTime = regionClip.startTime + note.time - (regionClip.startOffset || 0);
-                                const clampedStartTime = Math.max(regionClip.startTime, rawStartTime);
-
-                                activeClips.push({
-                                    ...mappedFx,
-                                    startTime: clampedStartTime,
-                                    duration: note.duration - (clampedStartTime - rawStartTime),
-                                    id: `midi-${note.midi}-${note.time}`
-                                });
-                            }
-                        }
-                    }
-                }
-            } else {
-                activeClips = layer.clips.filter(c =>
-                    timeMs >= c.startTime &&
-                    timeMs < (c.startTime + c.duration)
-                );
-            }
-
+        for (const { layer, activeClips } of layersToProcess) {
             for (const clip of activeClips) {
                 // Filter by Car Group if applicable
-                if (clip.carGroupId && clip.type !== 'eq') {
-                    const group = this.project.carGroups?.find(g => g.id === clip.carGroupId);
-                    if (group) {
-                        const key = `${row},${col}`;
-                        const isSelected = group.selection.includes(key);
-                        if (!isSelected) continue; // Skip rendering for this car
-                    }
+                if (clip.carGroupSet) {
+                    const key = `${row},${col}`;
+                    if (!clip.carGroupSet.has(key)) continue; // O(1) lookup
                 }
 
                 // Apply Jitter if enabled
@@ -900,10 +829,7 @@ export class ShowRenderer {
         }
     }
 
-    renderLayer(layer, timeMs) {
-        const frame = new Uint8Array(CHANNEL_COUNT).fill(0);
-
-        // Find active clips at this time
+    getActiveClipsForLayer(layer, timeMs) {
         let activeClips = [];
         if (layer.isMidi && layer.midiData) {
             const regionClip = layer.clips.find(c => c.type === 'midi-region' && timeMs >= c.startTime && timeMs < (c.startTime + c.duration));
@@ -939,6 +865,24 @@ export class ShowRenderer {
                 timeMs < (c.startTime + c.duration)
             );
         }
+
+        // Cache heavy calculations per-frame instead of per-pixel
+        return activeClips.map(clip => {
+            const resolvedChannels = this.resolveTargetChannels(clip);
+            let carGroupSet = null;
+            if (clip.carGroupId && clip.type !== 'eq') {
+                const group = this.project.carGroups?.find(g => g.id === clip.carGroupId);
+                if (group && group.selection) {
+                    carGroupSet = new Set(group.selection);
+                }
+            }
+            return { ...clip, resolvedChannels, carGroupSet, _originalClip: clip };
+        });
+    }
+
+    renderLayer(layer, timeMs) {
+        const frame = new Uint8Array(CHANNEL_COUNT).fill(0);
+        const activeClips = this.getActiveClipsForLayer(layer, timeMs);
 
         for (const clip of activeClips) {
             const clipTime = timeMs - clip.startTime;
@@ -1140,7 +1084,7 @@ export class ShowRenderer {
                 }
             }
 
-            const targets = this.resolveTargetChannels(clip);
+            const targets = clip.resolvedChannels || this.resolveTargetChannels(clip);
             if (targets.length === 0) continue;
 
             let finalBrightness = 0;
@@ -1162,7 +1106,7 @@ export class ShowRenderer {
     }
 
     renderEffect(clip, clipTime, value, frame) {
-        const targetChannels = this.resolveTargetChannels(clip);
+        const targetChannels = clip.resolvedChannels || this.resolveTargetChannels(clip);
 
         if (targetChannels.length === 0) return;
 
@@ -1311,9 +1255,9 @@ export class ShowRenderer {
         let baseLuminance = (0.299 * r + 0.587 * g + 0.114 * b);
         if (clip.invertImage) baseLuminance = 255 - baseLuminance;
         const luminance = baseLuminance * (a / 255);
-        const val = Math.floor(luminance * intensity);
-        const targets = this.resolveTargetChannels(clip);
-        this.applyToChannels(targets, val, frame);
+        const adjustedVal = Math.floor(luminance * intensity);
+        const targets = clip.resolvedChannels || this.resolveTargetChannels(clip);
+        this.applyToChannels(targets, adjustedVal, frame);
     }
 
     applyToChannels(channels, value, frame) {

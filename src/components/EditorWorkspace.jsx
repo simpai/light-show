@@ -5,7 +5,7 @@ import ClipEditor from './ClipEditor';
 
 export function EditorWorkspace({
     fpsDisplay,
-    matrixData,
+    rendererRef,
     matrixConfig,
     layoutData,
     showGroundLight,
@@ -13,7 +13,6 @@ export function EditorWorkspace({
     selectedCars,
     setSelectedCars,
     fitTrigger2D,
-    currentTime,
     clipboard,
     selectedPaletteClipId,
     handlePaletteClipSelect,
@@ -33,7 +32,7 @@ export function EditorWorkspace({
                     {fpsDisplay} FPS
                 </div>
                 <MatrixPreview2D
-                    matrixData={matrixData}
+                    rendererRef={rendererRef}
                     rows={matrixConfig.rows}
                     cols={matrixConfig.cols}
                     layoutData={layoutData}
@@ -42,7 +41,6 @@ export function EditorWorkspace({
                     selectedCars={selectedCars}
                     onSelectionChange={setSelectedCars}
                     fitTrigger={fitTrigger2D}
-                    updateTrigger={currentTime}
                 />
             </div>
 
@@ -68,9 +66,6 @@ export function EditorWorkspace({
                         clips={selectedPaletteClip ? [selectedPaletteClip] : selectedClips}
                         onChange={handleClipUpdate}
                         onDelete={handleDelete}
-                        assets={project.assets}
-                        lightGroups={project.lightGroups}
-                        carGroups={project.carGroups}
                         allCarsThumbnail={allCarsThumbnail}
                     />
                 ) : selectedLayerId ? (

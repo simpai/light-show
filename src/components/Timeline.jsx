@@ -549,7 +549,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                 );
 
                 if (hasMoved) {
-                    const json = project.toJSON();
+                    const json = project.toJSON(false);
                     const newProjectBuilt = ProjectState.fromJSONSync(json);
                     newProjectBuilt.assets = project.assets;
 
@@ -623,7 +623,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                         className="global-visibility-btn"
                         onClick={() => {
                             const allMuted = project.layers.every(l => l.muted);
-                            const json = project.toJSON();
+                            const json = project.toJSON(false);
                             const newProject = ProjectState.fromJSONSync(json);
                             newProject.assets = project.assets;
                             newProject.layers.forEach(l => l.muted = !allMuted);
@@ -710,7 +710,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                 className={`track-visibility-btn ${layer.muted ? 'muted' : ''}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    const json = project.toJSON();
+                                    const json = project.toJSON(false);
                                     const newProject = ProjectState.fromJSONSync(json);
                                     newProject.assets = project.assets;
                                     const l = newProject.layers.find(l => l.id === layer.id);
@@ -750,7 +750,7 @@ export function Timeline({ project, currentTime, duration, zoom, snapMode, bpm, 
                                         e.stopPropagation();
                                         e.currentTarget.blur();
                                         if (window.confirm(`Are you sure you want to delete track "${layer.name}"?`)) {
-                                            const json = project.toJSON();
+                                            const json = project.toJSON(false);
                                             const newProject = ProjectState.fromJSONSync(json);
                                             newProject.assets = project.assets;
                                             newProject.layers = newProject.layers.filter(l => l.id !== layer.id);

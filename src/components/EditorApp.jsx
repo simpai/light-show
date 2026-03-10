@@ -24,60 +24,11 @@ import MatrixPreview2D from './MatrixPreview2D';
 import LayoutGridEditor, { createDefaultGridData } from './LayoutGridEditor';
 import { Midi } from '@tonejs/midi';
 import { useStore } from '../store/useStore';
+import { Modal } from './common/Modal';
+import { CHANNEL_NAMES } from '../constants/channelNames';
+import { useClipOperations } from '../hooks/useClipOperations';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
-const CHANNEL_NAMES = {
-    0: "Left Outer Main Beam",
-    1: "Right Outer Main Beam",
-    2: "Left Inner Main Beam",
-    3: "Right Inner Main Beam",
-    4: "Left Signature",
-    5: "Right Signature",
-    6: "Left Channel 4",
-    7: "Right Channel 4",
-    8: "Left Channel 5",
-    9: "Right Channel 5",
-    10: "Left Channel 6",
-    11: "Right Channel 6",
-    12: "Left Front Turn",
-    13: "Right Front Turn",
-    14: "Left Front Fog",
-    15: "Right Front Fog",
-    16: "Left Aux Park",
-    17: "Right Aux Park",
-    18: "Left Side Marker",
-    19: "Right Side Marker",
-    20: "Left Side Repeater",
-    21: "Right Side Repeater",
-    22: "Left Rear Turn",
-    23: "Right Rear Turn",
-    24: "Brake Lights",
-    25: "Left Tail",
-    26: "Right Tail",
-    27: "Reverse Lights",
-    28: "Rear Fog Lights",
-    29: "License Plate Lights",
-    30: "Left Falcon Door",
-    31: "Right Falcon Door",
-    32: "Left Front Door",
-    33: "Right Front Door",
-    34: "Left Mirror",
-    35: "Right Mirror",
-    36: "Left Front Window",
-    37: "Right Front Window",
-    38: "Left Rear Window",
-    39: "Right Rear Window",
-    40: "Liftgate",
-    41: "Left Front Door Handle",
-    42: "Right Front Door Handle",
-    43: "Left Rear Door Handle",
-    44: "Right Rear Door Handle",
-    45: "Charge Port",
-};
-
-// Channels up to 47 are standard for Tesla
-for (let i = 46; i < 48; i++) {
-    if (!CHANNEL_NAMES[i]) CHANNEL_NAMES[i] = `Channel ${i}`;
-}
 
 const isMac = window.navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 const modKey = isMac ? '⌘' : 'Ctrl';
@@ -260,115 +211,53 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         if (!isPlayingRef.current) togglePlay();
     };
 
-    // Keyboard shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            // Check if user is typing in an input
-            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+    const {
+        handleClipSelect,
+        handleDelete,
+        handleClipUpdate,
+        handleClipDelete,
+        handlePaletteClipSelect,
+        handlePasteFromPalette,
+        handleAddClip,
+        handleDuplicateClip,
+        handleRemoveGaps,
+        handleAlignToSnap,
+        handleAlignClips
+    } = useClipOperations({
+        project,
+        saveToHistory,
+        selectedClipIds,
+        setSelectedClipIds,
+        selectedLayerId,
+        selectedPaletteClipId,
+        setSelectedPaletteClipId,
+        snapMode,
+        bpm
+    });
 
-            if (e.ctrlKey || e.metaKey) {
-                switch (e.key.toLowerCase()) {
-                    case 'z':
-                        e.preventDefault();
-                        if (e.shiftKey) handleRedo();
-                        else handleUndo();
-                        break;
-                    case 'y':
-                        e.preventDefault();
-                        handleRedo();
-                        break;
-                    case 'd':
-                        e.preventDefault();
-                        handleDuplicateClip();
-                        break;
-                    case 'x':
-                        // Cut logic
-                        if (selectedClipIds.length > 0) {
-                            const foundClips = project.layers.flatMap(l => l.clips).filter(c => selectedClipIds.includes(c.id));
-                            if (foundClips.length > 0) {
-                                setClipboard(foundClips.map(c => ({ ...c })));
-                                handleDelete(selectedClipIds);
-                            }
-                        }
-                        break;
-                    case 'c':
-                        // Copy logic
-                        if (selectedClipIds.length > 0) {
-                            const foundClips = project.layers.flatMap(l => l.clips).filter(c => selectedClipIds.includes(c.id));
-                            if (foundClips.length > 0) {
-                                setClipboard(foundClips.map(c => ({ ...c })));
-                            }
-                        }
-                        break;
-                    case 'v':
-                        // Paste logic
-                        if (clipboard && Array.isArray(clipboard) && clipboard.length > 0) {
-                            const json = project.toJSON(false);
-                            const newProject = ProjectState.fromJSONSync(json);
-                            newProject.assets = project.assets;
-
-                            // Calculate global offset relative to earliest clip
-                            const earliestStart = Math.min(...clipboard.map(c => c.startTime));
-                            const offset = useStore.getState().currentTime - earliestStart;
-
-                            const newPastedIds = [];
-                            clipboard.forEach(clip => {
-                                // Default target layer is the one it was originally on, or selected layer
-                                let targetLayerId = selectedLayerId || newProject.layers[0].id;
-                                // If multiple clips, try to maintain track relationship (simplified)
-                                const layer = newProject.layers.find(l => l.id === targetLayerId);
-                                if (layer) {
-                                    const newClip = {
-                                        ...clip,
-                                        id: crypto.randomUUID(),
-                                        startTime: Math.max(0, clip.startTime + offset)
-                                    };
-                                    layer.clips.push(newClip);
-                                    newPastedIds.push(newClip.id);
-                                }
-                            });
-                            saveToHistory(newProject);
-                            setSelectedClipIds(newPastedIds);
-                        }
-                        break;
-                }
-            } else {
-                // Non-ctrl shortcuts
-                const key = e.key.toLowerCase();
-
-                // Palette shortcuts: 1-5, q-t
-                const paletteKeys = ['1', '2', '3', '4', '5', 'q', 'w', 'e', 'r', 't'];
-                const slotIndex = paletteKeys.indexOf(key);
-                if (slotIndex !== -1) {
-                    e.preventDefault();
-                    handlePasteFromPalette(slotIndex);
-                    return;
-                }
-
-                switch (key) {
-                    case ' ':
-                        e.preventDefault();
-                        togglePlay();
-                        break;
-                    case 'enter':
-                        e.preventDefault();
-                        handlePlayFromBookmark();
-                        break;
-                    case 'delete':
-                    case 'backspace':
-                        if (selectedClipIds.length > 0) {
-                            handleDelete(selectedClipIds);
-                        } else if (selectedPaletteClipId) {
-                            handleClipDelete([selectedPaletteClipId]);
-                        }
-                        break;
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [project, history, redoStack, selectedClipIds, selectedLayerId, clipboard, isPlaying, audioFile, bookmarks]);
+    useKeyboardShortcuts({
+        project,
+        history,
+        redoStack,
+        selectedClipIds,
+        setSelectedClipIds,
+        selectedLayerId,
+        clipboard,
+        setClipboard,
+        isPlaying,
+        audioFile,
+        bookmarks,
+        selectedPaletteClipId,
+        handleUndo,
+        handleRedo,
+        handleDuplicateClip,
+        handleDelete,
+        handleClipDelete,
+        handlePasteFromPalette,
+        togglePlay,
+        handlePlayFromBookmark,
+        saveToHistory
+    });
 
     const allCarsThumbnail = useMemo(() => {
         if (!matrixConfig) return null;
@@ -395,49 +284,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         return canvas.toDataURL('image/png');
     }, [matrixConfig, layoutData]);
 
-    const handleClipSelect = (idOrIds, e) => {
-        setSelectedPaletteClipId(null); // Clear palette selection when timeline clip is selected
-        if (!idOrIds || (Array.isArray(idOrIds) && idOrIds.length === 0)) {
-            setSelectedClipIds([]);
-            return;
-        }
 
-        const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
-        const isMulti = e && (e.ctrlKey || e.metaKey);
-
-        if (isMulti) {
-            setSelectedClipIds(prev => {
-                let next = [...prev];
-                ids.forEach(id => {
-                    if (next.includes(id)) {
-                        next = next.filter(cid => cid !== id);
-                    } else {
-                        next.push(id);
-                    }
-                });
-                return next;
-            });
-        } else {
-            setSelectedClipIds(ids);
-        }
-    };
-
-    const handleDelete = (clipIds) => {
-        const idsToDelete = Array.isArray(clipIds) ? clipIds : [clipIds];
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
-        let foundCount = 0;
-        newProject.layers.forEach(layer => {
-            const initialLen = layer.clips.length;
-            layer.clips = layer.clips.filter(c => !idsToDelete.includes(c.id));
-            foundCount += (initialLen - layer.clips.length);
-        });
-        if (foundCount > 0) {
-            saveToHistory(newProject);
-            setSelectedClipIds([]);
-        }
-    };
 
     // Sync BPM when project analysis is available
     useEffect(() => {
@@ -662,142 +509,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         input.click();
     };
 
-    const handleClipUpdate = (updatedData, field = null) => {
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
 
-        // If field is provided, it's a batch/partial update for all selected clips.
-        // Otherwise, it's a full update for a single clip (legacy/palette support).
-        const targetIds = field ? selectedClipIds : [updatedData.id];
-        let found = false;
-
-        newProject.layers.forEach(layer => {
-            layer.clips = layer.clips.map(c => {
-                if (targetIds.includes(c.id)) {
-                    found = true;
-                    if (field) {
-                        if (field === '__multiple__') {
-                            return { ...c, ...updatedData };
-                        }
-                        return { ...c, [field]: updatedData[field] };
-                    }
-                    return updatedData;
-                }
-                return c;
-            });
-        });
-
-        if (!found) {
-            newProject.palette.forEach(slot => {
-                slot.clips = slot.clips.map(c => {
-                    if (targetIds.includes(c.id) || c.id === updatedData.id) {
-                        found = true;
-                        if (field) {
-                            if (field === '__multiple__') {
-                                return { ...c, ...updatedData };
-                            }
-                            return { ...c, [field]: updatedData[field] };
-                        }
-                        return updatedData;
-                    }
-                    return c;
-                });
-            });
-        }
-
-        if (found) {
-            saveToHistory(newProject);
-        }
-    };
-
-    const handleClipDelete = (clipIdOrIds) => {
-        const clipIds = Array.isArray(clipIdOrIds) ? clipIdOrIds : [clipIdOrIds];
-        const clipIdSet = new Set(clipIds);
-
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
-
-        let changed = false;
-        // Delete from layers
-        newProject.layers.forEach(layer => {
-            const initialLen = layer.clips.length;
-            layer.clips = layer.clips.filter(c => !clipIdSet.has(c.id));
-            if (layer.clips.length !== initialLen) changed = true;
-        });
-
-        // Delete from palette
-        newProject.palette.forEach(slot => {
-            const initialLen = slot.clips.length;
-            slot.clips = slot.clips.filter(c => !clipIdSet.has(c.id));
-            if (slot.clips.length !== initialLen) changed = true;
-        });
-
-        if (changed) {
-            saveToHistory(newProject);
-            if (clipIdSet.has(selectedPaletteClipId)) {
-                setSelectedPaletteClipId(null);
-            }
-            setSelectedClipIds(prev => prev.filter(id => !clipIdSet.has(id)));
-        }
-    };
-
-    const handlePaletteClipSelect = (clipId) => {
-        setSelectedPaletteClipId(clipId);
-        setSelectedClipIds([]); // Clear timeline selection
-    };
-
-    const handlePasteFromPalette = (slotIndex) => {
-        const slot = project.palette[slotIndex];
-        if (!slot || slot.clips.length === 0) return;
-
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
-
-        const targetLayerId = selectedLayerId || newProject.layers[0].id;
-        const layer = newProject.layers.find(l => l.id === targetLayerId);
-
-        if (layer) {
-            let clipsToPaste = slot.clips;
-
-            if (slot.randomToggle) {
-                const randomIndex = Math.floor(Math.random() * slot.clips.length);
-                clipsToPaste = [slot.clips[randomIndex]];
-            } else if (slot.sequentialToggle) {
-                const index = (slot.sequentialIndex || 0) % slot.clips.length;
-                clipsToPaste = [slot.clips[index]];
-                // We'll update the index later in the project state
-            }
-
-            // Find earliest clip in slot to calculate relative offsets
-            const earliestClip = clipsToPaste.reduce((earliest, current) =>
-                current.startTime < earliest.startTime ? current : earliest, clipsToPaste[0]
-            );
-
-            const newPastedIds = [];
-            clipsToPaste.forEach(clip => {
-                const relativeOffset = clip.startTime - earliestClip.startTime;
-                const newClip = {
-                    ...clip,
-                    id: crypto.randomUUID(),
-                    startTime: useStore.getState().currentTime + relativeOffset
-                };
-                layer.clips.push(newClip);
-                newPastedIds.push(newClip.id);
-            });
-
-            if (slot.sequentialToggle) {
-                const slotInNewProject = newProject.palette[slotIndex];
-                slotInNewProject.sequentialIndex = ((slotInNewProject.sequentialIndex || 0) + 1) % slot.clips.length;
-            }
-
-            saveToHistory(newProject);
-            setSelectedClipIds(newPastedIds);
-            setSelectedPaletteClipId(null);
-        }
-    };
 
     const handleAddCarGroup = () => {
         if (selectedCars.size === 0) {
@@ -847,262 +559,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setSelectedCars(new Set());
     };
 
-    const handleAddClip = (type = 'effect') => {
-        if (project.layers.length > 0) {
-            const json = project.toJSON(false);
-            const newProject = ProjectState.fromJSONSync(json);
-            // Preserve assets (fromJSONSync skips them for performance)
-            newProject.assets = project.assets;
-            const targetLayerId = selectedLayerId || newProject.layers[0].id;
-            const layer = newProject.layers.find(l => l.id === targetLayerId);
 
-            if (layer) {
-                // Smart placement logic: check for overlaps at currentTime
-                let startTime = useStore.getState().currentTime;
-
-                // Sort clips by startTime to find the right gap
-                const sortedClips = [...layer.clips].sort((a, b) => a.startTime - b.startTime);
-
-                // Find if currentTime is inside any clip
-                const overlappingClip = sortedClips.find(c =>
-                    useStore.getState().currentTime >= c.startTime && useStore.getState().currentTime < (c.startTime + c.duration)
-                );
-
-                if (overlappingClip) {
-                    // Position it immediately after the overlapping clip (or the last one in a chain of overlaps)
-                    let currentEnd = overlappingClip.startTime + overlappingClip.duration;
-                    let foundOverlap = true;
-                    while (foundOverlap) {
-                        const nextOverlap = sortedClips.find(c =>
-                            c.startTime < currentEnd + 10 && (c.startTime + c.duration) > currentEnd
-                        );
-                        if (nextOverlap) {
-                            currentEnd = nextOverlap.startTime + nextOverlap.duration;
-                        } else {
-                            foundOverlap = false;
-                        }
-                    }
-                    startTime = currentEnd;
-                }
-
-                const newClip = {
-                    id: crypto.randomUUID(),
-                    startTime: startTime,
-                    duration: 1000,
-                    type: type, // 'effect' or 'gif'
-                    effectType: type === 'effect' ? 'flash' : 'image',
-                    channels: [],
-                    targetLightGroups: [],
-                    fadeIn: 0,
-                    fadeOut: 0,
-                    pattern: 'uniform',
-                    patternDirection: 'horizontal',
-                    patternSpeed: 1.0,
-                    // GIF clips use beat-based timing by default
-                    ...(type === 'gif' && {
-                        timingMode: 'beat',
-                        bpm: 120,
-                        beatsPerFrame: 1,
-                        repetitions: 1
-                    }),
-                    ...(type === 'eq' && {
-                        bandCount: 1,
-                        bands: [{ minFreq: 20, maxFreq: 20000, maxScale: 1.0, minCutoff: 0, imageId: null }],
-                        peakHold: false,
-                        decay: 0.1,
-                        updateInterval: 40
-                    })
-                };
-
-                if (type === 'gif') {
-                    // Trigger image upload for GIF type
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = (e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                            window.dispatchEvent(new CustomEvent('imageUpload', {
-                                detail: { clipId: newClip.id, file }
-                            }));
-                        }
-                        e.target.value = ''; // Reset
-                    };
-                    input.click();
-                }
-
-                layer.clips.push(newClip);
-                saveToHistory(newProject);
-                setSelectedClipIds([newClip.id]);
-            }
-        }
-    };
-
-    const handleDuplicateClip = () => {
-        if (selectedClipIds.length === 0) return;
-
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
-
-        const newSelection = [];
-        selectedClipIds.forEach(clipId => {
-            let sourceClip = null;
-            let targetLayer = null;
-
-            for (const layer of newProject.layers) {
-                const found = layer.clips.find(c => c.id === clipId);
-                if (found) {
-                    sourceClip = found;
-                    targetLayer = layer;
-                    break;
-                }
-            }
-
-            if (sourceClip && targetLayer) {
-                const newClip = {
-                    ...sourceClip,
-                    id: crypto.randomUUID(),
-                    startTime: sourceClip.startTime + sourceClip.duration
-                };
-                targetLayer.clips.push(newClip);
-                newSelection.push(newClip.id);
-            }
-        });
-
-        if (newSelection.length > 0) {
-            saveToHistory(newProject);
-            setSelectedClipIds(newSelection);
-        }
-    };
-
-    const handleRemoveGaps = () => {
-        if (selectedClipIds.length < 2) return;
-
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
-
-        let changed = false;
-
-        newProject.layers.forEach(layer => {
-            const selectedInLayer = layer.clips
-                .filter(c => selectedClipIds.includes(c.id))
-                .sort((a, b) => a.startTime - b.startTime);
-
-            if (selectedInLayer.length >= 2) {
-                for (let i = 1; i < selectedInLayer.length; i++) {
-                    const prev = selectedInLayer[i - 1];
-                    const current = selectedInLayer[i];
-                    const nextStartTime = prev.startTime + prev.duration;
-
-                    if (Math.abs(current.startTime - nextStartTime) > 0.1) {
-                        current.startTime = nextStartTime;
-                        changed = true;
-                    }
-                }
-            }
-        });
-
-        if (changed) {
-            saveToHistory(newProject);
-        }
-    };
-
-    const handleAlignToSnap = () => {
-        if (selectedClipIds.length === 0 || snapMode === 'off') return;
-
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
-
-        const analysis = project.analysis;
-        const beatMarkers = analysis?.beat_times || [];
-        const onsetMarkers = analysis?.onset_times || [];
-        const duration = project.duration || 60000;
-
-        let snapIntervalMs = null;
-        const beatDurationMs = (60 / (bpm || 120)) * 1000;
-        const multiplier = snapMode === '1' ? 1
-            : snapMode === '1/2' ? 0.5
-                : snapMode === '1/4' ? 0.25
-                    : 0.125;
-        snapIntervalMs = beatDurationMs * multiplier;
-
-        const snapCandidates = [0, ...beatMarkers.map(t => t * 1000), ...onsetMarkers.map(t => t * 1000)];
-        if (snapIntervalMs) {
-            for (let t = 0; t <= duration; t += snapIntervalMs) {
-                snapCandidates.push(t);
-            }
-        }
-
-        let changed = false;
-        newProject.layers.forEach(layer => {
-            layer.clips.forEach(clip => {
-                if (selectedClipIds.includes(clip.id)) {
-                    let snappedTime = clip.startTime;
-                    let minDiff = Infinity;
-                    snapCandidates.forEach(snap => {
-                        const diff = Math.abs(clip.startTime - snap);
-                        if (diff < minDiff) {
-                            minDiff = diff;
-                            snappedTime = snap;
-                        }
-                    });
-                    if (Math.abs(clip.startTime - snappedTime) > 0.1) {
-                        clip.startTime = snappedTime;
-                        changed = true;
-                    }
-                }
-            });
-        });
-
-        if (changed) {
-            saveToHistory(newProject);
-        }
-    };
-
-    const handleAlignClips = () => {
-        if (selectedClipIds.length === 0) return;
-
-        const json = project.toJSON(false);
-        const newProject = ProjectState.fromJSONSync(json);
-        newProject.assets = project.assets;
-
-        // Group selected clips by layer
-        const selectionByLayer = new Map();
-        let globalMin = Infinity;
-
-        newProject.layers.forEach(layer => {
-            const selectedInLayer = layer.clips.filter(c => selectedClipIds.includes(c.id));
-            if (selectedInLayer.length > 0) {
-                selectionByLayer.set(layer.id, selectedInLayer);
-                selectedInLayer.forEach(c => {
-                    if (c.startTime < globalMin) globalMin = c.startTime;
-                });
-            }
-        });
-
-        if (globalMin === Infinity) return;
-
-        let changed = false;
-        selectionByLayer.forEach((clips, layerId) => {
-            // Find the earliest selected clip in this layer
-            const layerMin = Math.min(...clips.map(c => c.startTime));
-            const offset = globalMin - layerMin;
-
-            if (Math.abs(offset) > 0.1) {
-                clips.forEach(c => {
-                    c.startTime += offset;
-                });
-                changed = true;
-            }
-        });
-
-        if (changed) {
-            saveToHistory(newProject);
-        }
-    };
 
     // File operations moved to useFileOperations hook
 
@@ -1452,93 +909,4 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     );
 }
 
-function Modal({ title, children, onClose, footer, className = "" }) {
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className={`modal-content ${className}`} onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h3>{title}</h3>
-                    <button className="modal-close" onClick={onClose}><X size={20} /></button>
-                </div>
-                <div className="modal-body">
-                    {children}
-                </div>
-                {footer && (
-                    <div className="modal-footer">
-                        {footer}
-                    </div>
-                )}
-            </div>
-            <style>{`
-                .modal-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0, 0, 0, 0.85);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 1000;
-                }
-                .modal-content {
-                    background: #1a1a1a;
-                    border: 1px solid #333;
-                    border-radius: 12px;
-                    width: 95%;
-                    max-width: 800px;
-                    max-height: 90vh;
-                    display: flex;
-                    flex-direction: column;
-                    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-                }
-                .modal-content.modal-wide {
-                    max-width: 100vw;
-                    width: 100vw;
-                    height: 100vh;
-                    max-height: 100vh;
-                    border-radius: 0;
-                    border: none;
-                }
-                .modal-header {
-                    padding: 16px 20px;
-                    border-bottom: 1px solid #333;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                .modal-header h3 {
-                    margin: 0;
-                    font-size: 18px;
-                    color: white;
-                }
-                .modal-close {
-                    background: transparent;
-                    border: none;
-                    color: #888;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .modal-close:hover {
-                    color: white;
-                }
-                .modal-body {
-                    padding: 20px;
-                    overflow-y: auto;
-                    flex: 1;
-                }
-                .modal-footer {
-                    padding: 16px 20px;
-                    border-top: 1px solid #333;
-                    background: #222;
-                    border-bottom-left-radius: 12px;
-                    border-bottom-right-radius: 12px;
-                }
-            `}</style>
-        </div>
-    );
-}
 

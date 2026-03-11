@@ -159,6 +159,8 @@ export class ProjectState {
                 height: asset.height,
                 fps: asset.fps,
                 name: asset.name,
+                hash: asset.hash,
+                tags: asset.tags || [],
                 frames: asset.frames.map(imageData => {
                     const canvas = document.createElement('canvas');
                     canvas.width = imageData.width;
@@ -211,6 +213,17 @@ export class ProjectState {
     renameAsset(assetId, newName) {
         if (this.assets[assetId]) {
             this.assets[assetId].name = newName;
+        }
+    }
+
+    /**
+     * Update tags for an asset
+     * @param {string} assetId 
+     * @param {string[]} tags 
+     */
+    updateAssetTags(assetId, tags) {
+        if (this.assets[assetId]) {
+            this.assets[assetId].tags = tags;
         }
     }
 
@@ -363,6 +376,8 @@ export class ProjectState {
                 height: asset.height,
                 fps: asset.fps,
                 name: asset.name, // Restore the name
+                hash: asset.hash, // Restore the hash
+                tags: asset.tags || [], // Restore the tags
                 frames
             };
         }

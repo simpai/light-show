@@ -988,7 +988,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .timeline-resizer { height: 6px; cursor: row-resize; background: transparent; transition: background 0.2s; z-index: 100; margin-bottom: -6px; position: relative; }
         .timeline-resizer:hover { background: rgba(232, 32, 32, 0.4); }
         .timeline-panel { background: #151515; border-top: 1px solid #333; display: flex; flex-direction: column; margin: 0; padding: 0; }
-        .timeline-controls { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #333; }
+        .timeline-controls { padding: 2px; display: flex; align-items: center; gap: 5px; border-bottom: 1px solid #333; }
         .timeline-tracks-container { flex: 1; display: flex; flex-direction: column; position: relative; min-height: 0; }
         .btn-tesla-sm { background: #e82020; color: white; border: none; padding: 5px 15px; border-radius: 4px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
         .btn-link-small { background: transparent; border: 1px solid #444; color: #aaa; cursor: pointer; border-radius: 4px; transition: all 0.2s; }
@@ -1005,7 +1005,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .help-table kbd { background: #333; padding: 2px 6px; border-radius: 4px; border: 1px solid #444; font-family: monospace; font-size: 12px; color: #ef4444; }
         .cat-cell { font-weight: bold; color: #e82020; border-right: 1px solid #222; }
         .help-extras { background: rgba(232, 32, 32, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #e82020; font-size: 13px; color: #ccc; }
-        .time-display { font-family: monospace; min-width: 80px; display: inline-block; font-size: 14px; color: #ef4444; margin-left: 10px; }
+        .time-display { min-width: 50px; display: inline-block; font-size: 13px; }
       `}</style>
             {showAssetManager && (
                 <AssetManager

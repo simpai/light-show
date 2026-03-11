@@ -10,6 +10,7 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
     const setAudioFile = useStore(state => state.setAudioFile);
     const audioFileName = useStore(state => state.audioFileName);
     const setAudioFileName = useStore(state => state.setAudioFileName);
+    const addConsoleLog = useStore(state => state.addConsoleLog);
 
     // Keep some minor local states local if they don't need to be global
     // Actually, fpsDisplay and isAnalyzing could be local or store, let's keep them in the Store or here.
@@ -40,8 +41,8 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
             if (currentAudioFile && currentAudio && !currentAudio.paused && !currentAudio.seeking) {
                 const time = currentAudio.currentTime * 1000;
                 window.__lightShowTime = time;
-                // Throttle React store updates to ~4fps (250ms) - canvas renderers use window.__lightShowTime directly
-                if (now - lastStoreUpdateRef.current > 250) {
+                // Throttle React store updates to ~16fps (60ms) - canvas renderers use window.__lightShowTime directly
+                if (now - lastStoreUpdateRef.current > 60) {
                     setCurrentTime(time);
                     lastStoreUpdateRef.current = now;
                 }
@@ -57,8 +58,8 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
                     setCurrentTime(projectRef.current.duration);
                 } else {
                     window.__lightShowTime = next;
-                    // Throttle React store updates to ~4fps
-                    if (now - lastStoreUpdateRef.current > 250) {
+                    // Throttle React store updates to ~16fps
+                    if (now - lastStoreUpdateRef.current > 60) {
                         setCurrentTime(next);
                         lastStoreUpdateRef.current = now;
                     }
@@ -155,9 +156,8 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
         setFitTrigger2D(Date.now());
     };
 
-    const handleAudioUpload = (e) => {
-        const file = e.target.files[0];
-        if (file) {
+    const processAudioFile = async (file) => {
+        if (!file) return;
             if (audioUrlRef.current) {
                 URL.revokeObjectURL(audioUrlRef.current);
             }
@@ -166,10 +166,9 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
 
             setAudioFile(file);
             setAudioFileName(file.name);
+            addConsoleLog(`Audio Uploaded: ${file.name}`, 'info');
             setIsPlaying(false);
             setCurrentTime(0);
-
-            e.target.value = '';
 
             const audio = new window.Audio(audioUrlRef.current);
             audio.addEventListener('loadedmetadata', async () => {
@@ -177,8 +176,10 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
                 project.duration = duration;
 
                 try {
+                    addConsoleLog(`Starting audio FFT extraction: ${file.name}...`, 'info');
                     const pointsPerSecond = 100;
                     const waveformData = await AudioWaveformManager.generateWaveform(file, pointsPerSecond);
+                    addConsoleLog(`FFT extraction complete`, 'success');
                     project.waveform = {
                         peaks: waveformData.peaks,
                         pointsPerSecond: pointsPerSecond,
@@ -187,7 +188,9 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
                         fftSize: waveformData.fftSize
                     };
 
+                    addConsoleLog(`Starting beat analysis...`, 'info');
                     const beatData = AudioWaveformManager.detectBeats(waveformData.peaks, pointsPerSecond);
+                    addConsoleLog(`Beat analysis complete. BPM: ${beatData.bpm || 'Unknown'}`, 'success');
                     project.analysis = {
                         beat_times: beatData.beatTimes,
                         reference_beats: beatData.referenceBeats,
@@ -201,6 +204,7 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
                     }
                 } catch (err) {
                     console.error('Failed to generate waveform or beats:', err);
+                    addConsoleLog(`Analysis failed: ${err.message}`, 'error');
                 }
 
                 const updatedProject = Object.assign(Object.create(Object.getPrototypeOf(project)), project);
@@ -212,6 +216,38 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
                     }
                 }
             });
+    };
+
+    const handleAudioUpload = (e) => {
+        const file = e.target.files?.[0];
+        processAudioFile(file);
+        if (e.target) e.target.value = '';
+    };
+
+    const handleAudioPicker = async () => {
+        try {
+            if (window.showOpenFilePicker) {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{
+                        description: 'Audio Files',
+                        accept: { 'audio/*': ['.mp3', '.wav', '.ogg', '.m4a'] }
+                    }],
+                    multiple: false
+                });
+                const file = await handle.getFile();
+                processAudioFile(file);
+            } else {
+                // Fallback to legacy if API not supported
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'audio/*';
+                input.onchange = (e) => handleAudioUpload(e);
+                input.click();
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                addConsoleLog(`Audio selection failed: ${err.message}`, 'error');
+            }
         }
     };
 
@@ -245,6 +281,7 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
         handleSeek,
         handleReset,
         handleAudioUpload,
+        handleAudioPicker,
         handleAnalyzeAudio
     };
 }

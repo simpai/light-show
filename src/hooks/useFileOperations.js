@@ -1,4 +1,6 @@
+import React, { useState } from 'react';
 import JSZip from 'jszip';
+import { useStore } from '../store/useStore';
 import { ProjectState } from '../core/ProjectState';
 import { FseqWriter } from '../utils/FseqWriter';
 import { XsqWriter } from '../utils/XsqWriter';
@@ -27,6 +29,47 @@ export function useFileOperations({
     setFitTrigger2D,
     getCarFileName
 }) {
+    const [fileHandle, setFileHandle] = useState(null);
+    const addConsoleLog = useStore(state => state.addConsoleLog);
+
+    const getProjectBundle = async () => {
+        const zip = new JSZip();
+        const projectData = {
+            version: '1.1',
+            project: project.toJSON(),
+            matrixConfig,
+            audioFileName,
+            layoutData,
+            gridLayoutData,
+            bookmarks
+        };
+
+        zip.file("project.json", JSON.stringify(projectData, null, 2));
+
+        if (project.waveform && project.waveform.spectrogram) {
+            const specArray = project.waveform.spectrogram;
+            const totalPoints = specArray.length;
+            if (totalPoints > 0) {
+                const binsPerPoint = specArray[0].length;
+                const flatSpec8 = new Uint8Array(totalPoints * binsPerPoint);
+                for (let i = 0; i < totalPoints; i++) {
+                    flatSpec8.set(specArray[i], i * binsPerPoint);
+                }
+                zip.file("spectrogram.bin", flatSpec8.buffer);
+            }
+        }
+
+        if (audioFile) {
+            zip.file(audioFileName || "audio.mp3", audioFile);
+        }
+
+        return await zip.generateAsync({
+            type: 'blob',
+            compression: "DEFLATE",
+            compressionOptions: { level: 9 }
+        });
+    };
+
     const handleExportXsq = async () => {
         try {
             const writer = new XsqWriter();
@@ -37,7 +80,15 @@ export function useFileOperations({
 
             if (isMatrix) {
                 const zip = new JSZip();
-                let hasFiles = false;
+                let carIndex = 0;
+                let totalCars = 0;
+                for (let r = 0; r < gridSize.rows; r++) {
+                    for (let c = 0; c < gridSize.cols; c++) {
+                        const cell = layoutData?.layout?.[r]?.[c];
+                        if (layoutData && cell && !cell.exists) continue;
+                        totalCars++;
+                    }
+                }
 
                 for (let r = 0; r < gridSize.rows; r++) {
                     for (let c = 0; c < gridSize.cols; c++) {
@@ -58,6 +109,8 @@ export function useFileOperations({
                         });
                         zip.file(`${carName}.xsq`, xml);
                         hasFiles = true;
+                        carIndex++;
+                        addConsoleLog(`Exporting XSQ: ${carName} (${carIndex}/${totalCars})`, 'info', true);
                     }
                 }
 
@@ -79,7 +132,7 @@ export function useFileOperations({
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                console.log('Matrix XSQ Exported');
+                addConsoleLog(`XSQ Export Complete: ${totalCars} cars`, 'success');
             } else {
                 // Single car export
                 const frames = [];
@@ -145,9 +198,8 @@ export function useFileOperations({
                     zip.file(`${carName}.fseq`, arrayBuffer);
                     hasFiles = true;
                     carIndex++;
-                    const carElapsed = (performance.now() - carStartTime).toFixed(0);
-                    const pct = ((carIndex / totalCars) * 100).toFixed(1);
-                    console.log(`[FSEQ Export] ${pct}% (${carIndex}/${totalCars}) ${carName} - ${carElapsed}ms`);
+                    const pct = ((carIndex / totalCars) * 100).toFixed(0);
+                    addConsoleLog(`Exporting FSEQ: ${carName} (${carIndex}/${totalCars}) ${pct}%`, 'info', true);
                 }
             }
 
@@ -172,6 +224,7 @@ export function useFileOperations({
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            addConsoleLog(`FSEQ Export Complete: ${totalCars} cars in ${totalElapsed}s`, 'success');
         } catch (error) {
             console.error('Export failed:', error);
             alert('Failed to export light show.', error);
@@ -287,69 +340,111 @@ export function useFileOperations({
 
     const handleSaveProject = async () => {
         try {
-            const zip = new JSZip();
-
-            const projectData = {
-                version: '1.1',
-                project: project.toJSON(),
-                matrixConfig,
-                audioFileName,
-
-                layoutData,
-                gridLayoutData,
-                bookmarks
-            };
-
-            // 1. Add project metadata
-            zip.file("project.json", JSON.stringify(projectData, null, 2));
-
-            // 2. Add spectrogram binary data if available
-            if (project.waveform && project.waveform.spectrogram) {
-                const specArray = project.waveform.spectrogram;
-                const totalPoints = specArray.length;
-                if (totalPoints > 0) {
-                    const binsPerPoint = specArray[0].length;
-                    // Compression: Arrays are already normalized to Uint8 (0-255)
-                    const flatSpec8 = new Uint8Array(totalPoints * binsPerPoint);
-                    for (let i = 0; i < totalPoints; i++) {
-                        flatSpec8.set(specArray[i], i * binsPerPoint);
+            if (fileHandle) {
+                // Check permissions
+                const options = { mode: 'readwrite' };
+                if ((await fileHandle.queryPermission(options)) !== 'granted') {
+                    if ((await fileHandle.requestPermission(options)) !== 'granted') {
+                        alert('Permission to write to file was denied.');
+                        return;
                     }
-                    // Save as compressed 8-bit binary buffer
-                    zip.file("spectrogram.bin", flatSpec8.buffer);
                 }
+
+                const content = await getProjectBundle();
+                const writable = await fileHandle.createWritable();
+                await writable.write(content);
+                await writable.close();
+                addConsoleLog(`Project saved to ${fileHandle.name}`, 'success');
+            } else {
+                await handleSaveProjectAs();
             }
-
-            // 3. Add audio file if exists
-            if (audioFile) {
-                zip.file(audioFileName || "audio.mp3", audioFile);
-            }
-
-            const content = await zip.generateAsync({
-                type: 'blob',
-                compression: "DEFLATE",
-                compressionOptions: { level: 9 }
-            });
-            const url = URL.createObjectURL(content);
-
-            const a = document.createElement('a');
-            a.href = url;
-            const safeName = (audioFileName || 'lightshow').split('.')[0];
-            a.download = `${safeName}_project.ls`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-
-            URL.revokeObjectURL(url);
-            console.log('Project bundle saved');
         } catch (err) {
             console.error('Failed to save project:', err);
-            alert('Failed to save project bundle: ' + err.message);
+            // Fallback to old download method if it's a "not a function" error (browser doesn't support API)
+            if (err.name === 'TypeError' || err.message.includes('createWritable')) {
+                handleSaveProjectOld();
+            } else if (err.name !== 'AbortError') {
+                alert('Failed to save project: ' + err.message);
+            }
         }
     };
 
-    const handleLoadProject = async (file) => {
+    const handleSaveProjectAs = async () => {
         try {
+            const safeName = (audioFileName || 'lightshow').split('.')[0];
+            const handle = await window.showSaveFilePicker({
+                id: 'lightshow-project-picker',
+                suggestedName: `${safeName}_project.ls.zip`,
+                types: [{
+                    description: 'Lightshow Project',
+                    accept: { 'application/zip': ['.ls.zip'] },
+                }],
+            });
+
+            const content = await getProjectBundle();
+            const writable = await handle.createWritable();
+            await writable.write(content);
+            await writable.close();
+
+            setFileHandle(handle);
+            addConsoleLog(`Project saved as ${handle.name}`, 'success');
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                addConsoleLog('Save operation cancelled', 'warning');
+            } else {
+                console.error('Save As failed:', err);
+                addConsoleLog(`Failed to save project: ${err.message}`, 'error');
+            }
+        }
+    };
+
+    const handleSaveProjectOld = async () => {
+        try {
+            const content = await getProjectBundle();
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            const safeName = (audioFileName || 'lightshow').split('.')[0];
+            a.download = `${safeName}_project.ls.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log('Project bundle saved via download fallback');
+        } catch (err) {
+            console.error('Failed to save project fallback:', err);
+            alert('Failed to save project: ' + err.message);
+        }
+    };
+
+    const handleLoadProject = async (providedFile = null) => {
+        try {
+            let file;
+            let handle = null;
+
+            if (providedFile instanceof File) {
+                file = providedFile;
+            } else {
+                // Use File System Access API if available
+                if (window.showOpenFilePicker) {
+                    const [h] = await window.showOpenFilePicker({
+                        id: 'lightshow-project-picker',
+                        types: [{
+                            description: 'Lightshow Project',
+                            accept: { 'application/zip': ['.ls.zip', '.ls', '.zip', '.json'] },
+                        }],
+                        multiple: false
+                    });
+                    handle = h;
+                    file = await handle.getFile();
+                } else {
+                    // Fallback should be handled by the <input> in Toolbar
+                    return;
+                }
+            }
+
             const zip = await JSZip.loadAsync(file);
+            setFileHandle(handle);
 
             // 1. Load project.json
             const jsonFile = zip.file("project.json");
@@ -357,6 +452,8 @@ export function useFileOperations({
 
             const jsonText = await jsonFile.async("string");
             const data = JSON.parse(jsonText);
+
+            addConsoleLog(`Loading project: ${file.name || 'Unknown'}`, 'info');
 
             // 2. Restore State
             const loadedProject = await ProjectState.fromJSON(data.project);
@@ -405,7 +502,7 @@ export function useFileOperations({
                             }
 
                             loadedProject.waveform.spectrogram = spectrogram;
-                            console.log('Restored spectrogram from binary file');
+                            addConsoleLog('Restored spectrogram from cache', 'success');
                         } catch (err) {
                             console.error('Failed to restore spectrogram binary:', err);
                         }
@@ -413,7 +510,7 @@ export function useFileOperations({
 
                     // 5. Automatic Re-analysis if missing
                     if (!loadedProject.waveform || !loadedProject.waveform.spectrogram || !loadedProject.analysis?.beat_times) {
-                        console.log('Missing waveform, spectrogram, or beat data, starting automatic re-analysis...');
+                        addConsoleLog('Missing waveform data, starting automatic re-analysis...', 'info');
                         try {
                             const pointsPerSecond = loadedProject.waveform?.pointsPerSecond || 100;
                             const waveformData = await AudioWaveformManager.generateWaveform(audioFileObj, pointsPerSecond);
@@ -450,7 +547,7 @@ export function useFileOperations({
                                     rendererRef.current.clearCache();
                                 }
                             }
-                            console.log('Automatic re-analysis completed');
+                            addConsoleLog('Automatic re-analysis completed', 'success');
                         } catch (reErr) {
                             console.error('Auto re-analysis failed:', reErr);
                         }
@@ -460,11 +557,15 @@ export function useFileOperations({
 
             console.log('Project bundle loaded');
             setFitTrigger2D(Date.now());
-            alert('Project bundle loaded successfully!');
+            addConsoleLog(`Project bundle loaded successfully: ${file.name || 'Unknown'}`, 'success');
 
         } catch (err) {
-            console.error('Failed to load project bundle:', err);
-            alert('Failed to load project bundle: ' + err.message);
+            if (err.name === 'AbortError') {
+                addConsoleLog('Open operation cancelled', 'warning');
+            } else {
+                console.error('Failed to load project bundle:', err);
+                addConsoleLog(`Failed to load project bundle: ${err.message}`, 'error');
+            }
         }
     };
 
@@ -475,6 +576,8 @@ export function useFileOperations({
         handleImportTimeline,
         handleAppendTimeline,
         handleSaveProject,
-        handleLoadProject
+        handleSaveProjectAs,
+        handleLoadProject,
+        fileHandle
     };
 }

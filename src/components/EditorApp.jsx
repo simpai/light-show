@@ -182,9 +182,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         togglePlay,
         handleSeek,
         handleReset,
-        handleAudioUpload,
-        handleAnalyzeAudio,
-        isPlayingRef
+        handleAudioPicker,
+        handleAnalyzeAudio
     } = usePlayback(project, setProject, rendererRef, setBpm, setFitTrigger2D);
 
     const {
@@ -194,7 +193,9 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         handleImportTimeline,
         handleAppendTimeline,
         handleSaveProject,
-        handleLoadProject
+        handleSaveProjectAs,
+        handleLoadProject,
+        fileHandle
     } = useFileOperations({
         project, setProject,
         rendererRef, matrixConfig, setMatrixConfig,
@@ -678,18 +679,18 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         <div className="editor-container">
             <EditorToolbar
                 fileInputRef={fileInputRef}
-                handleAudioUpload={handleAudioUpload}
+                handleAudioPicker={handleAudioPicker}
                 audioFileName={audioFileName}
                 handleLoadProject={handleLoadProject}
                 handleSaveProject={handleSaveProject}
+                handleSaveProjectAs={handleSaveProjectAs}
+                fileHandle={fileHandle}
                 showLayoutEditor={showLayoutEditor}
                 setShowLayoutEditor={setShowLayoutEditor}
                 activeModal={activeModal}
                 setActiveModal={setActiveModal}
                 selectedCars={selectedCars}
                 handleAddCarGroup={handleAddCarGroup}
-                matrixConfig={matrixConfig}
-                setMatrixConfig={setMatrixConfig}
                 showGroundLight={showGroundLight}
                 setShowGroundLight={setShowGroundLight}
                 handleExportXsq={handleExportXsq}
@@ -980,8 +981,7 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
             <style>{`
         .editor-container { display: flex; flex-direction: column; height: 100%; background: #111; color: white; margin: 0; padding: 0; }
-        .editor-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #222; border-bottom: 1px solid #333; min-height: 42px; line-height: 1; margin: 0; }
-        .editor-header h2 { line-height: 1; margin: 0; }
+        .editor-header { display: flex; align-items: center; justify-content: space-between; padding: 8px ;background: #222; border-bottom: 1px solid #333; height: 50px; line-height: 1; margin: 0; }
         .editor-main { flex: 1; display: flex; overflow: hidden; margin: 0; padding: 0; }
         .preview-panel { flex: 1 1 auto; min-width: 400px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; padding: 0; margin: 0; }
         .palette-panel { flex: 0 0 280px; min-width: 230px; max-width: 350px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto; padding: 0; margin: 0; }

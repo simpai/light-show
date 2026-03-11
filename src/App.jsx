@@ -65,9 +65,7 @@ function App() {
 
   if (mode === 'fseq-viewer') {
     return (
-      <FseqViewer
-        onExit={() => setMode('editor')}
-      />
+      <FseqViewer />
     );
   }
 

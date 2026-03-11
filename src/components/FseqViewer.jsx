@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { FseqParser } from '../utils/FseqParser';
-import { ZoomIn, ZoomOut, Move, Grid3X3, ArrowLeft, Upload } from 'lucide-react';
+import { ZoomIn, ZoomOut, Move, Grid3X3, Upload } from 'lucide-react';
 
-const FseqViewer = ({ onExit }) => {
+const FseqViewer = () => {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const [fseqData, setFseqData] = useState(null);
@@ -183,7 +183,7 @@ const FseqViewer = ({ onExit }) => {
     return (
         <div className="fseq-viewer-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#111', color: 'white' }}>
             <div className="fseq-toolbar" style={{ padding: '10px', display: 'flex', alignItems: 'center', gap: '15px', background: '#1a1a1a', borderBottom: '1px solid #333' }}>
-                <button onClick={onExit} className="btn-icon" title="Back"><ArrowLeft size={18} /></button>
+                
 
                 <div className="upload-btn-wrapper">
                     <button className="btn-tesla-small"><Upload size={16} /> Load FSEQ</button>

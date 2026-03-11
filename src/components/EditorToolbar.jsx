@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Save, FolderOpen, Grid, Car, Plus, Layers, Music, Image as ImageIcon } from 'lucide-react';
+import { Save, FolderOpen, Grid, Car, Plus, Layers, Music, Image as ImageIcon, Eye } from 'lucide-react';
 import { getSpectrogramColor } from '../utils/colorUtils.js';
 
 const MiniSpectrogram = ({ project }) => {
@@ -38,7 +38,7 @@ const MiniSpectrogram = ({ project }) => {
     if (!project?.waveform?.spectrogram) return null;
 
     return (
-        <div style={{ display: 'flex', alignItems: 'flex-end', height: '48px', gap: '2px', marginLeft: '16px', background: '#111', padding: '4px 6px', borderRadius: '6px', border: '1px solid #333' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', height: '48px', gap: '2px', marginLeft: '10px', background: '#0002', padding: '1px' }}>
             {Array.from({ length: 32 }).map((_, i) => (
                 <div
                     key={i}
@@ -58,19 +58,18 @@ const MiniSpectrogram = ({ project }) => {
 };
 
 export function EditorToolbar({
-    fileInputRef,
-    handleAudioUpload,
+    handleAudioPicker,
     audioFileName,
     handleLoadProject,
     handleSaveProject,
+    handleSaveProjectAs,
+    fileHandle,
     showLayoutEditor,
     setShowLayoutEditor,
     activeModal,
     setActiveModal,
     selectedCars,
     handleAddCarGroup,
-    matrixConfig,
-    setMatrixConfig,
     showGroundLight,
     setShowGroundLight,
     handleExportXsq,
@@ -81,81 +80,54 @@ export function EditorToolbar({
     return (
         <header className="editor-header">
             <div style={{ display: 'flex', alignItems: 'center' }}>
-                <h2 style={{ margin: 0, fontSize: '18px' }}>🎵 Light Show Editor</h2>
+                <h2 style={{ margin: 0, fontSize: '18px' }}>KLightshow</h2>
                 <MiniSpectrogram project={project} />
             </div>
-            <div className="actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative', zIndex: 100 }}>
-                <div className="nav-links" style={{ display: 'flex', gap: '5px', marginRight: '15px', borderRight: '1px solid #444', paddingRight: '10px' }}>
-                    <button
-                        className="btn-link-small"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const url = window.location.origin + '/fseq-viewer';
-                            window.open(url, '_blank');
-                        }}
-                        style={{ fontSize: '12px', color: '#aaa', padding: '4px 8px', cursor: 'pointer' }}
-                    >
-                        FSEQ Viewer
-                    </button>
-                </div>
-
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="audio/*"
-                    onChange={handleAudioUpload}
-                    style={{ display: 'none' }}
-                />
+            <div className="actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', position: 'relative', zIndex: 100 }}>
                 <button
                     className="btn-icon"
                     tabIndex={-1}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => {
                         e.currentTarget.blur();
-                        fileInputRef.current?.click();
+                        handleAudioPicker();
                     }}
                     title="Upload Audio"
+                    style={{ color: audioFileName ? '#3b82f6' : 'inherit' }}
                 >
                     <Music size={20} />
                 </button>
-                {audioFileName && (
-                    <span style={{ fontSize: '12px', color: '#888', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {audioFileName}
-                    </span>
-                )}
-
-                <label
-                    className="btn-icon"
-                    title="Load Project"
-                    style={{ cursor: 'pointer', borderLeft: '1px solid #444', paddingLeft: '10px' }}
-                >
-                    <FolderOpen size={20} />
-                    <input
-                        type="file"
-                        accept=".ls,.json,.zip"
-                        onChange={(e) => {
-                            if (e.target.files[0]) {
-                                handleLoadProject(e.target.files[0]);
-                            }
-                            e.target.value = ''; // Reset to allow reloading same file
-                        }}
-                        style={{ display: 'none' }}
-                    />
-                </label>
-
                 <button
                     className="btn-icon"
-                    tabIndex={-1}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                        e.currentTarget.blur();
-                        handleSaveProject();
-                    }}
-                    title="Save Project"
+                    title="Load Project"
+                    onClick={() => handleLoadProject()}
                 >
-                    <Save size={20} />
+                    <FolderOpen size={20} />
                 </button>
+
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
+                    {fileHandle && (
+                        <span style={{ fontSize: '11px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: '4px' }}>
+                            {fileHandle.name}
+                        </span>
+                    )}
+                    <button
+                        className="btn-icon"
+                        onClick={handleSaveProject}
+                        title={fileHandle ? `Save to ${fileHandle.name}` : "Save Project"}
+                    >
+                        <Save size={20} />
+                    </button>
+                    <button
+                        className="btn-icon"
+                        onClick={handleSaveProjectAs}
+                        title="Save Project As..."
+                        style={{ flexDirection: 'column', height: 'auto', padding: '4px' }}
+                    >
+                        <Save size={20} />
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', lineHeight: 1 }}>+</span>
+                    </button>
+                </div>
 
                 <button
                     className={`btn-icon ${showLayoutEditor ? 'active' : ''}`}
@@ -180,23 +152,8 @@ export function EditorToolbar({
                         setActiveModal('lightGroups');
                     }}
                     title="Light Group Editor"
-                    style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
                 >
                     <Car size={20} />
-                </button>
-
-                <button
-                    className="btn-icon"
-                    tabIndex={-1}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                        e.currentTarget.blur();
-                        onOpenLibrary();
-                    }}
-                    title="Asset Manager"
-                    style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
-                >
-                    <ImageIcon size={20} />
                 </button>
 
                 {/* Car Group Controls */}
@@ -218,29 +175,19 @@ export function EditorToolbar({
                     </button>
                 </div>
 
-                {/* Matrix Size Controls */}
-                <div className="matrix-config" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
-                    <span style={{ fontSize: '12px', color: '#666' }}>Grid:</span>
-                    <input
-                        type="number"
-                        value={matrixConfig.cols}
-                        onChange={e => setMatrixConfig(prev => ({ ...prev, cols: parseInt(e.target.value) || 1 }))}
-                        style={{ width: '45px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
-                        min="1"
-                        max="100"
-                        title="Columns"
-                    />
-                    <span style={{ color: '#666' }}>×</span>
-                    <input
-                        type="number"
-                        value={matrixConfig.rows}
-                        onChange={e => setMatrixConfig(prev => ({ ...prev, rows: parseInt(e.target.value) || 1 }))}
-                        style={{ width: '45px', background: '#333', border: '1px solid #444', color: 'white', padding: '2px 5px', borderRadius: '3px' }}
-                        min="1"
-                        max="50"
-                        title="Rows"
-                    />
-                </div>
+                <button
+                    className="btn-icon"
+                    tabIndex={-1}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                        e.currentTarget.blur();
+                        onOpenLibrary();
+                    }}
+                    title="Asset Manager"
+                    style={{ color: '#f44', borderLeft: '1px solid #444', paddingLeft: '10px' }}
+                >
+                    <ImageIcon size={20} />
+                </button>
 
                 <div className="ground-light-toggle" style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '10px', marginLeft: '10px' }}>
                     <input
@@ -255,17 +202,28 @@ export function EditorToolbar({
                     </label>
                 </div>
 
-                <div className="toolbar-group" style={{ display: 'flex', gap: '10px', borderLeft: '1px solid #444', paddingLeft: '12px', marginLeft: '12px' }}>
-                    <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.currentTarget.blur(); handleExportXsq(); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
+                <div className="toolbar-group" style={{ display: 'flex', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '12px', marginLeft: '12px' }}>
+                    <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.currentTarget.blur(); handleExportXsq(); }} style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '6px 10px', fontSize: '14px' }}>
                         <Save size={18} />
                         .xsq
                     </button>
-                    <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.currentTarget.blur(); handleExportMatrix(); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', fontSize: '14px' }}>
+                    <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.currentTarget.blur(); handleExportMatrix(); }} style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '6px 10px', fontSize: '14px' }}>
                         <Save size={18} />
                         .fseq
                     </button>
+                    <button className="btn-secondary" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const url = window.location.origin + '/fseq-viewer';
+                            window.open(url, '_blank');
+                        }} style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '6px 10px', fontSize: '14px' }}>
+                        <Eye size={18} />
+                        .fseq
+                    </button>
+
                 </div>
             </div>
-        </header>
+        </header >
     );
 }

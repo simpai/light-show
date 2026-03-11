@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import MatrixPreview2D from './MatrixPreview2D';
 import ClipPalette from './ClipPalette';
 import ClipEditor from './ClipEditor';
+import { ConsoleOverlay } from './ConsoleOverlay';
 
 export function EditorWorkspace({
     fpsDisplay,
@@ -29,13 +30,27 @@ export function EditorWorkspace({
 }) {
     const paletteCollapsed = useStore(state => state.paletteCollapsed);
     const setPaletteCollapsed = useStore(state => state.setPaletteCollapsed);
+    const hasConsoleMessages = useStore(state => state.consoleMessages.length > 0);
 
     return (
         <div className="editor-main">
             <div className="preview-panel" style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', top: 4, left: 8, background: 'rgba(0,0,0,0.7)', color: '#0f0', fontSize: '11px', fontFamily: 'monospace', padding: '2px 6px', borderRadius: '3px', zIndex: 20, pointerEvents: 'none' }}>
+                <div style={{ 
+                    position: 'absolute', 
+                    top: 4, 
+                    right: 8, 
+                    background: 'rgba(0,0,0,0.7)', 
+                    color: '#0f0', 
+                    fontSize: '11px', 
+                    fontFamily: 'monospace', 
+                    padding: '2px 6px', 
+                    borderRadius: '3px', 
+                    zIndex: 20, 
+                    pointerEvents: 'none' 
+                }}>
                     {fpsDisplay} FPS
                 </div>
+                <ConsoleOverlay />
                 <MatrixPreview2D
                     rendererRef={rendererRef}
                     rows={matrixConfig.rows}

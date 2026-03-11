@@ -17,6 +17,7 @@ export const createEditorSlice = (set, get) => ({
 
     paletteCollapsed: localStorage.getItem('ls_editor_palette_collapsed') === 'true',
     timelineHeight: parseInt(localStorage.getItem('ls_editor_timeline_height')) || 350,
+    consoleMessages: [],
 
     // Actions
     setSelectedClipIds: (ids) => set({ selectedClipIds: typeof ids === 'function' ? ids(get().selectedClipIds) : ids }),
@@ -49,4 +50,26 @@ export const createEditorSlice = (set, get) => ({
         localStorage.setItem('ls_editor_timeline_height', height);
         set({ timelineHeight: height });
     },
+
+    addConsoleLog: (msg, type = 'info', isProgress = false) => {
+        set(state => {
+            const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const newMessage = { id: crypto.randomUUID(), text: msg, type, timestamp, isProgress };
+            
+            if (isProgress && state.consoleMessages.length > 0) {
+                const lastMsg = state.consoleMessages[state.consoleMessages.length - 1];
+                if (lastMsg.isProgress) {
+                    // Update the last progress message instead of adding a new one
+                    const updatedMessages = [...state.consoleMessages];
+                    updatedMessages[updatedMessages.length - 1] = { ...lastMsg, text: msg, timestamp };
+                    return { consoleMessages: updatedMessages };
+                }
+            }
+            
+            // Limit to last 50 messages
+            const newMessages = [...state.consoleMessages, newMessage].slice(-50);
+            return { consoleMessages: newMessages };
+        });
+    },
+    clearConsole: () => set({ consoleMessages: [] }),
 });

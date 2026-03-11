@@ -136,7 +136,7 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
         let animationFrameId;
 
         const updatePlayhead = () => {
-            const currentTime = useStore.getState().currentTime;
+            const currentTime = window.__lightShowTime !== undefined ? window.__lightShowTime : useStore.getState().currentTime;
             const zoomFactor = zoomRef.current || 50;
             const targetX = (currentTime / 1000) * zoomFactor;
 

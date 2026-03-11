@@ -16,6 +16,7 @@ import { LightGroupEditor } from './LightGroupEditor';
 import { CarGroupManager } from './CarGroupManager';
 import { EditorToolbar } from './EditorToolbar';
 import { EditorWorkspace } from './EditorWorkspace';
+import { AssetManager } from './AssetManager';
 import { TimelineControls } from './TimelineControls';
 import { useProjectHistory } from '../hooks/useProjectHistory';
 import { usePlayback } from '../hooks/usePlayback';
@@ -65,6 +66,14 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const setShowHelpModal = useStore(state => state.setShowHelpModal);
     const selectedPaletteClipId = useStore(state => state.selectedPaletteClipId);
     const setSelectedPaletteClipId = useStore(state => state.setSelectedPaletteClipId);
+
+    const [showAssetManager, setShowAssetManager] = useState(false);
+    useEffect(() => {
+        console.log("showAssetManager state changed:", showAssetManager);
+    }, [showAssetManager]);
+    const [assetManagerMode, setAssetManagerMode] = useState('manage'); // 'manage' | 'select'
+    const [assetManagerCallback, setAssetManagerCallback] = useState(null);
+    const [assetManagerSelectedId, setAssetManagerSelectedId] = useState(null);
 
     const [timelineHeight, setTimelineHeight] = useState(350);
     const resizingTimelineRef = useRef(false);
@@ -481,6 +490,51 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         return () => window.removeEventListener('imageUpload', handleImageUpload);
     }, [project]);
 
+    // Handle openAssetManagerForClip event from useClipOperations
+    useEffect(() => {
+        const handleOpenAssetManager = (event) => {
+            const { clipId } = event.detail;
+            setAssetManagerMode('select');
+            setAssetManagerSelectedId(null);
+
+            // Re-fetch project to ensure we modify the latest state
+            setAssetManagerCallback(() => (assetId) => {
+                const currentProject = useStore.getState().project;
+                const newProject = Object.assign(Object.create(Object.getPrototypeOf(currentProject)), currentProject);
+                let found = false;
+
+                newProject.layers = newProject.layers.map(layer => {
+                    const clonedLayer = { ...layer, clips: [...layer.clips] };
+                    const clipIndex = clonedLayer.clips.findIndex(c => c.id === clipId);
+
+                    if (clipIndex !== -1) {
+                        found = true;
+                        const clip = { ...clonedLayer.clips[clipIndex], assetId: assetId };
+
+                        // Copy FPS if available
+                        const asset = newProject.assets[assetId];
+                        if (asset && asset.fps) {
+                            clip.fps = asset.fps;
+                        }
+
+                        clonedLayer.clips[clipIndex] = clip;
+                    }
+                    return clonedLayer;
+                });
+
+                if (found) {
+                    setProject(newProject);
+                    rendererRef.current.setProject(newProject);
+                    saveToHistory(newProject);
+                }
+            });
+            setShowAssetManager(true);
+        };
+
+        window.addEventListener('openAssetManagerForClip', handleOpenAssetManager);
+        return () => window.removeEventListener('openAssetManagerForClip', handleOpenAssetManager);
+    }, [setProject, saveToHistory]);
+
     // Playback functions moved to usePlayback hook
 
     const handleAddTrack = () => {
@@ -599,6 +653,13 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         return found;
     }, [selectedClipIds, project]);
 
+    const onOpenAssetManager = (currentId, callback) => {
+        setAssetManagerMode('select');
+        setAssetManagerSelectedId(currentId);
+        setAssetManagerCallback(() => callback);
+        setShowAssetManager(true);
+    };
+
     const selectedPaletteClip = useMemo(() => {
         if (!selectedPaletteClipId) return null;
         for (const slot of project.palette) {
@@ -629,6 +690,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 handleExportXsq={handleExportXsq}
                 handleExportMatrix={handleExportMatrix}
                 project={project}
+                onOpenLibrary={() => {
+                    console.log("Opening Asset Manager in manage mode");
+                    setAssetManagerMode('manage');
+                    setAssetManagerSelectedId(null);
+                    setShowAssetManager(true);
+                }}
             />
 
             <EditorWorkspace
@@ -652,10 +719,11 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                 handleDelete={handleDelete}
                 allCarsThumbnail={allCarsThumbnail}
                 selectedLayerId={selectedLayerId}
+                onOpenAssetManager={onOpenAssetManager}
             />
 
-            <div 
-                className="timeline-resizer" 
+            <div
+                className="timeline-resizer"
                 onMouseDown={() => {
                     resizingTimelineRef.current = true;
                     document.body.style.cursor = 'row-resize';
@@ -939,6 +1007,20 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         .help-extras { background: rgba(232, 32, 32, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid #e82020; font-size: 13px; color: #ccc; }
         .time-display { font-family: monospace; min-width: 80px; display: inline-block; font-size: 14px; color: #ef4444; margin-left: 10px; }
       `}</style>
+            {showAssetManager && (
+                <AssetManager
+                    isOpen={showAssetManager}
+                    project={project}
+                    onProjectUpdate={setProject}
+                    mode={assetManagerMode}
+                    selectedAssetId={assetManagerSelectedId}
+                    onClose={() => setShowAssetManager(false)}
+                    onSelectAsset={(id) => {
+                        if (assetManagerCallback) assetManagerCallback(id);
+                        setShowAssetManager(false);
+                    }}
+                />
+            )}
         </div >
     );
 }

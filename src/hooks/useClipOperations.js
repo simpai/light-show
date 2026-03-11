@@ -238,19 +238,12 @@ export function useClipOperations({
                 };
 
                 if (type === 'gif') {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = (e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                            window.dispatchEvent(new CustomEvent('imageUpload', {
-                                detail: { clipId: newClip.id, file }
-                            }));
-                        }
-                        e.target.value = '';
-                    };
-                    input.click();
+                    // Slight delay to allow the clip to be selected first
+                    setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('openAssetManagerForClip', {
+                            detail: { clipId: newClip.id }
+                        }));
+                    }, 100);
                 }
 
                 layer.clips.push(newClip);

@@ -20,7 +20,7 @@ const CHANNELS = {
 };
 
 
-export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThumbnail = null }) {
+export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThumbnail = null, onOpenAssetManager }) {
     const project = useStore(state => state.project);
     const assets = project?.assets || {};
     const lightGroups = project?.lightGroups || {};
@@ -258,6 +258,26 @@ export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThum
                     </div>
                 )}
             </div>
+
+            {clip.type === 'gif' && (
+                <div className="section-container">
+                    <label className="section-title">Image Selection</label>
+                    <div className="form-group grid-2" style={{ alignItems: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={clip.assetId ? (assets[clip.assetId]?.name || 'Unknown Asset') : 'No Image Selected'}>
+                            {clip.assetId ? (assets[clip.assetId]?.name || 'Unknown Asset') : 'No Image Selected'}
+                        </div>
+                        <button className="btn-secondary" onClick={() => {
+                            if (onOpenAssetManager) {
+                                onOpenAssetManager(clip.assetId, (newAssetId) => {
+                                    handleChange('assetId', newAssetId);
+                                });
+                            }
+                        }} style={{ padding: '4px 8px', fontSize: '11px', flex: 1 }}>
+                            Select Image
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {clip.type === 'gif' && (
                 <div className="section-container">
@@ -672,17 +692,17 @@ export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThum
                         <strong style={{ fontSize: '13px', color: '#a5b4fc', margin: 0 }}>Band {idx + 1}</strong>
                         {band.imageId ? (
                             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                <label className="btn-icon" style={{ cursor: 'pointer', color: '#10b981', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px', fontSize: '11px' }} title="Replace Image">
-                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
-                                        if (e.target.files && e.target.files[0]) {
-                                            const event = new CustomEvent('imageUpload', {
-                                                detail: { clipId: clip.id, file: e.target.files[0], bandIndex: idx }
-                                            });
-                                            window.dispatchEvent(event);
-                                        }
-                                    }} />
+                                <button className="btn-icon" onClick={() => {
+                                    if (onOpenAssetManager) {
+                                        onOpenAssetManager(band.imageId, (newAssetId) => {
+                                            const newBands = [...clip.bands];
+                                            newBands[idx] = { ...newBands[idx], imageId: newAssetId };
+                                            handleChange('bands', newBands);
+                                        });
+                                    }
+                                }} style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px', fontSize: '11px', background: 'transparent', border: 'none', cursor: 'pointer' }} title="Replace Image">
                                     Replace
-                                </label>
+                                </button>
                                 <button className="btn-icon" onClick={() => {
                                     const newBands = [...clip.bands];
                                     newBands[idx] = { ...newBands[idx], imageId: null };
@@ -692,17 +712,17 @@ export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThum
                                 </button>
                             </div>
                         ) : (
-                            <label className="btn-icon" style={{ cursor: 'pointer', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px', fontSize: '11px' }}>
-                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
-                                    if (e.target.files && e.target.files[0]) {
-                                        const event = new CustomEvent('imageUpload', {
-                                            detail: { clipId: clip.id, file: e.target.files[0], bandIndex: idx }
-                                        });
-                                        window.dispatchEvent(event);
-                                    }
-                                }} />
-                                Upload Mapping Image
-                            </label>
+                            <button className="btn-icon" onClick={() => {
+                                if (onOpenAssetManager) {
+                                    onOpenAssetManager(null, (newAssetId) => {
+                                        const newBands = [...clip.bands];
+                                        newBands[idx] = { ...newBands[idx], imageId: newAssetId };
+                                        handleChange('bands', newBands);
+                                    });
+                                }
+                            }} style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px', fontSize: '11px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                                Select Mapping Image
+                            </button>
                         )}
                     </div>
                     {band.imageId && assets[band.imageId] && (

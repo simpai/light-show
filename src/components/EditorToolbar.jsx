@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Save, FolderOpen, Grid, Car, Plus, Layers, Music } from 'lucide-react';
+import { Save, FolderOpen, Grid, Car, Plus, Layers, Music, Image as ImageIcon } from 'lucide-react';
 import { getSpectrogramColor } from '../utils/colorUtils.js';
 
 const MiniSpectrogram = ({ project }) => {
@@ -75,7 +75,8 @@ export function EditorToolbar({
     setShowGroundLight,
     handleExportXsq,
     handleExportMatrix,
-    project
+    project,
+    onOpenLibrary
 }) {
     return (
         <header className="editor-header">
@@ -182,6 +183,20 @@ export function EditorToolbar({
                     style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
                 >
                     <Car size={20} />
+                </button>
+
+                <button
+                    className="btn-icon"
+                    tabIndex={-1}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                        e.currentTarget.blur();
+                        onOpenLibrary();
+                    }}
+                    title="Asset Manager"
+                    style={{ borderLeft: '1px solid #444', paddingLeft: '10px' }}
+                >
+                    <ImageIcon size={20} />
                 </button>
 
                 {/* Car Group Controls */}

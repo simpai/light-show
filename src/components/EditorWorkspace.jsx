@@ -23,7 +23,8 @@ export function EditorWorkspace({
     handleClipUpdate,
     handleDelete,
     allCarsThumbnail,
-    selectedLayerId
+    selectedLayerId,
+    onOpenAssetManager
 }) {
     const [paletteCollapsed, setPaletteCollapsed] = useState(false);
 
@@ -80,6 +81,8 @@ export function EditorWorkspace({
                         onChange={handleClipUpdate}
                         onDelete={handleDelete}
                         allCarsThumbnail={allCarsThumbnail}
+                        onOpenAssetManager={onOpenAssetManager}
+                        assets={project.assets}
                     />
                 ) : selectedLayerId ? (
                     <div className="p-4">

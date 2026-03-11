@@ -152,11 +152,13 @@ export class ProjectState {
      */
     serializeAssets() {
         const serialized = {};
+
         for (const [id, asset] of Object.entries(this.assets)) {
             serialized[id] = {
                 width: asset.width,
                 height: asset.height,
                 fps: asset.fps,
+                name: asset.name,
                 frames: asset.frames.map(imageData => {
                     const canvas = document.createElement('canvas');
                     canvas.width = imageData.width;
@@ -168,6 +170,69 @@ export class ProjectState {
             };
         }
         return serialized;
+    }
+
+    /**
+     * Remove an asset from the project
+     * @param {string} assetId 
+     */
+    removeAsset(assetId) {
+        if (this.assets[assetId]) {
+            delete this.assets[assetId];
+            // Nullify references in clips
+            this.layers.forEach(layer => {
+                layer.clips.forEach(clip => {
+                    if (clip.assetId === assetId) clip.assetId = null;
+                    if (clip.bands) {
+                        clip.bands.forEach(band => {
+                            if (band.imageId === assetId) band.imageId = null;
+                        });
+                    }
+                });
+            });
+            this.palette.forEach(slot => {
+                slot.clips.forEach(clip => {
+                    if (clip.assetId === assetId) clip.assetId = null;
+                    if (clip.bands) {
+                        clip.bands.forEach(band => {
+                            if (band.imageId === assetId) band.imageId = null;
+                        });
+                    }
+                });
+            });
+        }
+    }
+
+    /**
+     * Rename an asset
+     * @param {string} assetId 
+     * @param {string} newName 
+     */
+    renameAsset(assetId, newName) {
+        if (this.assets[assetId]) {
+            this.assets[assetId].name = newName;
+        }
+    }
+
+    /**
+     * Get IDs of all assets currently used by clips
+     * @returns {Set<string>}
+     */
+    getUsedAssetIds() {
+        const usedIds = new Set();
+        const checkClip = (clip) => {
+            if (clip.assetId) usedIds.add(clip.assetId);
+            if (clip.bands) {
+                clip.bands.forEach(band => {
+                    if (band.imageId) usedIds.add(band.imageId);
+                });
+            }
+        };
+
+        this.layers.forEach(layer => layer.clips.forEach(checkClip));
+        this.palette.forEach(slot => slot.clips.forEach(checkClip));
+
+        return usedIds;
     }
 
     /**
@@ -297,6 +362,7 @@ export class ProjectState {
                 width: asset.width,
                 height: asset.height,
                 fps: asset.fps,
+                name: asset.name, // Restore the name
                 frames
             };
         }

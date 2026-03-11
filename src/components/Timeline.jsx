@@ -257,13 +257,20 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
     const handleRulerMouseDown = (e) => {
         const rect = rulerScrollRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left + rulerScrollRef.current.scrollLeft;
+        const y = e.clientY - rect.top;
         const clickedTime = (x / pixelsPerSecond) * 1000;
         const snappedTimeMs = getSnappedTime(clickedTime);
 
-        // Find bookmark near clicked position
-        const thresholdPx = 10;
-        const thresholdMs = (thresholdPx / pixelsPerSecond) * 1000;
-        const nearbyBookmark = bookmarks.find(b => Math.abs(b - clickedTime) <= thresholdMs);
+        // Find bookmark near clicked position - ONLY if clicking in the bottom half of the ruler
+        const rulerHeight = rect.height;
+        const inBottomHalf = y > rulerHeight / 2;
+        
+        let nearbyBookmark = undefined;
+        if (inBottomHalf) {
+            const thresholdPx = 10;
+            const thresholdMs = (thresholdPx / pixelsPerSecond) * 1000;
+            nearbyBookmark = bookmarks.find(b => Math.abs(b - clickedTime) <= thresholdMs);
+        }
 
         if (nearbyBookmark !== undefined) {
             if (e.ctrlKey) {
@@ -1205,7 +1212,7 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
                 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e82020; z-index: 10; pointer-events: none; }
                 .bookmark-marker-ruler { 
                     position: absolute; 
-                    top: 0; 
+                    bottom: 0; 
                     width: 14px; 
                     height: 18px; 
                     background: #22c55e; 

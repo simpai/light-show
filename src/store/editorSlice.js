@@ -15,6 +15,9 @@ export const createEditorSlice = (set, get) => ({
     showLayoutEditor: false,
     fitTrigger2D: 0,
 
+    paletteCollapsed: localStorage.getItem('ls_editor_palette_collapsed') === 'true',
+    timelineHeight: parseInt(localStorage.getItem('ls_editor_timeline_height')) || 350,
+
     // Actions
     setSelectedClipIds: (ids) => set({ selectedClipIds: typeof ids === 'function' ? ids(get().selectedClipIds) : ids }),
     setSelectedLayerId: (id) => set({ selectedLayerId: id }),
@@ -37,4 +40,13 @@ export const createEditorSlice = (set, get) => ({
     setSelectedCars: (cars) => set({ selectedCars: typeof cars === 'function' ? cars(get().selectedCars) : cars }),
     setShowLayoutEditor: (show) => set({ showLayoutEditor: show }),
     setFitTrigger2D: (trigger) => set({ fitTrigger2D: trigger }),
+
+    setPaletteCollapsed: (collapsed) => {
+        localStorage.setItem('ls_editor_palette_collapsed', collapsed);
+        set({ paletteCollapsed: collapsed });
+    },
+    setTimelineHeight: (height) => {
+        localStorage.setItem('ls_editor_timeline_height', height);
+        set({ timelineHeight: height });
+    },
 });

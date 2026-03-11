@@ -66,6 +66,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const setShowHelpModal = useStore(state => state.setShowHelpModal);
     const selectedPaletteClipId = useStore(state => state.selectedPaletteClipId);
     const setSelectedPaletteClipId = useStore(state => state.setSelectedPaletteClipId);
+    const timelineHeight = useStore(state => state.timelineHeight);
+    const setTimelineHeight = useStore(state => state.setTimelineHeight);
 
     const [showAssetManager, setShowAssetManager] = useState(false);
     useEffect(() => {
@@ -75,7 +77,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const [assetManagerCallback, setAssetManagerCallback] = useState(null);
     const [assetManagerSelectedId, setAssetManagerSelectedId] = useState(null);
 
-    const [timelineHeight, setTimelineHeight] = useState(350);
     const resizingTimelineRef = useRef(false);
 
     useEffect(() => {
@@ -509,13 +510,17 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
 
                     if (clipIndex !== -1) {
                         found = true;
-                        const clip = { ...clonedLayer.clips[clipIndex], assetId: assetId };
-
-                        // Copy FPS if available
+                        const clip = { ...clonedLayer.clips[clipIndex], assetId: assetId, timingMode: 'beat' };
                         const asset = newProject.assets[assetId];
-                        if (asset && asset.fps) {
-                            clip.fps = asset.fps;
-                        }
+
+                        // Calculate new duration
+                        const frameCount = asset?.frames?.length || 1;
+                        const bpm = clip.bpm || 120;
+                        const beatsPerFrame = clip.beatsPerFrame || 1;
+                        const repetitions = clip.repetitions || 1;
+                        const msPerBeat = 60000 / bpm;
+                        const frameDuration = msPerBeat * beatsPerFrame;
+                        clip.duration = Math.round(frameDuration * frameCount * repetitions);
 
                         clonedLayer.clips[clipIndex] = clip;
                     }

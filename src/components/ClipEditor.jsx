@@ -252,7 +252,7 @@ export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThum
                             onChange={repetitions => {
                                 const updatedClip = { ...clip, repetitions, timingMode: 'beat' };
                                 const duration = calculateDuration('beat', updatedClip);
-                                handleChanges({ repetitions, duration });
+                                handleChanges({ repetitions, duration, timingMode: 'beat' });
                             }}
                         />
                     </div>
@@ -269,7 +269,9 @@ export default function ClipEditor({ clips = [], onChange, onDelete, allCarsThum
                         <button className="btn-secondary" onClick={() => {
                             if (onOpenAssetManager) {
                                 onOpenAssetManager(clip.assetId, (newAssetId) => {
-                                    handleChange('assetId', newAssetId);
+                                    const updatedClip = { ...clip, assetId: newAssetId, timingMode: 'beat' };
+                                    const duration = calculateDuration('beat', updatedClip);
+                                    handleChanges({ assetId: newAssetId, duration, timingMode: 'beat' });
                                 });
                             }
                         }} style={{ padding: '4px 8px', fontSize: '11px', flex: 1 }}>

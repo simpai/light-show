@@ -18,6 +18,7 @@ export function AssetManager({
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [tagInput, setTagInput] = useState("");
     const [filterTag, setFilterTag] = useState("");
+    const [zoomScale, setZoomScale] = useState(2); // 1, 2, 3, 4
     const fileInputRef = useRef(null);
 
     if (!isOpen) return null;
@@ -194,10 +195,27 @@ export function AssetManager({
             <div className="asset-manager-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
                 <div className="asset-toolbar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', padding: '0 8px' }}>
-                    <div className="asset-stats" style={{ color: '#888', fontSize: '12px' }}>
-                        {Object.keys(assets).length} items in library. {usedIds.size} in use.
-                    </div>
-                    <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div className="zoom-controls" style={{ display: 'flex', background: '#222', padding: '2px', borderRadius: '6px', marginRight: '8px' }}>
+                            {[1, 2, 3, 4].map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setZoomScale(s)}
+                                    style={{
+                                        padding: '2px 8px',
+                                        fontSize: '11px',
+                                        background: zoomScale === s ? '#3b82f6' : 'transparent',
+                                        color: zoomScale === s ? 'white' : '#888',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    {s}x
+                                </button>
+                            ))}
+                        </div>
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -210,10 +228,10 @@ export function AssetManager({
                             className="btn btn-primary"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 12px', fontSize: '12px' }}
                         >
                             <Upload size={14} />
-                            {uploading ? 'Uploading...' : 'Upload New'}
+                            {uploading ? '...' : 'Upload'}
                         </button>
                     </div>
                 </div>
@@ -254,10 +272,12 @@ export function AssetManager({
 
                 <div className="asset-grid" style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                    gap: '16px',
+                    gridTemplateColumns: `repeat(auto-fill, minmax(${80 * zoomScale}px, 1fr))`,
+                    gridAutoRows: 'max-content',
+                    alignContent: 'start',
+                    gap: '4px',
                     overflowY: 'auto',
-                    padding: '8px',
+                    padding: '4px',
                     flex: 1
                 }}>
                     {Object.entries(assets)
@@ -293,30 +313,37 @@ export function AssetManager({
                                         onClick={(e) => handleAssetClick(id, e)}
                                         style={{
                                             backgroundColor: '#1a1a1a',
-                                            border: `2px solid ${(isSelected || selectedIds.has(id)) ? '#3b82f6' : '#333'}`,
-                                            borderRadius: '8px',
+                                            border: `2px solid ${(isSelected || selectedIds.has(id)) ? '#3b82f6' : '#222'}`,
+                                            borderRadius: '6px',
                                             overflow: 'hidden',
                                             cursor: 'pointer',
                                             position: 'relative',
-                                            transition: 'all 0.2s',
+                                            transition: 'all 0.1s',
                                             display: 'flex',
-                                            flexDirection: 'column'
+                                            flexDirection: 'column',
+                                            height: `${80 * zoomScale}px`
                                         }}
                                     >
                                         <div className="asset-thumb-container" style={{
-                                            height: '100px',
-                                            minHeight: '100px',
-                                            background: '#000 url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAHElEQVQYV2NkYGAwZmBgOMuAACA+CWCVMBqSGgA38w8IEU+rYQAAAABJRU5ErkJggg==") repeat',
+                                            flex: 1,
+                                            background: '#2d3844', // Even darker muted blue
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            position: 'relative'
+                                            position: 'relative',
+                                            padding: '2px',
+                                            minHeight: 0
                                         }}>
                                             {thumbSrc ? (
                                                 <img
                                                     src={thumbSrc}
                                                     alt={asset.name}
-                                                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                                                    style={{ 
+                                                        width: '100%', 
+                                                        height: '100%', 
+                                                        objectFit: 'contain', 
+                                                        imageRendering: 'pixelated' 
+                                                    }}
                                                 />
                                             ) : (
                                                 <span style={{ color: '#555', fontSize: '10px' }}>No Preview</span>
@@ -334,18 +361,20 @@ export function AssetManager({
                                             )}
                                         </div>
 
-                                        <div className="asset-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '4px 8px', borderBottom: '1px solid #222' }}>
-                                            {(asset.tags || []).map(tag => (
-                                                <span key={tag} style={{ background: '#333', color: '#aaa', fontSize: '9px', padding: '1px 5px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                    {tag}
-                                                    {mode === 'manage' && (
-                                                        <X size={8} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleRemoveTag(id, tag); }} />
-                                                    )}
-                                                </span>
-                                            ))}
-                                        </div>
+                                        {zoomScale > 1 && (
+                                            <div className="asset-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', padding: '2px 4px', background: '#2d3844' }}>
+                                                {(asset.tags || []).slice(0, 3).map(tag => (
+                                                    <span key={tag} style={{ background: 'rgba(0,0,0,0.3)', color: '#ccc', fontSize: '8px', padding: '0px 4px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                        {tag}
+                                                        {mode === 'manage' && (
+                                                            <X size={8} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleRemoveTag(id, tag); }} />
+                                                        )}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
 
-                                        <div className="asset-info" style={{ padding: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div className="asset-info" style={{ padding: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '32px' }}>
                                             {editingId === id ? (
                                                 <div style={{ display: 'flex', width: '100%' }}>
                                                     <input
@@ -356,18 +385,18 @@ export function AssetManager({
                                                         onKeyDown={e => e.key === 'Enter' && saveEdit(id, e)}
                                                         onClick={e => e.stopPropagation()}
                                                         onBlur={e => saveEdit(id, e)}
-                                                        style={{ width: '100%', fontSize: '11px', padding: '2px 4px', background: '#333', border: '1px solid #555', color: 'white', borderRadius: '2px' }}
+                                                        style={{ width: '100%', fontSize: '10px', padding: '1px 3px', background: '#333', border: '1px solid #555', color: 'white', borderRadius: '2px' }}
                                                     />
                                                 </div>
                                             ) : (
                                                 <div style={{ flex: 1, overflow: 'hidden' }}>
                                                     <div
                                                         title={asset.name || 'Unnamed'}
-                                                        style={{ fontSize: '12px', color: '#ddd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                                        style={{ fontSize: (zoomScale === 1 ? '9px' : '11px'), color: '#ddd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                                                     >
-                                                        {asset.name || 'Unnamed Asset'}
+                                                        {asset.name || 'Unnamed'}
                                                     </div>
-                                                    <div style={{ fontSize: '9px', color: '#666', marginTop: '2px' }}>
+                                                    <div style={{ fontSize: '8px', color: '#666', marginTop: '0px' }}>
                                                         {asset.width}x{asset.height} • {asset.frames?.length || 1}F
                                                     </div>
                                                 </div>

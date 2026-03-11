@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useStore } from '../store/useStore';
 import MatrixPreview2D from './MatrixPreview2D';
 import ClipPalette from './ClipPalette';
 import ClipEditor from './ClipEditor';
@@ -26,7 +27,8 @@ export function EditorWorkspace({
     selectedLayerId,
     onOpenAssetManager
 }) {
-    const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+    const paletteCollapsed = useStore(state => state.paletteCollapsed);
+    const setPaletteCollapsed = useStore(state => state.setPaletteCollapsed);
 
     return (
         <div className="editor-main">

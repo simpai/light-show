@@ -143,6 +143,7 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
         if (audioFile && audioRef.current) {
             audioRef.current.currentTime = timeMs / 1000;
         }
+        window.__lightShowTime = timeMs;
         setCurrentTime(timeMs);
     };
 
@@ -151,6 +152,7 @@ export function usePlayback(project, setProject, rendererRef, setBpm, setFitTrig
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
         }
+        window.__lightShowTime = 0;
         setCurrentTime(0);
         setIsPlaying(false);
         setFitTrigger2D(Date.now());

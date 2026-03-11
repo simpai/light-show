@@ -330,17 +330,17 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
         document.addEventListener('mouseup', handleMouseUp);
     };
 
-    const handleLaneMouseDown = (e, layerId) => {
+    const handleTimelineMouseDown = (e) => {
         // Marquee selection with Shift
+        const trackLanesRect = e.currentTarget.getBoundingClientRect();
+        
         if (e.shiftKey) {
-            const laneContainer = e.currentTarget.closest('.track-lanes');
-            const rect = laneContainer.getBoundingClientRect();
-            const startX = e.clientX - rect.left;
-            const startY = e.clientY - rect.top;
+            const startX = e.clientX - trackLanesRect.left;
+            const startY = e.clientY - trackLanesRect.top;
 
             const handleMouseMove = (moveEvent) => {
-                const curX = Math.max(0, moveEvent.clientX - rect.left);
-                const curY = Math.max(0, moveEvent.clientY - rect.top);
+                const curX = Math.max(0, moveEvent.clientX - trackLanesRect.left);
+                const curY = Math.max(0, moveEvent.clientY - trackLanesRect.top);
                 setMarquee({ startX, startY, endX: curX, endY: curY });
             };
 
@@ -383,17 +383,27 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
             return;
         }
 
-        // Only trigger if clicking on the lane itself, not on a clip
-        if (e.target !== e.currentTarget && !e.target.classList.contains('grid-line')) return;
+        // Only trigger if clicking on the lanes background or grid lines (not a clip)
+        const isBackground = e.target.classList.contains('track-lanes') || 
+                           e.target.classList.contains('track-lane') || 
+                           e.target.classList.contains('grid-line');
+        
+        if (!isBackground) return;
 
         if (onClipSelect) onClipSelect(null);
-        onLayerSelect(layerId);
-
-        const rect = lanesScrollRef.current.getBoundingClientRect();
+        
+        // Determine layer from Y position
+        const y = e.clientY - trackLanesRect.top;
+        const layerIdx = Math.floor(y / 50);
+        if (layerIdx >= 0 && layerIdx < project.layers.length) {
+            onLayerSelect(project.layers[layerIdx].id);
+        } else {
+            onLayerSelect(null);
+        }
 
         const seek = (moveEvent) => {
-            if (!rect || !lanesScrollRef.current) return;
-            const x = moveEvent.clientX - rect.left + lanesScrollRef.current.scrollLeft;
+            if (!trackLanesRect || !lanesScrollRef.current) return;
+            const x = moveEvent.clientX - trackLanesRect.left + lanesScrollRef.current.scrollLeft;
             const timeInMs = (x / pixelsPerSecond) * 1000;
             const snappedTimeMs = getSnappedTime(timeInMs);
 
@@ -803,7 +813,7 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
                     ref={lanesScrollRef}
                     onScroll={handleLanesScroll}
                 >
-                    <div className="track-lanes" style={{ width: totalWidth }}>
+                    <div className="track-lanes" style={{ width: totalWidth }} onMouseDown={handleTimelineMouseDown}>
                         {/* Grid lines */}
                         {snapIntervalMs && Array.from({ length: Math.ceil(duration / snapIntervalMs) + 1 }).map((_, i) => {
                             const t = i * snapIntervalMs;
@@ -831,7 +841,6 @@ export function Timeline({ onClipSelect, onLayerSelect, onLayerDoubleClick, onSe
                             <div
                                 key={layer.id}
                                 className={`track-lane ${selectedLayerId === layer.id ? 'selected' : ''} ${layer.muted ? 'muted' : ''}`}
-                                onMouseDown={(e) => handleLaneMouseDown(e, layer.id)}
                             >
                                 {/* MIDI events are now rendered inside 'midi-region' clips */}
                                 {layer.clips.map(clip => {

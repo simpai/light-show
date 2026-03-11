@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ImageProcessor } from '../utils/ImageProcessor';
 import { Upload, X, Trash2, Edit2, Check, CheckCircle2 } from 'lucide-react';
 import { Modal } from './common/Modal';
@@ -19,6 +19,7 @@ export function AssetManager({
     const [tagInput, setTagInput] = useState("");
     const [filterTag, setFilterTag] = useState("");
     const [zoomScale, setZoomScale] = useState(2); // 1, 2, 3, 4
+    const [lastClickedId, setLastClickedId] = useState(null);
     const fileInputRef = useRef(null);
 
     if (!isOpen) return null;
@@ -141,13 +142,45 @@ export function AssetManager({
             if (onSelectAsset) onSelectAsset(assetId);
         } else {
             // Multi-selection logic for manage mode
-            const newSelected = new Set(selectedIds);
-            if (newSelected.has(assetId)) {
-                newSelected.delete(assetId);
+            let newSelected = new Set(selectedIds);
+            const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+            
+            if (e.shiftKey && lastClickedId && assets[lastClickedId]) {
+                // Range selection
+                const filteredAssets = Object.entries(assets)
+                    .filter(([_, asset]) => filterTag === "" || (asset.tags || []).includes(filterTag));
+                
+                const assetIds = filteredAssets.map(([id]) => id);
+                const startIdx = assetIds.indexOf(lastClickedId);
+                const endIdx = assetIds.indexOf(assetId);
+                
+                if (startIdx !== -1 && endIdx !== -1) {
+                    const low = Math.min(startIdx, endIdx);
+                    const high = Math.max(startIdx, endIdx);
+                    
+                    // If not holding Ctrl, start selection fresh for the range
+                    if (!isCtrlOrMeta) {
+                        newSelected = new Set();
+                    }
+                    
+                    for (let i = low; i <= high; i++) {
+                        newSelected.add(assetIds[i]);
+                    }
+                }
+            } else if (isCtrlOrMeta) {
+                // Toggle individual item
+                if (newSelected.has(assetId)) {
+                    newSelected.delete(assetId);
+                } else {
+                    newSelected.add(assetId);
+                }
             } else {
-                newSelected.add(assetId);
+                // Single selection (regular click)
+                newSelected = new Set([assetId]);
             }
+            
             setSelectedIds(newSelected);
+            setLastClickedId(assetId);
         }
     };
 
@@ -334,20 +367,10 @@ export function AssetManager({
                                             padding: '2px',
                                             minHeight: 0
                                         }}>
-                                            {thumbSrc ? (
-                                                <img
-                                                    src={thumbSrc}
-                                                    alt={asset.name}
-                                                    style={{ 
-                                                        width: '100%', 
-                                                        height: '100%', 
-                                                        objectFit: 'contain', 
-                                                        imageRendering: 'pixelated' 
-                                                    }}
-                                                />
-                                            ) : (
-                                                <span style={{ color: '#555', fontSize: '10px' }}>No Preview</span>
-                                            )}
+                                            <AssetThumbnail 
+                                                asset={asset} 
+                                                isSelected={isSelected || selectedIds.has(id)} 
+                                            />
 
                                             {isUsed && (
                                                 <div style={{ position: 'absolute', top: '4px', left: '4px', background: 'rgba(16, 185, 129, 0.9)', color: 'white', fontSize: '9px', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
@@ -461,5 +484,76 @@ export function AssetManager({
                 }
             `}</style>
         </Modal>
+    );
+}
+
+function AssetThumbnail({ asset, isSelected }) {
+    const canvasRef = useRef(null);
+    const frameIndexRef = useRef(0);
+    const lastTimeRef = useRef(0);
+    const requestRef = useRef(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const frames = asset.frames || [];
+        if (frames.length === 0) return;
+
+        // Ensure canvas matches asset dimensions for sharp rendering
+        canvas.width = asset.width;
+        canvas.height = asset.height;
+
+        const renderFrame = (time) => {
+            if (isSelected && frames.length > 1) {
+                const fps = asset.fps || 10;
+                const interval = 1000 / fps;
+                
+                if (time - lastTimeRef.current >= interval) {
+                    frameIndexRef.current = (frameIndexRef.current + 1) % frames.length;
+                    lastTimeRef.current = time;
+                }
+            } else {
+                frameIndexRef.current = 0;
+            }
+
+            const frame = frames[frameIndexRef.current];
+            if (frame) {
+                ctx.putImageData(frame, 0, 0);
+            }
+            
+            if (isSelected && frames.length > 1) {
+                requestRef.current = requestAnimationFrame(renderFrame);
+            } else {
+                // If not selected or single frame, just draw once
+                const frame = frames[0];
+                if (frame) ctx.putImageData(frame, 0, 0);
+                requestRef.current = null;
+            }
+        };
+
+        if (isSelected && frames.length > 1) {
+            requestRef.current = requestAnimationFrame(renderFrame);
+        } else {
+            const frame = frames[0];
+            if (frame) ctx.putImageData(frame, 0, 0);
+        }
+
+        return () => {
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        };
+    }, [asset, isSelected]);
+
+    return (
+        <canvas
+            ref={canvasRef}
+            style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                imageRendering: 'pixelated'
+            }}
+        />
     );
 }

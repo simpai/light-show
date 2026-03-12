@@ -10,7 +10,7 @@ import { Maximize2 } from 'lucide-react';
 const carW = 40;
 const carH = 90;
 const cellSizeW = 50; // Base cell width for layout grid
-const cellSizeH = 110; // Base cell height for layout grid
+const cellSizeH = 100; // Base cell height for layout grid
 
 // Assets paths
 const ASSETS = {
@@ -27,11 +27,11 @@ const ASSETS = {
 const LIGHT_MAP = {
     // Channels that have both ground and overlay, or multiple elements
     0: [ // Left Outer Main Beam
-        { ground: true, sprite: 'PROJECT_WHITE', x: -12, y: -90, scale: 1.2 },
+        { ground: true, sprite: 'PROJECT_WHITE', x: -12, y: -100, scale: 2 },
         { sprite: 'LIGHT_WHITE', x: -14, y: -36, scale: 1.5 }
     ],
     1: [ // Right Outer Main Beam
-        { ground: true, sprite: 'PROJECT_WHITE', x: 12, y: -90, scale: 1.2 },
+        { ground: true, sprite: 'PROJECT_WHITE', x: 12, y: -100, scale: 2 },
         { sprite: 'LIGHT_WHITE', x: 14, y: -36, scale: 1.5 }
     ],
     2: [{ sprite: 'LIGHT_WHITE', x: -9, y: -36, scale: 1.5 }], // Left Inner Main Beam
@@ -198,7 +198,7 @@ export default function MatrixView2D({
 
                         const centerX = (c + 1) * cellSizeW;
                         const centerY = (r + 1) * cellSizeH;
-                        const yaw = (cell?.rotation || 0) * (Math.PI / 180);
+                        const yaw = ((cell?.rotation || 0) + 180) * (Math.PI / 180);
 
                         ctx.save();
                         ctx.translate(centerX, centerY);
@@ -234,7 +234,7 @@ export default function MatrixView2D({
                     const lights = matrixData[r]?.[c];
                     const centerX = (c + 1) * cellSizeW;
                     const centerY = (r + 1) * cellSizeH;
-                    const yaw = (cell?.rotation || 0) * (Math.PI / 180);
+                    const yaw = ((cell?.rotation || 0) + 180) * (Math.PI / 180);
 
                     ctx.save();
                     ctx.translate(centerX, centerY);

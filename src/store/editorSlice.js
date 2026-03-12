@@ -18,6 +18,7 @@ export const createEditorSlice = (set, get) => ({
     paletteCollapsed: localStorage.getItem('ls_editor_palette_collapsed') === 'true',
     timelineHeight: parseInt(localStorage.getItem('ls_editor_timeline_height')) || 350,
     consoleMessages: [],
+    previewMode: localStorage.getItem('ls_editor_preview_mode') || 'matrix', // 'matrix' (old) | 'car' (new image-based)
 
     // Actions
     setSelectedClipIds: (ids) => set({ selectedClipIds: typeof ids === 'function' ? ids(get().selectedClipIds) : ids }),
@@ -49,6 +50,10 @@ export const createEditorSlice = (set, get) => ({
     setTimelineHeight: (height) => {
         localStorage.setItem('ls_editor_timeline_height', height);
         set({ timelineHeight: height });
+    },
+    setPreviewMode: (mode) => {
+        localStorage.setItem('ls_editor_preview_mode', mode);
+        set({ previewMode: mode });
     },
 
     addConsoleLog: (msg, type = 'info', isProgress = false) => {

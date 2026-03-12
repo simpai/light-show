@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { Save, FolderOpen, Grid, Car, Plus, Layers, Music, Image as ImageIcon, Eye } from 'lucide-react';
+import { Save, FolderOpen, Grid, Car, Plus, Layers, Music, Image as ImageIcon, Eye, Monitor } from 'lucide-react';
 import { getSpectrogramColor } from '../utils/colorUtils.js';
+import { useStore } from '../store/useStore';
 
 const MiniSpectrogram = ({ project }) => {
     const barsRef = useRef([]);
@@ -77,6 +78,9 @@ export function EditorToolbar({
     project,
     onOpenLibrary
 }) {
+    const previewMode = useStore(state => state.previewMode);
+    const setPreviewMode = useStore(state => state.setPreviewMode);
+
     return (
         <header className="editor-header">
             <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -200,6 +204,23 @@ export function EditorToolbar({
                     <label htmlFor="showGroundLight" style={{ fontSize: '12px', color: '#888', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         Ground Light
                     </label>
+                </div>
+                
+                <div className="preview-mode-toggle" style={{ display: 'flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid #444', paddingLeft: '10px' }}>
+                    <button
+                        className={`btn-icon ${previewMode === 'matrix' ? 'active' : ''}`}
+                        onClick={() => setPreviewMode('matrix')}
+                        title="Matrix Preview (Pixel)"
+                    >
+                        <Monitor size={20} />
+                    </button>
+                    <button
+                        className={`btn-icon ${previewMode === 'car' ? 'active' : ''}`}
+                        onClick={() => setPreviewMode('car')}
+                        title="Car Preview (Image)"
+                    >
+                        <ImageIcon size={20} />
+                    </button>
                 </div>
 
                 <div className="toolbar-group" style={{ display: 'flex', gap: '5px', borderLeft: '1px solid #444', paddingLeft: '12px', marginLeft: '12px' }}>

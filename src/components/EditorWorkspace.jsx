@@ -1,6 +1,7 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
 import MatrixPreview2D from './MatrixPreview2D';
+import MatrixView2D from './MatrixView2D';
 import ClipPalette from './ClipPalette';
 import ClipEditor from './ClipEditor';
 import { ConsoleOverlay } from './ConsoleOverlay';
@@ -31,6 +32,7 @@ export function EditorWorkspace({
     const paletteCollapsed = useStore(state => state.paletteCollapsed);
     const setPaletteCollapsed = useStore(state => state.setPaletteCollapsed);
     const hasConsoleMessages = useStore(state => state.consoleMessages.length > 0);
+    const previewMode = useStore(state => state.previewMode);
 
     return (
         <div className="editor-main">
@@ -51,17 +53,30 @@ export function EditorWorkspace({
                     {fpsDisplay} FPS
                 </div>
                 <ConsoleOverlay />
-                <MatrixPreview2D
-                    rendererRef={rendererRef}
-                    rows={matrixConfig.rows}
-                    cols={matrixConfig.cols}
-                    layoutData={layoutData}
-                    showGroundLight={showGroundLight}
-                    lightGroups={project.lightGroups}
-                    selectedCars={selectedCars}
-                    onSelectionChange={setSelectedCars}
-                    fitTrigger={fitTrigger2D}
-                />
+                {previewMode === 'car' ? (
+                    <MatrixView2D
+                        rendererRef={rendererRef}
+                        rows={matrixConfig.rows}
+                        cols={matrixConfig.cols}
+                        layoutData={layoutData}
+                        showGroundLight={showGroundLight}
+                        selectedCars={selectedCars}
+                        onSelectionChange={setSelectedCars}
+                        fitTrigger={fitTrigger2D}
+                    />
+                ) : (
+                    <MatrixPreview2D
+                        rendererRef={rendererRef}
+                        rows={matrixConfig.rows}
+                        cols={matrixConfig.cols}
+                        layoutData={layoutData}
+                        showGroundLight={showGroundLight}
+                        lightGroups={project.lightGroups}
+                        selectedCars={selectedCars}
+                        onSelectionChange={setSelectedCars}
+                        fitTrigger={fitTrigger2D}
+                    />
+                )}
             </div>
 
             {paletteCollapsed ? (

@@ -189,9 +189,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const {
         handleExportXsq,
         handleExportMatrix,
-        handleExportTimeline,
-        handleImportTimeline,
-        handleAppendTimeline,
         handleSaveProject,
         handleSaveProjectAs,
         handleLoadProject,
@@ -745,7 +742,6 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
                     history={history} handleUndo={handleUndo}
                     redoStack={redoStack} handleRedo={handleRedo}
                     selectedClipIds={selectedClipIds} handleRemoveGaps={handleRemoveGaps} handleAlignToSnap={handleAlignToSnap} snapMode={snapMode} handleAlignClips={handleAlignClips}
-                    handleImportTimeline={handleImportTimeline} handleAppendTimeline={handleAppendTimeline} handleExportTimeline={handleExportTimeline}
                     zoom={zoom} setZoom={setZoom}
                     setSnapMode={setSnapMode}
                     bpm={bpm} setBpm={setBpm} handleBpmChange={handleBpmChange}

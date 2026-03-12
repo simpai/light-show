@@ -231,113 +231,6 @@ export function useFileOperations({
         }
     };
 
-    const handleExportTimeline = () => {
-        try {
-            const timelineData = {
-                version: '1.2_timeline',
-                layers: project.layers,
-                duration: project.duration,
-                palette: project.palette,
-                assets: project.serializeAssets()
-            };
-
-            const dataStr = JSON.stringify(timelineData, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `timeline_data_${new Date().getTime()}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Timeline export failed:', error);
-            alert('Failed to export timeline data: ' + error.message);
-        }
-    };
-
-    const handleImportTimeline = (file) => {
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-
-                if (!data.layers || !data.version?.includes('timeline')) {
-                    alert('Invalid timeline data file.');
-                    return;
-                }
-
-                // Create a clone of the current project to merge into
-                const newProject = ProjectState.fromJSONSync(project.toJSON(false));
-                newProject.assets = project.assets; // keep existing ones temporarily
-
-                // Deserialize and merge new assets into current project
-                if (data.assets) {
-                    const importedAssets = await ProjectState.deserializeAssets(data.assets);
-                    newProject.assets = { ...newProject.assets, ...importedAssets };
-                }
-
-                // Overwrite purely timeline data
-                newProject.layers = data.layers;
-                if (data.duration) newProject.duration = data.duration;
-                if (data.palette) newProject.palette = data.palette;
-
-                saveToHistory(newProject);
-                alert('Timeline data imported successfully!');
-
-            } catch (err) {
-                console.error('Timeline import failed:', err);
-                alert('Failed to import timeline data: ' + err.message);
-            }
-        };
-        reader.readAsText(file);
-    };
-
-    const handleAppendTimeline = (file) => {
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-
-                if (!data.layers || !data.version?.includes('timeline')) {
-                    alert('Invalid timeline data file.');
-                    return;
-                }
-
-                const newProject = ProjectState.fromJSONSync(project.toJSON(false));
-                newProject.assets = { ...project.assets };
-
-                // Deserialize and merge new assets
-                if (data.assets) {
-                    const importedAssets = await ProjectState.deserializeAssets(data.assets);
-                    newProject.assets = { ...newProject.assets, ...importedAssets };
-                }
-
-                // Append layers instead of replacing
-                newProject.layers = [...newProject.layers, ...data.layers];
-
-                // Extend duration if imported data is longer
-                if (data.duration && data.duration > newProject.duration) {
-                    newProject.duration = data.duration;
-                }
-
-                saveToHistory(newProject);
-                alert(`Appended ${data.layers.length} tracks to timeline!`);
-
-            } catch (err) {
-                console.error('Timeline append failed:', err);
-                alert('Failed to append timeline data: ' + err.message);
-            }
-        };
-        reader.readAsText(file);
-    };
-
     const handleSaveProject = async () => {
         try {
             if (fileHandle) {
@@ -572,9 +465,6 @@ export function useFileOperations({
     return {
         handleExportXsq,
         handleExportMatrix,
-        handleExportTimeline,
-        handleImportTimeline,
-        handleAppendTimeline,
         handleSaveProject,
         handleSaveProjectAs,
         handleLoadProject,

@@ -31,7 +31,6 @@ export function TimelineControls({
     history, handleUndo,
     redoStack, handleRedo,
     selectedClipIds, handleRemoveGaps, handleAlignToSnap, snapMode, handleAlignClips,
-    handleImportTimeline, handleAppendTimeline, handleExportTimeline,
     zoom, setZoom,
     setSnapMode,
     bpm, setBpm, handleBpmChange,
@@ -155,39 +154,6 @@ export function TimelineControls({
                 <AlignLeft size={18} />
             </button>
 
-            <Bar />
-
-            <label className="btn-icon" title="Import Timeline Data" style={{ marginLeft: '5px', color: '#ff77aa', cursor: 'pointer' }}>
-                <Upload size={18} />
-                <input
-                    type="file"
-                    accept=".json"
-                    onChange={(e) => {
-                        if (e.target.files[0]) {
-                            handleImportTimeline(e.target.files[0]);
-                        }
-                        e.target.value = '';
-                    }}
-                    style={{ display: 'none' }}
-                />
-            </label>
-            <label className="btn-icon" title="Append To Timeline Data" style={{ marginLeft: '5px', color: '#ffaa44', cursor: 'pointer' }}>
-                <Plus size={18} />
-                <input
-                    type="file"
-                    accept=".json"
-                    onChange={(e) => {
-                        if (e.target.files[0]) {
-                            handleAppendTimeline(e.target.files[0]);
-                        }
-                        e.target.value = '';
-                    }}
-                    style={{ display: 'none' }}
-                />
-            </label>
-            <button onClick={handleExportTimeline} className="btn-icon" title="Export Timeline Data" style={{ marginLeft: '5px', color: '#ff77aa' }}>
-                <Download size={18} />
-            </button>
             <Bar />
 
             {/* <div className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '0px' }}>

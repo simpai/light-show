@@ -7,10 +7,10 @@ import { Maximize2 } from 'lucide-react';
  * Renders multiple cars using PNG assets with 2-pass rendering (ground then car+lights).
  */
 
-const carW = 14; 
-const carH = 25;
-const cellSizeW = 25; // Base cell width for layout grid
-const cellSizeH = 40; // Base cell height for layout grid
+const carW = 40;
+const carH = 90;
+const cellSizeW = 50; // Base cell width for layout grid
+const cellSizeH = 110; // Base cell height for layout grid
 
 // Assets paths
 const ASSETS = {
@@ -22,49 +22,54 @@ const ASSETS = {
     PROJECT_RED: '/preview/ground_projection_red.png',
 };
 
-// Light mapping based on 14x25 scale
+// Light mapping based on 40x90 scale (Rescaled from 14x25)
 // Relative to center (0,0)
 const LIGHT_MAP = {
     // Channels that have both ground and overlay, or multiple elements
-    0: [
-        { ground: true, sprite: 'PROJECT_WHITE', x: -4, y: -15, scale: 0.8 }, // Ground
-        { sprite: 'LIGHT_WHITE', x: -5, y: -10, scale: 0.5 } // Overlay
+    0: [ // Left Outer Main Beam
+        { ground: true, sprite: 'PROJECT_WHITE', x: -12, y: -90, scale: 1.2 },
+        { sprite: 'LIGHT_WHITE', x: -14, y: -36, scale: 1.5 }
     ],
-    1: [
-        { ground: true, sprite: 'PROJECT_WHITE', x: 4, y: -15, scale: 0.8 },
-        { sprite: 'LIGHT_WHITE', x: 5, y: -10, scale: 0.5 }
+    1: [ // Right Outer Main Beam
+        { ground: true, sprite: 'PROJECT_WHITE', x: 12, y: -90, scale: 1.2 },
+        { sprite: 'LIGHT_WHITE', x: 14, y: -36, scale: 1.5 }
     ],
-    2: [{ sprite: 'LIGHT_WHITE', x: -3, y: -10, scale: 0.5 }],
-    3: [{ sprite: 'LIGHT_WHITE', x: 3, y: -10, scale: 0.5 }],
-    4: [{ sprite: 'LIGHT_WHITE', x: -5.5, y: -9.5, scale: 0.3 }],
-    5: [{ sprite: 'LIGHT_WHITE', x: 5.5, y: -9.5, scale: 0.3 }],
-    12: [{ sprite: 'LIGHT_ORANGE', x: -6, y: -9, scale: 0.4 }],
-    13: [{ sprite: 'LIGHT_ORANGE', x: 6, y: -9, scale: 0.4 }],
-    14: [{ sprite: 'LIGHT_WHITE', x: -5, y: -12, scale: 0.4 }],
-    15: [{ sprite: 'LIGHT_WHITE', x: 5, y: -12, scale: 0.4 }],
-    20: [{ sprite: 'LIGHT_ORANGE', x: -7.5, y: 2, scale: 0.3 }],
-    21: [{ sprite: 'LIGHT_ORANGE', x: 7.5, y: 2, scale: 0.3 }], 
-    22: [{ sprite: 'LIGHT_ORANGE', x: -5, y: 11, scale: 0.4 }],
-    23: [{ sprite: 'LIGHT_ORANGE', x: 5, y: 11, scale: 0.4 }],
-    24: [
-        { ground: true, sprite: 'PROJECT_RED', x: 0, y: 15, scale: 1.0 }, // Ground
-        { sprite: 'LIGHT_RED', x: -5, y: 12, scale: 0.5 },
-        { sprite: 'LIGHT_RED', x: 0, y: 12.5, scale: 0.5 },
-        { sprite: 'LIGHT_RED', x: 5, y: 12, scale: 0.5 }
+    2: [{ sprite: 'LIGHT_WHITE', x: -9, y: -36, scale: 1.5 }], // Left Inner Main Beam
+    3: [{ sprite: 'LIGHT_WHITE', x: 9, y: -36, scale: 1.5 }],  // Right Inner Main Beam
+    4: [{ sprite: 'LIGHT_WHITE', x: -16, y: -34, scale: 1.0 }], // Left Signature
+    5: [{ sprite: 'LIGHT_WHITE', x: 16, y: -34, scale: 1.0 }],  // Right Signature
+    12: [{ sprite: 'LIGHT_ORANGE', x: -17, y: -32, scale: 1.2 }], // Left Front Turn
+    13: [{ sprite: 'LIGHT_ORANGE', x: 17, y: -32, scale: 1.2 }],  // Right Front Turn
+    14: [{ sprite: 'LIGHT_WHITE', x: -14, y: -43, scale: 1.2 }], // Left fog
+    15: [{ sprite: 'LIGHT_WHITE', x: 14, y: -43, scale: 1.2 }],  // right fog
+    20: [{ sprite: 'LIGHT_ORANGE', x: -21, y: 7, scale: 0.9 }], // Left side repeater
+    21: [{ sprite: 'LIGHT_ORANGE', x: 21, y: 7, scale: 0.9 }],  // Right side repeater
+    22: [{ sprite: 'LIGHT_ORANGE', x: -14, y: 40, scale: 1.2 }], // Left Rear Turn
+    23: [{ sprite: 'LIGHT_ORANGE', x: 14, y: 40, scale: 1.2 }],  // Right Rear Turn
+    24: [ // brake
+        { ground: true, sprite: 'PROJECT_RED', x: 0, y: 54, scale: 2.0 },
+        { sprite: 'LIGHT_RED', x: -14, y: 43, scale: 1.5 },
+        { sprite: 'LIGHT_RED', x: 0, y: 45, scale: 1.5 },
+        { sprite: 'LIGHT_RED', x: 14, y: 43, scale: 1.5 }
     ],
-    25: [{ sprite: 'LIGHT_RED', x: -4, y: 12, scale: 0.5 }],
-    26: [{ sprite: 'LIGHT_RED', x: 4, y: 12, scale: 0.5 }],
-    27: [
-        { ground: true, sprite: 'PROJECT_WHITE', x: 0, y: 15, scale: 0.8 }, // Ground
-        { sprite: 'LIGHT_WHITE', x: -5, y: 12, scale: 0.4 },
-        { sprite: 'LIGHT_WHITE', x: 5, y: 12, scale: 0.4 }
+    25: [ // Left Tail
+        { ground: true, sprite: 'PROJECT_RED', x: -12, y: 54, scale: 2.0 },
+        { sprite: 'LIGHT_RED', x: -11, y: 43, scale: 1.5 }
     ],
-    28: [
-        { ground: true, sprite: 'PROJECT_RED', x: 0, y: 15, scale: 0.8 }, // Ground
-        { sprite: 'LIGHT_RED', x: -5, y: 12, scale: 0.4 },
-        { sprite: 'LIGHT_RED', x: 5, y: 12, scale: 0.4 }
+    26: [ // Right Tail
+        { ground: true, sprite: 'PROJECT_RED', x: 12, y: 54, scale: 2.0 },
+        { sprite: 'LIGHT_RED', x: 11, y: 43, scale: 1.5 }
     ],
-    29: [{ sprite: 'LIGHT_WHITE', x: 0, y: 13, scale: 0.3 }],
+    27: [ // reverse
+        { sprite: 'LIGHT_WHITE', x: -14, y: 43, scale: 1.2 },
+        { sprite: 'LIGHT_WHITE', x: 14, y: 43, scale: 1.2 }
+    ],
+    28: [ // rear fog
+        { ground: true, sprite: 'PROJECT_RED', x: 0, y: 54, scale: 2.0 },
+        { sprite: 'LIGHT_RED', x: -14, y: 43, scale: 1.2 },
+        { sprite: 'LIGHT_RED', x: 14, y: 43, scale: 1.2 }
+    ],
+    29: [{ sprite: 'LIGHT_WHITE', x: 0, y: 47, scale: 0.9 }], // license plate
 };
 
 export default function MatrixView2D({
@@ -208,7 +213,7 @@ export default function MatrixView2D({
                                         const w = img.width * (item.scale || 1);
                                         const h = img.height * (item.scale || 1);
                                         ctx.globalAlpha = (val / 255) * 0.6;
-                                        ctx.drawImage(img, item.x - w/2, item.y - h/2, w, h);
+                                        ctx.drawImage(img, item.x - w / 2, item.y - h / 2, w, h);
                                     }
                                 });
                             }
@@ -237,16 +242,16 @@ export default function MatrixView2D({
 
                     // Draw Car Body
                     if (images.CAR) {
-                        ctx.drawImage(images.CAR, -carW/2, -carH/2, carW, carH);
+                        ctx.drawImage(images.CAR, -carW / 2, -carH / 2, carW, carH);
                     }
 
                     // Draw Selection
                     if (selectedCars.has(key) || tempSelection.has(key)) {
                         ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
-                        ctx.fillRect(-carW/2, -carH/2, carW, carH);
+                        ctx.fillRect(-carW / 2, -carH / 2, carW, carH);
                         ctx.strokeStyle = '#0f0';
                         ctx.lineWidth = 1;
-                        ctx.strokeRect(-carW/2, -carH/2, carW, carH);
+                        ctx.strokeRect(-carW / 2, -carH / 2, carW, carH);
                     }
 
                     // Draw Light Overlays
@@ -260,7 +265,7 @@ export default function MatrixView2D({
                                         const w = img.width * (item.scale || 1);
                                         const h = img.height * (item.scale || 1);
                                         ctx.globalAlpha = (val / 255);
-                                        ctx.drawImage(img, item.x - w/2, item.y - h/2, w, h);
+                                        ctx.drawImage(img, item.x - w / 2, item.y - h / 2, w, h);
                                     }
                                 });
                             }
@@ -357,7 +362,7 @@ export default function MatrixView2D({
             return;
         }
         if (!dragStart) return;
-        
+
         const mode = e.shiftKey ? 'add' : (e.altKey ? 'subtract' : 'new');
         let newSelection = new Set(selectedCars);
 
@@ -376,8 +381,8 @@ export default function MatrixView2D({
     };
 
     return (
-        <div 
-            className="matrix-view-2d-container" 
+        <div
+            className="matrix-view-2d-container"
             ref={containerRef}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}

@@ -56,25 +56,51 @@ export const createEditorSlice = (set, get) => ({
         set({ previewMode: mode });
     },
 
+    setMatrixConfig: (config) => {
+        set(state => ({
+            matrixConfig: { ...state.matrixConfig, ...config }
+        }));
+    },
+
     addConsoleLog: (msg, type = 'info', isProgress = false) => {
+        const newId = crypto.randomUUID();
+        let targetId = newId;
+
         set(state => {
             const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const newMessage = { id: crypto.randomUUID(), text: msg, type, timestamp, isProgress };
             
             if (isProgress && state.consoleMessages.length > 0) {
                 const lastMsg = state.consoleMessages[state.consoleMessages.length - 1];
                 if (lastMsg.isProgress) {
                     // Update the last progress message instead of adding a new one
+                    targetId = lastMsg.id;
                     const updatedMessages = [...state.consoleMessages];
-                    updatedMessages[updatedMessages.length - 1] = { ...lastMsg, text: msg, timestamp };
+                    updatedMessages[updatedMessages.length - 1] = { ...lastMsg, text: msg, timestamp, createdAt: Date.now() };
                     return { consoleMessages: updatedMessages };
                 }
             }
             
-            // Limit to last 50 messages
+            // New message
+            const newMessage = { id: newId, text: msg, type, timestamp, isProgress, createdAt: Date.now() };
             const newMessages = [...state.consoleMessages, newMessage].slice(-50);
             return { consoleMessages: newMessages };
         });
+
+        // Auto-remove after 5 seconds
+        // Re-check createdAt to ensure we don't remove it if it was updated recently (for progress)
+        setTimeout(() => {
+            set(state => {
+                const msgIdx = state.consoleMessages.findIndex(m => m.id === targetId);
+                if (msgIdx === -1) return state;
+                
+                const msgObj = state.consoleMessages[msgIdx];
+                // If it hasn't been updated in the last 4.9s, remove it
+                if (Date.now() - msgObj.createdAt >= 4900) {
+                    return { consoleMessages: state.consoleMessages.filter(m => m.id !== targetId) };
+                }
+                return state;
+            });
+        }, 5000);
     },
     clearConsole: () => set({ consoleMessages: [] }),
 });

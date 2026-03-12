@@ -40,7 +40,7 @@ export function ConsoleOverlay() {
         >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {messages.map((msg) => (
-                    <div key={msg.id} style={{ display: 'flex', gap: '8px', opacity: msg.isProgress ? 1 : 0.9 }}>
+                    <div key={msg.id} className="console-msg" style={{ display: 'flex', gap: '8px', opacity: msg.isProgress ? 1 : 0.9 }}>
                         <span style={{ color: '#666', flexShrink: 0 }}>[{msg.timestamp}]</span>
                         <span style={{
                             color: msg.type === 'error' ? '#ff5555' :
@@ -54,6 +54,23 @@ export function ConsoleOverlay() {
                     </div>
                 ))}
             </div>
+            <style>{`
+                .console-msg {
+                    animation: consoleFadeIn 0.3s ease-out forwards;
+                }
+                /* Non-progress messages fade out before the store removes them at 5s */
+                .console-msg:not(:last-child), .console-msg {
+                    animation: consoleFadeIn 0.3s ease-out forwards, consoleFadeOut 0.5s ease-in 4.5s forwards;
+                }
+                @keyframes consoleFadeIn {
+                    from { opacity: 0; transform: translateX(-10px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+                @keyframes consoleFadeOut {
+                    from { opacity: 1; transform: translateX(0); }
+                    to { opacity: 0; transform: translateX(10px); }
+                }
+            `}</style>
         </div>
     );
 }

@@ -44,6 +44,8 @@ function createDefaultGridData(cols, rows) {
         colIds: defaultColIds(cols),
         rowIds: defaultRowIds(rows),
         colFirst: true,
+        cellSizeW: 50,
+        cellSizeH: 100,
         cells,
     };
 }
@@ -64,6 +66,7 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
 
     const gridRef = useRef(null);
     const fileInputRef = useRef(null);
+    const manualIdInputRef = useRef(null);
 
     // --- Size Change ---
     const handleSizeChange = (newCols, newRows) => {
@@ -101,6 +104,14 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
             return { ...prev, cols: nc, rows: nr, colIds, rowIds, cells };
         });
         setSelectedCells(new Set());
+    };
+
+    const handleCellSizeChange = (w, h) => {
+        setData(prev => ({
+            ...prev,
+            cellSizeW: Math.max(1, parseInt(w) || 1),
+            cellSizeH: Math.max(1, parseInt(h) || 1)
+        }));
     };
 
     // --- Cell Selection ---
@@ -228,14 +239,19 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
         const yawValues = [...new Set(cells.map(x => x.cell.yaw))];
         const yawCommon = yawValues.length === 1 ? yawValues[0] : '';
 
+        // Common manualId
+        const idValues = [...new Set(cells.map(x => x.cell.manualId || ''))];
+        const idCommon = idValues.length === 1 ? idValues[0] : '';
+
         // Generated car IDs
         const carIds = cells.map(x => {
+            if (x.cell.manualId) return x.cell.manualId;
             const cid = data.colIds[x.c] || '';
             const rid = data.rowIds[x.r] || '';
             return data.colFirst ? `${cid}${rid}` : `${rid}${cid}`;
         });
 
-        return { cells, uniqueRows, uniqueCols, colId, rowId, existsCommon, yawCommon, carIds };
+        return { cells, uniqueRows, uniqueCols, colId, rowId, existsCommon, yawCommon, idCommon, carIds };
     };
 
     const updateSelectedExists = (val) => {
@@ -257,6 +273,32 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
             selectedCells.forEach(k => {
                 const [r, c] = k.split(',').map(Number);
                 if (next.cells[r]?.[c]) next.cells[r][c].yaw = ((yaw % 360) + 360) % 360;
+            });
+            return next;
+        });
+    };
+
+    const offsetSelectedYaw = (offset) => {
+        setData(prev => {
+            const next = JSON.parse(JSON.stringify(prev));
+            selectedCells.forEach(k => {
+                const [r, c] = k.split(',').map(Number);
+                if (next.cells[r]?.[c]) {
+                    const current = next.cells[r][c].yaw || 0;
+                    const newValue = current + offset;
+                    next.cells[r][c].yaw = ((newValue % 360) + 360) % 360;
+                }
+            });
+            return next;
+        });
+    };
+
+    const updateSelectedManualId = (val) => {
+        setData(prev => {
+            const next = JSON.parse(JSON.stringify(prev));
+            selectedCells.forEach(k => {
+                const [r, c] = k.split(',').map(Number);
+                if (next.cells[r]?.[c]) next.cells[r][c].manualId = val;
             });
             return next;
         });
@@ -341,10 +383,21 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
         onClose();
     };
 
-    // Keyboard shortcut: Escape to close
+    // Keyboard shortcuts
     useEffect(() => {
         const onKey = (e) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') {
+                onClose();
+                return;
+            }
+            if ((e.key === 'n' || e.key === 'N')) {
+                // Focus Manual ID input if not already typing
+                const tag = e.target.tagName.toLowerCase();
+                if (tag !== 'input' && tag !== 'textarea') {
+                    e.preventDefault();
+                    manualIdInputRef.current?.focus();
+                }
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
@@ -409,6 +462,25 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
                             <RotateCcw size={16} /> Reset
                         </button>
                     </div>
+
+                    <div className="le-cell-size-controls" style={{ marginLeft: '12px', borderLeft: '1px solid #444', paddingLeft: '12px' }}>
+                        <span style={{ fontSize: '12px', color: '#888' }}>Cell Size:</span>
+                        <input
+                            type="number" min={1} max={500}
+                            value={data.cellSizeW || 50}
+                            onChange={e => handleCellSizeChange(e.target.value, data.cellSizeH)}
+                            className="le-size-input"
+                            title="Cell Width"
+                        />
+                        <span style={{ color: '#666' }}>×</span>
+                        <input
+                            type="number" min={1} max={500}
+                            value={data.cellSizeH || 100}
+                            onChange={e => handleCellSizeChange(data.cellSizeW, e.target.value)}
+                            className="le-size-input"
+                            title="Cell Height"
+                        />
+                    </div>
                 </div>
 
                 <div className="le-header-right">
@@ -462,12 +534,15 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
                                                 {data.rowIds[r]}
                                             </button>
                                         </td>
-                                        {Array.from({ length: data.cols }, (_, c) => {
-                                            const cell = data.cells[r]?.[c];
-                                            const carId = data.colFirst
-                                                ? `${data.colIds[c]}${data.rowIds[r]}`
-                                                : `${data.rowIds[r]}${data.colIds[c]}`;
-                                            return (
+                                         {Array.from({ length: data.cols }, (_, c) => {
+                                             const cell = data.cells[r]?.[c];
+                                             let carId = cell?.manualId;
+                                             if (!carId) {
+                                                 carId = data.colFirst
+                                                     ? `${data.colIds[c]}${data.rowIds[r]}`
+                                                     : `${data.rowIds[r]}${data.colIds[c]}`;
+                                             }
+                                             return (
                                                 <td
                                                     key={c}
                                                     className={getCellClass(r, c)}
@@ -552,15 +627,27 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
                             {/* Yaw */}
                             <div className="le-prop-group">
                                 <label className="le-prop-label">YAW (°)</label>
-                                <input
-                                    type="number"
-                                    className="le-prop-input"
-                                    value={info.yawCommon}
-                                    onChange={e => updateSelectedYaw(e.target.value)}
-                                    min={0} max={360} step={1}
-                                    placeholder="Mixed"
-                                />
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    <input
+                                        type="number"
+                                        className="le-prop-input"
+                                        value={info.yawCommon}
+                                        onChange={e => updateSelectedYaw(e.target.value)}
+                                        min={0} max={360} step={1}
+                                        placeholder="Mixed"
+                                        style={{ flex: 1 }}
+                                    />
+                                </div>
                                 <div className="le-yaw-presets">
+                                    <span style={{ fontSize: '10px', color: '#666', alignSelf: 'center', marginRight: '2px' }}>ROT:</span>
+                                    {[-90, -45, -5, -1, 1, 5, 45, 90].map(v => (
+                                        <button key={v} className="le-yaw-btn" onClick={() => offsetSelectedYaw(v)}>
+                                            {v > 0 ? `+${v}` : v}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="le-yaw-presets">
+                                    <span style={{ fontSize: '10px', color: '#666', alignSelf: 'center', marginRight: '2px' }}>SET:</span>
                                     {[0, 90, 180, 270].map(v => (
                                         <button key={v} className="le-yaw-btn" onClick={() => updateSelectedYaw(v)}>
                                             {v}°
@@ -569,9 +656,22 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
                                 </div>
                             </div>
 
+                            {/* Manual ID */}
+                            <div className="le-prop-group">
+                                <label className="le-prop-label">Manual ID (Override)</label>
+                                <input
+                                    ref={manualIdInputRef}
+                                    type="text"
+                                    className="le-prop-input"
+                                    value={info.idCommon ?? ''}
+                                    onChange={e => updateSelectedManualId(e.target.value)}
+                                    placeholder={selectedCells.size > 1 ? 'Batch edit' : 'e.g. A01'}
+                                />
+                            </div>
+
                             {/* ID Order */}
                             <div className="le-prop-group">
-                                <label className="le-prop-label">ID Format</label>
+                                <label className="le-prop-label">ID Format (Auto-gen)</label>
                                 <div className="le-id-order">
                                     <label className="le-radio-label">
                                         <input type="radio" name="idOrder" checked={data.colFirst} onChange={toggleColFirst} />
@@ -888,19 +988,21 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
 
                 .le-yaw-presets {
                     display: flex;
-                    gap: 4px;
+                    flex-wrap: wrap;
+                    gap: 3px;
                     margin-top: 4px;
                 }
                 .le-yaw-btn {
-                    flex: 1;
-                    padding: 3px;
+                    padding: 2px 5px;
                     background: #333;
                     border: 1px solid #555;
                     color: #aaa;
                     border-radius: 3px;
                     cursor: pointer;
-                    font-size: 11px;
+                    font-size: 10px;
                     transition: all 0.15s;
+                    min-width: 24px;
+                    text-align: center;
                 }
                 .le-yaw-btn:hover {
                     background: #444;

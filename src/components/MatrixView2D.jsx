@@ -9,8 +9,6 @@ import { Maximize2 } from 'lucide-react';
 
 const carW = 40;
 const carH = 90;
-const cellSizeW = 50; // Base cell width for layout grid
-const cellSizeH = 100; // Base cell height for layout grid
 
 // Assets paths
 const ASSETS = {
@@ -82,6 +80,10 @@ export default function MatrixView2D({
     onSelectionChange,
     fitTrigger = 0
 }) {
+    const matrixConfig = useStore(state => state.matrixConfig);
+    const cellSizeW = matrixConfig?.cellSizeW || 50;
+    const cellSizeH = matrixConfig?.cellSizeH || 100;
+
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const [images, setImages] = useState({});

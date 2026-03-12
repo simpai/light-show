@@ -146,6 +146,8 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     // Get the car filename for a given grid position using gridLayoutData IDs
     const getCarFileName = (r, c) => {
         if (gridLayoutData) {
+            const cell = gridLayoutData.cells[r]?.[c];
+            if (cell?.manualId) return cell.manualId;
             const colId = gridLayoutData.colIds[c] || '';
             const rowId = gridLayoutData.rowIds[r] || '';
             return gridLayoutData.colFirst ? `${colId}${rowId}` : `${rowId}${colId}`;
@@ -160,7 +162,12 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
         setGridLayoutData(gd);
         const converted = gridDataToLayoutData(gd);
         setLayoutData(converted);
-        const newConfig = { rows: gd.rows, cols: gd.cols };
+        const newConfig = { 
+            rows: gd.rows, 
+            cols: gd.cols,
+            cellSizeW: gd.cellSizeW || 50,
+            cellSizeH: gd.cellSizeH || 100
+        };
         setMatrixConfig(newConfig);
         rendererRef.current.setMatrixMode(true, newConfig);
         setFitTrigger2D(Date.now());

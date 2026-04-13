@@ -147,10 +147,13 @@ export default function EditorApp({ audioFile: initialAudioFile, analysis: initi
     const getCarFileName = (r, c) => {
         if (gridLayoutData) {
             const cell = gridLayoutData.cells[r]?.[c];
-            if (cell?.manualId) return cell.manualId;
             const colId = gridLayoutData.colIds[c] || '';
             const rowId = gridLayoutData.rowIds[r] || '';
-            return gridLayoutData.colFirst ? `${colId}${rowId}` : `${rowId}${colId}`;
+            
+            const template = cell?.manualId || '{COL}{ROW}';
+            return template
+                .replace(/{COL}/g, colId)
+                .replace(/{ROW}/g, rowId);
         }
         // Fallback to default naming
         const rowLetter = String.fromCharCode(65 + r);

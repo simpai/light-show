@@ -18,9 +18,6 @@ function defaultColIds(count) {
     return ids;
 }
 
-/**
- * Generate default row IDs: 01, 02, 03, ...
- */
 function defaultRowIds(count) {
     const ids = [];
     const pad = String(count).length;
@@ -28,6 +25,16 @@ function defaultRowIds(count) {
         ids.push(String(i + 1).padStart(Math.max(pad, 2), '0'));
     }
     return ids;
+}
+
+/**
+ * Resolve a car ID from a template and components
+ */
+function resolveId(template, colId, rowId) {
+    if (!template) return `${colId}${rowId}`;
+    return template
+        .replace(/{COL}/g, colId)
+        .replace(/{ROW}/g, rowId);
 }
 
 function createDefaultGridData(cols, rows) {
@@ -43,7 +50,6 @@ function createDefaultGridData(cols, rows) {
         rows,
         colIds: defaultColIds(cols),
         rowIds: defaultRowIds(rows),
-        colFirst: true,
         cellSizeW: 50,
         cellSizeH: 100,
         cells,
@@ -240,15 +246,14 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
         const yawCommon = yawValues.length === 1 ? yawValues[0] : '';
 
         // Common manualId
-        const idValues = [...new Set(cells.map(x => x.cell.manualId || ''))];
+        const idValues = [...new Set(cells.map(x => x.cell.manualId || 'X{COL},Y{ROW}'))];
         const idCommon = idValues.length === 1 ? idValues[0] : '';
 
         // Generated car IDs
         const carIds = cells.map(x => {
-            if (x.cell.manualId) return x.cell.manualId;
             const cid = data.colIds[x.c] || '';
             const rid = data.rowIds[x.r] || '';
-            return data.colFirst ? `${cid}${rid}` : `${rid}${cid}`;
+            return resolveId(x.cell.manualId || 'X{COL},Y{ROW}', cid, rid);
         });
 
         return { cells, uniqueRows, uniqueCols, colId, rowId, existsCommon, yawCommon, idCommon, carIds };
@@ -341,7 +346,11 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
     };
 
     const toggleColFirst = () => {
-        setData(prev => ({ ...prev, colFirst: !prev.colFirst }));
+        // Obsolete
+    };
+
+    const handleTemplateChange = (val) => {
+        // Obsolete
     };
 
     // --- JSON Import/Export ---
@@ -534,15 +543,14 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
                                                 {data.rowIds[r]}
                                             </button>
                                         </td>
-                                         {Array.from({ length: data.cols }, (_, c) => {
-                                             const cell = data.cells[r]?.[c];
-                                             let carId = cell?.manualId;
-                                             if (!carId) {
-                                                 carId = data.colFirst
-                                                     ? `${data.colIds[c]}${data.rowIds[r]}`
-                                                     : `${data.rowIds[r]}${data.colIds[c]}`;
-                                             }
-                                             return (
+                                        {Array.from({ length: data.cols }, (_, c) => {
+                                            const cell = data.cells[r]?.[c];
+                                            const colId = data.colIds[c] || "";
+
+                                            const rowId = data.rowIds[r] || "";
+
+                                            const carId = resolveId(cell?.manualId || "X{COL},Y{ROW}", colId, rowId);
+                                            return (
                                                 <td
                                                     key={c}
                                                     className={getCellClass(r, c)}
@@ -656,32 +664,18 @@ export default function LayoutGridEditor({ gridData, onApply, onClose }) {
                                 </div>
                             </div>
 
-                            {/* Manual ID */}
+                            {/* ID Template */}
                             <div className="le-prop-group">
-                                <label className="le-prop-label">Manual ID (Override)</label>
+                                <label className="le-prop-label">ID Template</label>
                                 <input
                                     ref={manualIdInputRef}
                                     type="text"
                                     className="le-prop-input"
                                     value={info.idCommon ?? ''}
                                     onChange={e => updateSelectedManualId(e.target.value)}
-                                    placeholder={selectedCells.size > 1 ? 'Batch edit' : 'e.g. A01'}
+                                    placeholder={selectedCells.size > 1 ? 'Batch edit' : 'e.g. X{COL}_Y{ROW}'}
                                 />
-                            </div>
-
-                            {/* ID Order */}
-                            <div className="le-prop-group">
-                                <label className="le-prop-label">ID Format (Auto-gen)</label>
-                                <div className="le-id-order">
-                                    <label className="le-radio-label">
-                                        <input type="radio" name="idOrder" checked={data.colFirst} onChange={toggleColFirst} />
-                                        <span>[Col][Row]</span>
-                                    </label>
-                                    <label className="le-radio-label">
-                                        <input type="radio" name="idOrder" checked={!data.colFirst} onChange={toggleColFirst} />
-                                        <span>[Row][Col]</span>
-                                    </label>
-                                </div>
+                                <div className="le-prop-hint">Use {'{COL}'} and {'{ROW}'} for dynamic IDs.</div>
                             </div>
 
                             {/* Generated Car IDs */}
